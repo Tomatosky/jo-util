@@ -1,4 +1,4 @@
-package maputil
+package mapUtil
 
 import (
 	"encoding/json"

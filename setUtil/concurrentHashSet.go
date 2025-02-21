@@ -1,4 +1,4 @@
-package setutil
+package setUtil
 
 import (
 	"encoding/json"
@@ -7,13 +7,13 @@ import (
 
 // ConcurrentHashSet 基于 ConcurrentHashMap 实现的并发安全集合
 type ConcurrentHashSet[T comparable] struct {
-	m *maputil.ConcurrentHashMap[T, struct{}] // 使用空结构体作为值类型
+	m *mapUtil.ConcurrentHashMap[T, struct{}] // 使用空结构体作为值类型
 }
 
 // NewConcurrentHashSet 构造函数
 func NewConcurrentHashSet[T comparable](elements ...T) *ConcurrentHashSet[T] {
 	set := &ConcurrentHashSet[T]{
-		m: maputil.NewConcurrentHashMap[T, struct{}](), // 初始化底层Map
+		m: mapUtil.NewConcurrentHashMap[T, struct{}](), // 初始化底层Map
 	}
 	set.AddAll(elements...)
 	return set

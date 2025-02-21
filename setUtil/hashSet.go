@@ -1,4 +1,4 @@
-package setutil
+package setUtil
 
 import "encoding/json"
 
