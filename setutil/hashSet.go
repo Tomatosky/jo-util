@@ -1,5 +1,7 @@
 package setutil
 
+import "encoding/json"
+
 // HashSet 非并发安全的哈希集合实现
 type HashSet[T comparable] struct {
 	m map[T]struct{} // 使用空结构体作为值类型（0内存占用）
@@ -68,4 +70,12 @@ func (s *HashSet[T]) ToSlice() []T {
 // IsEmpty 判断是否为空
 func (s *HashSet[T]) IsEmpty() bool {
 	return len(s.m) == 0
+}
+
+func (s *HashSet[T]) ToString() string {
+	bytes, err := json.Marshal(s.ToSlice())
+	if err != nil {
+		panic(err)
+	}
+	return string(bytes)
 }

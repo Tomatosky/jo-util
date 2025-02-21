@@ -2,7 +2,7 @@ package setutil
 
 import (
 	"encoding/json"
-	"jo-util/maputil"
+	"github.com/Tomatosky/jo-util/maputil"
 )
 
 // ConcurrentHashSet 基于 ConcurrentHashMap 实现的并发安全集合
