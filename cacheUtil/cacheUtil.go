@@ -11,13 +11,6 @@ type Item[V any] struct {
 	Expiration int64
 }
 
-func (item Item[V]) Expired() bool {
-	if item.Expiration == 0 {
-		return false
-	}
-	return time.Now().UnixNano() > item.Expiration
-}
-
 const (
 	cleanupInterval = 1 * time.Minute // 固定清理间隔
 )
@@ -69,12 +62,10 @@ func (c *cache[K, V]) Get(k K) (V, bool) {
 		var zero V
 		return zero, false
 	}
-	if item.Expiration > 0 {
-		if time.Now().UnixNano() > item.Expiration {
-			c.mu.RUnlock()
-			var zero V
-			return zero, false
-		}
+	if c.expiration > 0 && time.Now().UnixNano() > item.Expiration {
+		c.mu.RUnlock()
+		var zero V
+		return zero, false
 	}
 	c.mu.RUnlock()
 	return item.Object, true
@@ -86,11 +77,9 @@ func (c *cache[K, V]) get(k K) (V, bool) {
 		var zero V
 		return zero, false
 	}
-	if item.Expiration > 0 {
-		if time.Now().UnixNano() > item.Expiration {
-			var zero V
-			return zero, false
-		}
+	if c.expiration > 0 && time.Now().UnixNano() > item.Expiration {
+		var zero V
+		return zero, false
 	}
 	return item.Object, true
 }
@@ -105,6 +94,9 @@ func (c *cache[K, V]) delete(k K) {
 }
 
 func (c *cache[K, V]) deleteExpired() {
+	if c.expiration <= 0 {
+		return
+	}
 	now := time.Now().UnixNano()
 	c.mu.Lock()
 	for k, v := range c.items {
@@ -129,13 +121,6 @@ func (c *cache[K, V]) Items() map[K]Item[V] {
 		m[k] = v
 	}
 	return m
-}
-
-func (c *cache[K, V]) ItemCount() int {
-	c.mu.RLock()
-	n := len(c.items)
-	c.mu.RUnlock()
-	return n
 }
 
 func (c *cache[K, V]) Flush() {
@@ -175,27 +160,15 @@ func runJanitor[K comparable, V any](c *cache[K, V]) {
 	go j.Run(c)
 }
 
-func newCache[K comparable, V any](de time.Duration, m map[K]Item[V]) *cache[K, V] {
-	if de == 0 {
-		de = -1
+func New[K comparable, V any](expiration time.Duration) *Cache[K, V] {
+	c := &cache[K, V]{
+		expiration: expiration,
+		items:      make(map[K]Item[V]),
 	}
-	return &cache[K, V]{
-		expiration: de,
-		items:      m,
-	}
-}
-
-func newCacheWithJanitor[K comparable, V any](expiration time.Duration, m map[K]Item[V]) *Cache[K, V] {
-	c := newCache(expiration, m)
 	C := &Cache[K, V]{c}
 	if expiration > 0 {
 		runJanitor(c) // 自动启用janitor
 		runtime.SetFinalizer(C, stopJanitor[K, V])
 	}
 	return C
-}
-
-func New[K comparable, V any](expiration time.Duration) *Cache[K, V] {
-	items := make(map[K]Item[V])
-	return newCacheWithJanitor[K, V](expiration, items)
 }
