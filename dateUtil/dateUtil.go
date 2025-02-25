@@ -1,11 +1,41 @@
 package dateUtil
 
 import (
+	"fmt"
 	"math"
+	"strings"
 	"time"
 )
 
 var loc *time.Location
+var timeFormat map[string]string
+
+func init() {
+	timeFormat = map[string]string{
+		"yyyy-mm-dd hh:mm:ss": "2006-01-02 15:04:05",
+		"yyyy-mm-dd hh:mm":    "2006-01-02 15:04",
+		"yyyy-mm-dd hh":       "2006-01-02 15",
+		"yyyy-mm-dd":          "2006-01-02",
+		"yyyy-mm":             "2006-01",
+		"mm-dd":               "01-02",
+		"dd-mm-yy hh:mm:ss":   "02-01-06 15:04:05",
+		"yyyy/mm/dd hh:mm:ss": "2006/01/02 15:04:05",
+		"yyyy/mm/dd hh:mm":    "2006/01/02 15:04",
+		"yyyy/mm/dd hh":       "2006/01/02 15",
+		"yyyy/mm/dd":          "2006/01/02",
+		"yyyy/mm":             "2006/01",
+		"mm/dd":               "01/02",
+		"dd/mm/yy hh:mm:ss":   "02/01/06 15:04:05",
+		"yyyymmdd":            "20060102",
+		"mmddyy":              "010206",
+		"yyyy":                "2006",
+		"yy":                  "06",
+		"mm":                  "01",
+		"hh:mm:ss":            "15:04:05",
+		"hh:mm":               "15:04",
+		"mm:ss":               "04:05",
+	}
+}
 
 func getTime(timestamp int64) time.Time {
 	if loc == nil {
@@ -98,11 +128,36 @@ func IsSameDay(t1, t2 int64) bool {
 	return y1 == y2 && m1 == m2 && d1 == d2
 }
 
-// Parse 解析时间字符串
-func Parse(str string) int64 {
-	t, err := time.ParseInLocation("2006-01-02 15:04:05", str, loc)
-	if err != nil {
-		panic(err)
+func FormatToStr(t time.Time, format string, timezone ...string) string {
+	tf, ok := timeFormat[strings.ToLower(format)]
+	if !ok {
+		return ""
 	}
-	return t.Unix()
+
+	if timezone != nil && timezone[0] != "" {
+		loc, err := time.LoadLocation(timezone[0])
+		if err != nil {
+			return ""
+		}
+		return t.In(loc).Format(tf)
+	}
+	return t.Format(tf)
+}
+
+func ParseToTime(str, format string, timezone ...string) (time.Time, error) {
+	tf, ok := timeFormat[strings.ToLower(format)]
+	if !ok {
+		return time.Time{}, fmt.Errorf("format %s not support", format)
+	}
+
+	if timezone != nil && timezone[0] != "" {
+		loc, err := time.LoadLocation(timezone[0])
+		if err != nil {
+			return time.Time{}, err
+		}
+
+		return time.ParseInLocation(tf, str, loc)
+	}
+
+	return time.Parse(tf, str)
 }
