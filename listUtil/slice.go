@@ -1,6 +1,10 @@
 package listUtil
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"math/rand"
+	"time"
+)
 
 func Contain[T comparable](slice []T, target T) bool {
 	for _, item := range slice {
@@ -35,4 +39,29 @@ func ToString[T comparable](slice []T) string {
 		panic(err)
 	}
 	return string(marshal)
+}
+
+func Reverse[T any](slice []T) {
+	for i, j := 0, len(slice)-1; i < j; i, j = i+1, j-1 {
+		slice[i], slice[j] = slice[j], slice[i]
+	}
+}
+
+func Shuffle[T any](slice []T) []T {
+	rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	rand.Shuffle(len(slice), func(i, j int) {
+		slice[i], slice[j] = slice[j], slice[i]
+	})
+
+	return slice
+}
+
+func AddIfAbsent[T comparable](slice []T, item T) {
+	for _, v := range slice {
+		if v == item {
+			return
+		}
+	}
+	slice = append(slice, item)
 }
