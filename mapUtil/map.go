@@ -18,6 +18,13 @@ func Values[K comparable, V any](m map[K]V) []V {
 	return values
 }
 
+func GetOrDefault[K comparable, V any](m map[K]V, key K, defaultValue V) V {
+	if value, ok := m[key]; ok {
+		return value
+	}
+	return defaultValue
+}
+
 func ToString[K comparable, V any](m map[K]V) string {
 	marshal, err := json.Marshal(m)
 	if err != nil {
