@@ -29,11 +29,10 @@ func NewConcurrentHashMap[K comparable, V any](initMap ...map[K]V) *ConcurrentHa
 	return cm
 }
 
-func (cm *ConcurrentHashMap[K, V]) Get(key K) (V, bool) {
+func (cm *ConcurrentHashMap[K, V]) Get(key K) V {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
-	value, ok := cm.m[key]
-	return value, ok
+	return cm.m[key]
 }
 
 func (cm *ConcurrentHashMap[K, V]) Put(key K, value V) {
