@@ -87,6 +87,7 @@ func (c *cache[K, V]) get(k K) (V, bool) {
 func (c *cache[K, V]) Delete(k K) {
 	c.mu.Lock()
 	c.delete(k)
+	c.mu.Unlock()
 }
 
 func (c *cache[K, V]) delete(k K) {
