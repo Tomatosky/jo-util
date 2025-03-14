@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
+	"github.com/Tomatosky/jo-util/strUtil"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -120,4 +122,12 @@ func (rc *RequestClient) Post(url string, data map[string]interface{}, postOptio
 	}
 
 	return string(body), nil
+}
+
+func UrlEncode(params map[string]interface{}) string {
+	var p = url.Values{}
+	for k, v := range params {
+		p.Add(k, strUtil.ToString(v))
+	}
+	return p.Encode()
 }
