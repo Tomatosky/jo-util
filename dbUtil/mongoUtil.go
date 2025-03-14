@@ -1,4 +1,4 @@
-package mongoUtil
+package dbUtil
 
 import (
 	"context"
@@ -27,7 +27,7 @@ type Config struct {
 	MinPoolSize uint64
 }
 
-func New(config *Config) (*MongoUtil, error) {
+func NewMongo(config *Config) (*MongoUtil, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
