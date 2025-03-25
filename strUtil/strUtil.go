@@ -16,16 +16,16 @@ func ToInt(s string) int {
 
 // ToInt32 将字符串转换为 int32
 func ToInt32(s string) int32 {
-	i64, err := strconv.ParseInt(s, 10, 32)
+	i32, err := strconv.ParseInt(s, 10, 32)
 	if err != nil {
 		panic(err)
 	}
-	return int32(i64)
+	return int32(i32)
 }
 
 // ToInt64 将字符串转换为 int64
 func ToInt64(s string) int64 {
-	i64, err := strconv.ParseInt(s, 10, 32)
+	i64, err := strconv.ParseInt(s, 10, 64)
 	if err != nil {
 		panic(err)
 	}
@@ -34,16 +34,16 @@ func ToInt64(s string) int64 {
 
 // ToFloat32 将字符串转换为 float32
 func ToFloat32(s string) float32 {
-	f64, err := strconv.ParseFloat(s, 32)
+	f32, err := strconv.ParseFloat(s, 32)
 	if err != nil {
 		panic(err)
 	}
-	return float32(f64)
+	return float32(f32)
 }
 
 // ToFloat64 将字符串转换为 float64
 func ToFloat64(s string) float64 {
-	f64, err := strconv.ParseFloat(s, 32)
+	f64, err := strconv.ParseFloat(s, 64)
 	if err != nil {
 		panic(err)
 	}
