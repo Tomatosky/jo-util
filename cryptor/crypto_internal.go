@@ -24,6 +24,35 @@ func generateDesKey(key []byte) []byte {
 	return genKey
 }
 
+func addPadding(data []byte, blockSize int, paddingType PaddingType) []byte {
+	switch paddingType {
+	case Pkcs7Padding:
+		return pkcs7Padding(data, blockSize)
+	case ZeroPadding:
+		return zeroPadding(data, blockSize)
+	case NoPadding:
+		if len(data)%blockSize != 0 {
+			panic("data length is not aligned to block size")
+		}
+		return data
+	default:
+		panic("unknown padding type")
+	}
+}
+
+func removePadding(data []byte, paddingType PaddingType) []byte {
+	switch paddingType {
+	case Pkcs7Padding:
+		return pkcs7UnPadding(data)
+	case ZeroPadding:
+		return zeroUnPadding(data)
+	case NoPadding:
+		return data
+	default:
+		panic("unknown padding type")
+	}
+}
+
 func pkcs7Padding(src []byte, blockSize int) []byte {
 	padding := blockSize - len(src)%blockSize
 	padText := bytes.Repeat([]byte{byte(padding)}, padding)
@@ -34,4 +63,20 @@ func pkcs7UnPadding(src []byte) []byte {
 	length := len(src)
 	unPadding := int(src[length-1])
 	return src[:(length - unPadding)]
+}
+
+func zeroPadding(data []byte, blockSize int) []byte {
+	padding := blockSize - (len(data) % blockSize)
+	padText := bytes.Repeat([]byte{0}, padding)
+	return append(data, padText...)
+}
+
+func zeroUnPadding(data []byte) []byte {
+	length := len(data)
+	for i := length - 1; i >= 0; i-- {
+		if data[i] != 0 {
+			return data[:i+1]
+		}
+	}
+	return data[:0]
 }
