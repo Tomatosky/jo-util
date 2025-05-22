@@ -12,7 +12,7 @@ type Item[V any] struct {
 }
 
 const (
-	cleanupInterval = 1 * time.Minute // 固定清理间隔
+	cleanupInterval = 20 * time.Second // 固定清理间隔
 )
 
 type Cache[K comparable, V any] struct {
@@ -26,11 +26,15 @@ type cache[K comparable, V any] struct {
 	janitor    *janitor[K, V]
 }
 
-func (c *cache[K, V]) Set(k K, x V) {
+func (c *cache[K, V]) Set(k K, x V, expiration ...time.Duration) {
 	c.mu.Lock()
+	exp := time.Now().Add(c.expiration).UnixNano()
+	if len(expiration) > 0 {
+		exp = time.Now().Add(expiration[0]).UnixNano()
+	}
 	c.items[k] = Item[V]{
 		Object:     x,
-		Expiration: time.Now().Add(c.expiration).UnixNano(),
+		Expiration: exp,
 	}
 	c.mu.Unlock()
 }
