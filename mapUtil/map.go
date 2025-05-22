@@ -25,6 +25,12 @@ func GetOrDefault[K comparable, V any](m map[K]V, key K, defaultValue V) V {
 	return defaultValue
 }
 
+func PutIfAbsent[K comparable, V any](m map[K]V, key K, defaultValue V) {
+	if _, ok := m[key]; !ok {
+		m[key] = defaultValue
+	}
+}
+
 func ToString[K comparable, V any](m map[K]V) string {
 	marshal, err := json.Marshal(m)
 	if err != nil {
