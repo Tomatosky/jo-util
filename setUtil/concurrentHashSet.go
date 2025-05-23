@@ -68,3 +68,7 @@ func (s *ConcurrentHashSet[T]) ToString() string {
 	}
 	return string(bytes)
 }
+
+func (s *ConcurrentHashSet[T]) Range(f func(T) bool) {
+	s.m.ra
+}
