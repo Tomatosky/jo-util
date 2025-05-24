@@ -12,7 +12,7 @@ type Item[V any] struct {
 }
 
 const (
-	cleanupInterval = 20 * time.Second // 固定清理间隔
+	cleanupInterval = 30 * time.Second // 固定清理间隔
 )
 
 type Cache[K comparable, V any] struct {
