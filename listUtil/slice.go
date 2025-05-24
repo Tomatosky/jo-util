@@ -20,7 +20,7 @@ func Contain[T comparable](slice []T, target T) bool {
 func Unique[T comparable](slice []T) []T {
 	// 使用 map 来记录已经出现过的元素
 	seen := make(map[T]bool)
-	var result []T
+	result := make([]T, 0)
 
 	// 遍历切片，将不重复的元素添加到结果中
 	for _, item := range slice {
@@ -57,11 +57,11 @@ func Shuffle[T any](slice []T) []T {
 	return slice
 }
 
-func AddIfAbsent[T comparable](slice []T, item T) {
-	for _, v := range slice {
+func AddIfAbsent[T comparable](slice *[]T, item T) {
+	for _, v := range *slice {
 		if v == item {
 			return
 		}
 	}
-	slice = append(slice, item)
+	*slice = append(*slice, item)
 }

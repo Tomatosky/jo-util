@@ -12,21 +12,16 @@ type EventHandler func(data interface{})
 // EventManager 事件管理器结构
 type EventManager struct {
 	handlers   map[string][]EventHandler
-	pool       *ants.Pool
+	pool       *Pool
 	lock       sync.RWMutex
 	destroying bool
-	wg         sync.WaitGroup // 用于等待所有事件处理完成
 }
 
 // NewEventManager 创建一个新的事件管理器
 func NewEventManager() (*EventManager, error) {
-	pool, err := ants.NewPool(ants.DefaultAntsPoolSize)
-	if err != nil {
-		return nil, err
-	}
 	return &EventManager{
 		handlers: make(map[string][]EventHandler),
-		pool:     pool,
+		pool:     NewPool(ants.DefaultAntsPoolSize),
 	}, nil
 }
 
@@ -60,13 +55,10 @@ func (em *EventManager) Trigger(eventName string, data interface{}) error {
 		return errors.New("event name cannot be empty")
 	}
 
-	em.wg.Add(1)
 	err := em.pool.Submit(func() {
-		defer em.wg.Done()
 		em.triggerSync(eventName, data)
 	})
 	if err != nil {
-		em.wg.Done()
 		return err
 	}
 	return nil
@@ -109,14 +101,14 @@ func (em *EventManager) Clear() {
 
 // OnDestroy 销毁事件管理器
 func (em *EventManager) OnDestroy() {
-	defer em.pool.Release()
+	//defer em.pool.Release()
 
 	em.lock.Lock()
 	// 设置销毁标志，阻止新的事件注册和触发
 	em.destroying = true
 	em.lock.Unlock()
 	// 等待所有正在处理的事件完成
-	em.wg.Wait()
+	//em.pool.ShutDown()
 	// 清除所有事件处理函数
 	em.Clear()
 }
