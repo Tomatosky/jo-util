@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/panjf2000/ants/v2"
 	"sync"
+	"time"
 )
 
 // EventHandler 定义事件处理函数的类型
@@ -55,6 +56,14 @@ func (em *EventManager) Trigger(eventName string, data interface{}) error {
 		return errors.New("event name cannot be empty")
 	}
 
+	em.lock.RLock()
+	_, exists := em.handlers[eventName]
+	em.lock.RUnlock()
+
+	if !exists {
+		return errors.New("event not found")
+	}
+
 	err := em.pool.Submit(func() {
 		em.triggerSync(eventName, data)
 	})
@@ -65,21 +74,15 @@ func (em *EventManager) Trigger(eventName string, data interface{}) error {
 }
 
 // triggerSync 同步触发事件
-func (em *EventManager) triggerSync(eventName string, data interface{}) error {
+func (em *EventManager) triggerSync(eventName string, data interface{}) {
 	em.lock.RLock()
-	handlers, exists := em.handlers[eventName]
+	handlers, _ := em.handlers[eventName]
 	em.lock.RUnlock()
-
-	if !exists {
-		return errors.New("event not found")
-	}
 
 	// 同步执行所有处理函数
 	for _, handler := range handlers {
 		handler(data)
 	}
-
-	return nil
 }
 
 // HasEvent 检查事件是否存在
@@ -100,17 +103,13 @@ func (em *EventManager) Clear() {
 }
 
 // OnDestroy 销毁事件管理器
-func (em *EventManager) OnDestroy() {
-	//defer em.pool.Release()
+func (em *EventManager) OnDestroy(timeout time.Duration) {
+	defer em.pool.Release(timeout)
 
 	em.lock.Lock()
 	// 设置销毁标志，阻止新的事件注册和触发
 	em.destroying = true
 	em.lock.Unlock()
-	// 等待所有正在处理的事件完成
-	//em.pool.Release()
-	// 清除所有事件处理函数
-	em.Clear()
 }
 
 // isDestroying 检查是否正在销毁
