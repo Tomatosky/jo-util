@@ -108,7 +108,7 @@ func (em *EventManager) OnDestroy() {
 	em.destroying = true
 	em.lock.Unlock()
 	// 等待所有正在处理的事件完成
-	//em.pool.ShutDown()
+	//em.pool.Release()
 	// 清除所有事件处理函数
 	em.Clear()
 }

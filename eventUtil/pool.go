@@ -29,7 +29,7 @@ func (p *Pool) Submit(task func()) error {
 	return nil
 }
 
-func (p *Pool) ShutDown(timeout time.Duration) {
+func (p *Pool) Release(timeout time.Duration) {
 	p.pool.Waiting()
 	defer p.pool.Release()
 
