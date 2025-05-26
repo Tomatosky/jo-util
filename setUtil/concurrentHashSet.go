@@ -51,6 +51,13 @@ func (s *ConcurrentHashSet[T]) Clear() {
 	s.m.Clear()
 }
 
+// Range 遍历元素（返回false可提前终止）
+func (s *ConcurrentHashSet[T]) Range(f func(T) bool) {
+	s.m.Range(func(key T, value struct{}) bool {
+		return f(key)
+	})
+}
+
 // ToSlice 转换为切片
 func (s *ConcurrentHashSet[T]) ToSlice() []T {
 	return s.m.Keys()

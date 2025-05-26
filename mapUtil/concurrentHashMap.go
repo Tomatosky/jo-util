@@ -111,6 +111,18 @@ func (cm *ConcurrentHashMap[K, V]) ToMap() map[K]V {
 	return cm.m
 }
 
+// Range 遍历元素（返回false可提前终止）
+func (cm *ConcurrentHashMap[K, V]) Range(f func(key K, value V) bool) {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+
+	for k, v := range cm.m {
+		if !f(k, v) {
+			break
+		}
+	}
+}
+
 func (cm *ConcurrentHashMap[K, V]) ToString() string {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()

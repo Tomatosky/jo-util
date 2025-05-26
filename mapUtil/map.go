@@ -2,6 +2,13 @@ package mapUtil
 
 import "encoding/json"
 
+func ContainsKey[K comparable, V any](m map[K]V, key K) bool {
+	if _, ok := m[key]; ok {
+		return true
+	}
+	return false
+}
+
 func Keys[K comparable, V any](m map[K]V) []K {
 	keys := make([]K, 0, len(m))
 	for k := range m {

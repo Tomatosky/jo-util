@@ -164,6 +164,39 @@ func TestToString2(t *testing.T) {
 	}
 }
 
+func TestConcurrentHashMap_Range(t *testing.T) {
+	// 准备测试数据
+	testData := map[string]int{
+		"a": 1,
+		"b": 2,
+		"c": 3,
+	}
+	cm := NewConcurrentHashMap(testData)
+	// 测试完整遍历
+	visited := make(map[string]int)
+	cm.Range(func(key string, value int) bool {
+		visited[key] = value
+		return true
+	})
+	if len(visited) != len(testData) {
+		t.Errorf("Expected %d items, got %d", len(testData), len(visited))
+	}
+	for k, v := range testData {
+		if visited[k] != v {
+			t.Errorf("Expected value %d for key %s, got %d", v, k, visited[k])
+		}
+	}
+	// 测试提前终止
+	count := 0
+	cm.Range(func(key string, value int) bool {
+		count++
+		return count < 2 // 只遍历前两个元素
+	})
+	if count != 2 {
+		t.Errorf("Expected to stop after 2 items, but processed %d", count)
+	}
+}
+
 func TestConcurrentAccess(t *testing.T) {
 	cm := NewConcurrentHashMap[int, int]()
 	const numRoutines = 100

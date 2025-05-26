@@ -5,6 +5,73 @@ import (
 	"testing"
 )
 
+func TestContainsKey(t *testing.T) {
+	tests := []struct {
+		name     string
+		m        map[string]int
+		key      string
+		expected bool
+	}{
+		{
+			name:     "key exists",
+			m:        map[string]int{"a": 1, "b": 2},
+			key:      "a",
+			expected: true,
+		},
+		{
+			name:     "key does not exist",
+			m:        map[string]int{"a": 1, "b": 2},
+			key:      "c",
+			expected: false,
+		},
+		{
+			name:     "empty map",
+			m:        map[string]int{},
+			key:      "a",
+			expected: false,
+		},
+		{
+			name:     "nil map",
+			m:        nil,
+			key:      "a",
+			expected: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ContainsKey(tt.m, tt.key)
+			if got != tt.expected {
+				t.Errorf("ContainsKey() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestContainsKeyWithDifferentTypes(t *testing.T) {
+	// 测试不同类型的 key
+	t.Run("int key", func(t *testing.T) {
+		m := map[int]string{1: "one", 2: "two"}
+		if !ContainsKey(m, 1) {
+			t.Error("ContainsKey() with int key failed")
+		}
+	})
+	t.Run("float key", func(t *testing.T) {
+		m := map[float64]string{1.1: "one", 2.2: "two"}
+		if !ContainsKey(m, 1.1) {
+			t.Error("ContainsKey() with float key failed")
+		}
+	})
+	t.Run("struct key", func(t *testing.T) {
+		type myKey struct {
+			id int
+		}
+		m := map[myKey]string{{id: 1}: "one", {id: 2}: "two"}
+		if !ContainsKey(m, myKey{id: 1}) {
+			t.Error("ContainsKey() with struct key failed")
+		}
+	})
+}
+
 func TestKeys(t *testing.T) {
 	tests := []struct {
 		name string
