@@ -85,7 +85,7 @@ type PostOptions struct {
 }
 
 // Post 发送POST请求
-func (rc *RequestClient) Post(url string, data map[string]interface{}, postOptions *PostOptions) (string, error) {
+func (rc *RequestClient) Post(postUrl string, data map[string]interface{}, postOptions *PostOptions) (string, error) {
 	var (
 		reqBody     io.Reader
 		contentType string
@@ -111,7 +111,7 @@ func (rc *RequestClient) Post(url string, data map[string]interface{}, postOptio
 	}
 
 	// 创建 HTTP 请求
-	req, err := http.NewRequest("POST", url, reqBody)
+	req, err := http.NewRequest("POST", postUrl, reqBody)
 	if err != nil {
 		return "", err
 	}
