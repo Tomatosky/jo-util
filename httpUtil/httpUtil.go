@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"github.com/Tomatosky/jo-util/strUtil"
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -84,43 +86,57 @@ type PostOptions struct {
 
 // Post 发送POST请求
 func (rc *RequestClient) Post(url string, data map[string]interface{}, postOptions *PostOptions) (string, error) {
-	// 将数据转换为JSON格式
-	jsonData, err := json.Marshal(data)
+	var (
+		reqBody     io.Reader
+		contentType string
+	)
+
+	// 判断是否使用 JSON 格式
+	if postOptions.IsJson {
+		// JSON 格式
+		jsonData, err := json.Marshal(data)
+		if err != nil {
+			return "", err
+		}
+		reqBody = bytes.NewBuffer(jsonData)
+		contentType = "application/json"
+	} else {
+		// 表单格式 (x-www-form-urlencoded)
+		formData := url.Values{}
+		for key, value := range data {
+			formData.Set(key, fmt.Sprintf("%v", value)) // 确保值转为字符串
+		}
+		reqBody = strings.NewReader(formData.Encode())
+		contentType = "application/x-www-form-urlencoded"
+	}
+
+	// 创建 HTTP 请求
+	req, err := http.NewRequest("POST", url, reqBody)
 	if err != nil {
 		return "", err
 	}
-
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return "", err
-	}
-
 	// 设置请求头
 	if postOptions.Headers != nil {
 		for key, value := range postOptions.Headers {
 			req.Header.Set(key, value)
 		}
 	}
-	if postOptions.IsJson {
-		req.Header.Set("Content-Type", "application/json")
-	}
-
-	// 发送请求
+	req.Header.Set("Content-Type", contentType) // 根据 IsJson 设置正确的 Content-Type
+	// 设置超时（如果配置）
 	if postOptions.Timeout > 0 {
 		rc.Client.Timeout = time.Duration(postOptions.Timeout) * time.Second
 	}
+	// 发送请求
 	resp, err := rc.Client.Do(req)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
-
-	// 读取响应体
+	// 读取响应
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
 	}
-
 	return string(body), nil
 }
 
