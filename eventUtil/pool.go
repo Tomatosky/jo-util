@@ -29,8 +29,7 @@ func (p *Pool) Submit(task func()) error {
 	return nil
 }
 
-func (p *Pool) Release(timeout time.Duration) {
-	p.pool.Waiting()
+func (p *Pool) Release(timeout time.Duration) (isTimeout bool) {
 	defer p.pool.Release()
 
 	// 创建一个通道用于通知等待完成
@@ -46,9 +45,9 @@ func (p *Pool) Release(timeout time.Duration) {
 	select {
 	case <-done:
 		// 所有任务正常完成
-		return
+		return false
 	case <-time.After(timeout):
 		// 超时后直接返回，不等待剩余任务
-		return
+		return true
 	}
 }
