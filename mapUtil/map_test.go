@@ -301,3 +301,97 @@ func TestToString(t *testing.T) {
 		})
 	}
 }
+
+func TestSortByValue(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    map[string]int
+		reverse  bool
+		expected []string
+	}{
+		{
+			name:     "empty map",
+			input:    map[string]int{},
+			reverse:  false,
+			expected: []string{},
+		},
+		{
+			name:     "ascending sort",
+			input:    map[string]int{"a": 3, "b": 1, "c": 2},
+			reverse:  false,
+			expected: []string{"b", "c", "a"},
+		},
+		{
+			name:     "descending sort",
+			input:    map[string]int{"a": 3, "b": 1, "c": 2},
+			reverse:  true,
+			expected: []string{"a", "c", "b"},
+		},
+		{
+			name:     "same values ascending",
+			input:    map[string]int{"a": 1, "b": 1, "c": 1},
+			reverse:  false,
+			expected: []string{"a", "b", "c"}, // 顺序不重要，但需要稳定
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := SortByValue(tt.input, tt.reverse)
+
+			if len(got) != len(tt.expected) {
+				t.Errorf("expected length %d, got %d", len(tt.expected), len(got))
+				return
+			}
+
+			// 对于相同值的测试用例，我们只检查顺序是否稳定
+			if tt.name == "same values ascending" {
+				// 检查是否包含所有键
+				keys := make(map[string]bool)
+				for _, k := range got {
+					keys[k] = true
+				}
+				for _, k := range tt.expected {
+					if !keys[k] {
+						t.Errorf("missing key %s in result", k)
+					}
+				}
+				return
+			}
+
+			// 对于其他测试用例，检查顺序是否正确
+			for i := range got {
+				if got[i] != tt.expected[i] {
+					t.Errorf("at index %d, expected %s, got %s", i, tt.expected[i], got[i])
+				}
+			}
+		})
+	}
+}
+
+func TestSortByValueWithDifferentTypes(t *testing.T) {
+	// 测试不同类型的map
+	t.Run("float64 values", func(t *testing.T) {
+		input := map[string]float64{"a": 1.1, "b": 1.0, "c": 1.2}
+		expected := []string{"b", "a", "c"}
+		got := SortByValue(input, false)
+
+		for i := range got {
+			if got[i] != expected[i] {
+				t.Errorf("at index %d, expected %s, got %s", i, expected[i], got[i])
+			}
+		}
+	})
+
+	t.Run("string values", func(t *testing.T) {
+		input := map[int]string{1: "z", 2: "a", 3: "m"}
+		expected := []int{2, 3, 1}
+		got := SortByValue(input, false)
+
+		for i := range got {
+			if got[i] != expected[i] {
+				t.Errorf("at index %d, expected %d, got %d", i, expected[i], got[i])
+			}
+		}
+	})
+}

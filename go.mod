@@ -8,6 +8,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/panjf2000/ants/v2 v2.11.3
 	go.uber.org/zap v1.27.0
+	golang.org/x/exp v0.0.0-20250531010427-b6e5de432a8b
 )
 
 require (
