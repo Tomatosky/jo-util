@@ -65,3 +65,24 @@ func AddIfAbsent[T comparable](slice *[]T, item T) {
 	}
 	*slice = append(*slice, item)
 }
+
+func Remove[T comparable](slice []T, target T, all bool) []T {
+	if !all {
+		// 只删除第一个匹配项
+		for i, item := range slice {
+			if item == target {
+				return append(slice[:i], slice[i+1:]...)
+			}
+		}
+	} else {
+		// 删除所有匹配项
+		result := make([]T, 0, len(slice))
+		for _, item := range slice {
+			if item != target {
+				result = append(result, item)
+			}
+		}
+		return result
+	}
+	return slice
+}

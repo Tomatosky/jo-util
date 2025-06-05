@@ -141,3 +141,85 @@ func TestAddIfAbsent(t *testing.T) {
 		})
 	}
 }
+
+func TestRemove2(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    []int
+		target   int
+		all      bool
+		expected []int
+	}{
+		{
+			name:     "Remove first occurrence",
+			input:    []int{1, 2, 3, 2, 4},
+			target:   2,
+			all:      false,
+			expected: []int{1, 3, 2, 4},
+		},
+		{
+			name:     "Remove all occurrences",
+			input:    []int{1, 2, 3, 2, 4},
+			target:   2,
+			all:      true,
+			expected: []int{1, 3, 4},
+		},
+		{
+			name:     "Target not found",
+			input:    []int{1, 2, 3},
+			target:   4,
+			all:      false,
+			expected: []int{1, 2, 3},
+		},
+		{
+			name:     "Empty slice",
+			input:    []int{},
+			target:   1,
+			all:      false,
+			expected: []int{},
+		},
+		{
+			name:     "Remove all from empty slice",
+			input:    []int{},
+			target:   1,
+			all:      true,
+			expected: []int{},
+		},
+		{
+			name:     "Remove first from single element",
+			input:    []int{5},
+			target:   5,
+			all:      false,
+			expected: []int{},
+		},
+		{
+			name:     "Remove all from single element",
+			input:    []int{5},
+			target:   5,
+			all:      true,
+			expected: []int{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := Remove(tt.input, tt.target, tt.all)
+			if !equal(result, tt.expected) {
+				t.Errorf("Remove(%v, %d, %t) = %v, want %v", tt.input, tt.target, tt.all, result, tt.expected)
+			}
+		})
+	}
+}
+
+// equal 辅助函数用于比较两个切片是否相等
+func equal[T comparable](a, b []T) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
