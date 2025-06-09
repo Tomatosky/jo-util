@@ -223,3 +223,76 @@ func equal[T comparable](a, b []T) bool {
 	}
 	return true
 }
+
+func TestGetByIndex(t *testing.T) {
+	tests := []struct {
+		name      string
+		slice     []int
+		index     int
+		want      int
+		wantError bool
+	}{
+		{"empty slice", []int{}, 0, 0, true},
+		{"first element", []int{1, 2, 3}, 0, 1, false},
+		{"last element", []int{1, 2, 3}, 2, 3, false},
+		{"negative index -1", []int{1, 2, 3}, -1, 3, false},
+		{"negative index -2", []int{1, 2, 3}, -2, 2, false},
+		{"index out of range", []int{1, 2, 3}, 3, 0, true},
+		{"negative index out of range", []int{1, 2, 3}, -4, 0, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := GetByIndex(tt.slice, tt.index)
+			if (err != nil) != tt.wantError {
+				t.Errorf("GetByIndex() error = %v, wantError %v", err, tt.wantError)
+				return
+			}
+			if !tt.wantError && got != tt.want {
+				t.Errorf("GetByIndex() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestInsertByIndex(t *testing.T) {
+	tests := []struct {
+		name      string
+		slice     []int
+		index     int
+		value     int
+		want      []int
+		wantError bool
+	}{
+		{"insert at beginning", []int{2, 3}, 0, 1, []int{1, 2, 3}, false},
+		{"insert at end", []int{1, 2}, 2, 3, []int{1, 2, 3}, false},
+		{"insert in middle", []int{1, 3}, 1, 2, []int{1, 2, 3}, false},
+		{"negative index -1", []int{1, 3}, -1, 2, []int{1, 3, 2}, false},
+		{"negative index -2", []int{1, 3}, -2, 2, []int{1, 2, 3}, false},
+		{"index out of range", []int{1, 2}, 3, 3, nil, true},
+		{"negative index out of range", []int{1, 2}, -4, 0, nil, true},
+		{"empty slice insert at 0", []int{}, 0, 1, []int{1}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := InsertByIndex(tt.slice, tt.index, tt.value)
+			if (err != nil) != tt.wantError {
+				t.Errorf("InsertByIndex() error = %v, wantError %v", err, tt.wantError)
+				return
+			}
+			if !tt.wantError {
+				if len(got) != len(tt.want) {
+					t.Errorf("InsertByIndex() length = %v, want %v", len(got), len(tt.want))
+					return
+				}
+				for i := range got {
+					if got[i] != tt.want[i] {
+						t.Errorf("InsertByIndex() = %v, want %v", got, tt.want)
+						return
+					}
+				}
+			}
+		})
+	}
+}
