@@ -7,12 +7,18 @@ import (
 
 var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
 
+// Number 约束，限制为所有整数类型
+type Number interface {
+	~int | ~int8 | ~int16 | ~int32 | ~int64 |
+	~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr
+}
+
 // RandomInt 生成指定范围 [start, end) 的随机整数
-func RandomInt(start, end int) int {
+func RandomInt[T Number](start, end T) T {
 	if start >= end {
 		panic("invalid range: start >= end")
 	}
-	return rng.Intn(end-start) + start
+	return T(rng.Int63n(int64(end-start))) + start
 }
 
 // RandomEle 从切片中随机选择一个元素
