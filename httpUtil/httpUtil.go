@@ -7,8 +7,11 @@ import (
 	"fmt"
 	"github.com/Tomatosky/jo-util/strUtil"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -79,9 +82,10 @@ func (rc *RequestClient) Get(url string, getOptions *GetOptions) (string, error)
 }
 
 type PostOptions struct {
-	Headers map[string]string
-	Timeout int
-	IsJson  bool
+	Headers     map[string]string
+	Timeout     int
+	IsJson      bool
+	IsMultipart bool
 }
 
 // Post 发送POST请求
@@ -90,9 +94,44 @@ func (rc *RequestClient) Post(postUrl string, data map[string]interface{}, postO
 		reqBody     io.Reader
 		contentType string
 	)
+	// 判断请求体格式
+	switch {
+	case postOptions.IsMultipart:
+		// multipart/form-data 格式
+		body := &bytes.Buffer{}
+		writer := multipart.NewWriter(body)
 
-	// 判断是否使用 JSON 格式
-	if postOptions.IsJson {
+		for key, value := range data {
+			// 处理文件上传情况
+			if file, ok := value.(*os.File); ok {
+				part, err := writer.CreateFormFile(key, filepath.Base(file.Name()))
+				if err != nil {
+					return "", err
+				}
+				_, err = io.Copy(part, file)
+				if err != nil {
+					return "", err
+				}
+				continue
+			}
+
+			// 处理普通字段
+			strValue := fmt.Sprintf("%v", value)
+			err := writer.WriteField(key, strValue)
+			if err != nil {
+				return "", err
+			}
+		}
+
+		err := writer.Close()
+		if err != nil {
+			return "", err
+		}
+
+		reqBody = body
+		contentType = writer.FormDataContentType()
+
+	case postOptions.IsJson:
 		// JSON 格式
 		jsonData, err := json.Marshal(data)
 		if err != nil {
@@ -100,7 +139,8 @@ func (rc *RequestClient) Post(postUrl string, data map[string]interface{}, postO
 		}
 		reqBody = bytes.NewBuffer(jsonData)
 		contentType = "application/json"
-	} else {
+
+	default:
 		// 表单格式 (x-www-form-urlencoded)
 		formData := url.Values{}
 		for key, value := range data {
@@ -116,12 +156,12 @@ func (rc *RequestClient) Post(postUrl string, data map[string]interface{}, postO
 		return "", err
 	}
 	// 设置请求头
+	req.Header.Set("Content-Type", contentType)
 	if postOptions.Headers != nil {
 		for key, value := range postOptions.Headers {
 			req.Header.Set(key, value)
 		}
 	}
-	req.Header.Set("Content-Type", contentType) // 根据 IsJson 设置正确的 Content-Type
 	// 设置超时（如果配置）
 	if postOptions.Timeout > 0 {
 		rc.Client.Timeout = time.Duration(postOptions.Timeout) * time.Second
