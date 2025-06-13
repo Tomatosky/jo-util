@@ -50,11 +50,11 @@ func RandomEleSet[T any](slice []T, n int) []T {
 }
 
 // RandomWeightedKey 根据权重随机选择一个键
-func RandomWeightedKey[T comparable](weights map[T]int) T {
+func RandomWeightedKey[K comparable, V Number](weights map[K]V) K {
 	// 计算总权重
 	var sum int
 	for _, w := range weights {
-		sum += w
+		sum += int(w)
 	}
 
 	// 处理无效权重的情况
@@ -68,7 +68,7 @@ func RandomWeightedKey[T comparable](weights map[T]int) T {
 	// 查找对应的键
 	var runningTotal int
 	for key, weight := range weights {
-		runningTotal += weight
+		runningTotal += int(weight)
 		if runningTotal > r {
 			return key
 		}
