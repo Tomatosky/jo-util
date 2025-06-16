@@ -191,6 +191,53 @@ func TestIsSameDay(t *testing.T) {
 	}
 }
 
+func TestIsSameWeek(t *testing.T) {
+	now := time.Now().Unix()
+	oneDay := int64(24 * 60 * 60)
+	oneWeek := 7 * oneDay
+	tests := []struct {
+		name string
+		t1   int64
+		t2   int64
+		want bool
+	}{
+		{"Same time", now, now, true},
+		{"Same week different day", now, now + oneDay, true},
+		{"Different week", now, now + oneWeek, false},
+		{"Different year", 1609459200, 1640995200, false}, // 2021-01-01 and 2021-12-31
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsSameWeek(tt.t1, tt.t2); got != tt.want {
+				t.Errorf("IsSameWeek() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+func TestIsSameMonth(t *testing.T) {
+	now := time.Now().Unix()
+	oneDay := int64(24 * 60 * 60)
+	oneMonth := 31 * oneDay // Approximate
+	tests := []struct {
+		name string
+		t1   int64
+		t2   int64
+		want bool
+	}{
+		{"Same time", now, now, true},
+		{"Same month different day", now, now + oneDay, true},
+		{"Different month", now, now + oneMonth, false},
+		{"Same month different year", 1609459200, 1640995200, false}, // Jan 2021 and Jan 2022
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsSameMonth(tt.t1, tt.t2); got != tt.want {
+				t.Errorf("IsSameMonth() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestFormatToStr(t *testing.T) {
 	testTime := time.Date(2022, 1, 1, 12, 30, 45, 0, loc)
 

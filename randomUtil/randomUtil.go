@@ -10,7 +10,7 @@ var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
 // Number 约束，限制为所有整数类型
 type Number interface {
 	~int | ~int8 | ~int16 | ~int32 | ~int64 |
-	~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr
+		~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr
 }
 
 // RandomInt 生成指定范围 [start, end) 的随机整数

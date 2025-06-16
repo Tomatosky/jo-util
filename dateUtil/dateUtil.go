@@ -122,6 +122,27 @@ func IsSameDay(t1, t2 int64) bool {
 	return y1 == y2 && m1 == m2 && d1 == d2
 }
 
+func IsSameWeek(t1, t2 int64) bool {
+	time1 := GetTime(t1)
+	time2 := GetTime(t2)
+
+	// 获取年份和周数
+	y1, w1 := time1.ISOWeek()
+	y2, w2 := time2.ISOWeek()
+
+	return y1 == y2 && w1 == w2
+}
+
+func IsSameMonth(t1, t2 int64) bool {
+	time1 := GetTime(t1)
+	time2 := GetTime(t2)
+
+	y1, m1, _ := time1.Date()
+	y2, m2, _ := time2.Date()
+
+	return y1 == y2 && m1 == m2
+}
+
 func FormatToStr(t time.Time, format string, timezone ...string) string {
 	tf, ok := timeFormat[strings.ToLower(format)]
 	if !ok {
