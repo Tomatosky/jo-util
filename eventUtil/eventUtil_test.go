@@ -53,7 +53,7 @@ func TestRegisterDuringDestruction(t *testing.T) {
 	em, _ := NewEventManager()
 
 	// Start destruction
-	go em.OnDestroy(1 * time.Second)
+	go em.ShutDown(1 * time.Second)
 
 	// Wait a bit to ensure destruction flag is set
 	time.Sleep(100 * time.Millisecond)
@@ -109,7 +109,7 @@ func TestTriggerDuringDestruction(t *testing.T) {
 	em.Register("test", func(data interface{}) {})
 
 	// Start destruction
-	go em.OnDestroy(1 * time.Second)
+	go em.ShutDown(1 * time.Second)
 
 	// Wait a bit to ensure destruction flag is set
 	time.Sleep(100 * time.Millisecond)
@@ -153,7 +153,7 @@ func TestOnDestroy(t *testing.T) {
 	em.Register("test", func(data interface{}) {})
 
 	// Start destruction
-	em.OnDestroy(100 * time.Millisecond)
+	em.ShutDown(100 * time.Millisecond)
 
 	// Verify destruction flag
 	if !em.isDestroying() {

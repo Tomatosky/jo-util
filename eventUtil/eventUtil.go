@@ -102,8 +102,8 @@ func (em *EventManager) Clear() {
 	em.handlers = make(map[string][]EventHandler)
 }
 
-// OnDestroy 销毁事件管理器
-func (em *EventManager) OnDestroy(timeout time.Duration) {
+// ShutDown 销毁事件管理器
+func (em *EventManager) ShutDown(timeout time.Duration) {
 	defer em.pool.Release(timeout)
 
 	em.lock.Lock()
