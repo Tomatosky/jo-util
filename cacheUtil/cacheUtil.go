@@ -88,6 +88,26 @@ func (c *cache[K, V]) get(k K) (V, bool) {
 	return item.Object, true
 }
 
+func (c *cache[K, V]) GetWithExpiration(k K) (V, time.Time, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	item, found := c.items[k]
+	if !found {
+		var zero V
+		return zero, time.Time{}, false
+	}
+
+	if c.expiration > 0 && time.Now().UnixNano() > item.Expiration {
+		var zero V
+		return zero, time.Time{}, false
+	}
+
+	// 将纳秒时间戳转换为time.Time
+	expirationTime := time.Unix(0, item.Expiration)
+	return item.Object, expirationTime, true
+}
+
 func (c *cache[K, V]) Delete(k K) {
 	c.mu.Lock()
 	c.delete(k)
