@@ -49,16 +49,21 @@ type FormatOpt struct {
 const defaultTimeZone = "Asia/Shanghai"
 
 // Format 时间格式化方法
-func Format(formatType FormatType, opt FormatOpt) string {
+func Format(formatType FormatType, opt ...FormatOpt) string {
 	var t time.Time
+	option := FormatOpt{}
+	if len(opt) > 0 {
+		option = opt[0]
+	}
+
 	// 设置时间
-	if opt.CustomTime > 0 {
-		t = time.Unix(0, opt.CustomTime*int64(time.Millisecond))
+	if option.CustomTime > 0 {
+		t = time.Unix(0, option.CustomTime*int64(time.Millisecond))
 	} else {
 		t = time.Now()
 	}
 	// 设置时区
-	timeZone := opt.TimeZone
+	timeZone := option.TimeZone
 	if timeZone == "" {
 		timeZone = defaultTimeZone
 	}
@@ -71,10 +76,10 @@ func Format(formatType FormatType, opt FormatOpt) string {
 	// 根据格式类型返回格式化后的字符串
 	switch formatType {
 	case Format_Custom:
-		if opt.CustomType == "" {
+		if option.CustomType == "" {
 			panic("custom type cannot be empty")
 		}
-		return t.Format(opt.CustomType)
+		return t.Format(option.CustomType)
 	// 2位年份格式
 	case Format_YY_MM_DD_HHmmss_SSS:
 		return t.Format("06-01-02 15:04:05.000")
