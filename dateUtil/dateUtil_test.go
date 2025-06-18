@@ -162,14 +162,6 @@ func TestEndOfMonth(t *testing.T) {
 	}
 }
 
-func TestFormat(t *testing.T) {
-	timestamp := int64(1640995200) // UTC 2022-01-01 00:00:00 = CST 2022-01-01 08:00:00
-	want := "2022-01-01 08:00:00"
-	if got := Format(timestamp); got != want {
-		t.Errorf("Format() = %v, want %v", got, want)
-	}
-}
-
 func TestIsSameDay(t *testing.T) {
 	tests := []struct {
 		name string
@@ -233,31 +225,6 @@ func TestIsSameMonth(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := IsSameMonth(tt.t1, tt.t2); got != tt.want {
 				t.Errorf("IsSameMonth() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestFormatToStr(t *testing.T) {
-	testTime := time.Date(2022, 1, 1, 12, 30, 45, 0, loc)
-
-	tests := []struct {
-		name   string
-		t      time.Time
-		format string
-		want   string
-	}{
-		{"default format", testTime, "yyyy-mm-dd hh:mm:ss", "2022-01-01 12:30:45"},
-		{"date only", testTime, "yyyy-mm-dd", "2022-01-01"},
-		{"time only", testTime, "hh:mm:ss", "12:30:45"},
-		{"different format", testTime, "dd/mm/yy hh:mm:ss", "01/01/22 12:30:45"},
-		{"invalid format", testTime, "invalid", ""},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := FormatToStr(tt.t, tt.format); got != tt.want {
-				t.Errorf("FormatToStr() = %v, want %v", got, tt.want)
 			}
 		})
 	}

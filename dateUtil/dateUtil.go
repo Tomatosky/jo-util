@@ -106,11 +106,6 @@ func EndOfMonth(timestamp int64) int64 {
 	return nextMonthFirstDay.Unix() - 1
 }
 
-// Format 格式化时间戳
-func Format(timestamp int64) string {
-	return GetTime(timestamp).Format("2006-01-02 15:04:05")
-}
-
 // IsSameDay 判断两个时间戳是否在同一天
 func IsSameDay(t1, t2 int64) bool {
 	time1 := GetTime(t1)
@@ -141,22 +136,6 @@ func IsSameMonth(t1, t2 int64) bool {
 	y2, m2, _ := time2.Date()
 
 	return y1 == y2 && m1 == m2
-}
-
-func FormatToStr(t time.Time, format string, timezone ...string) string {
-	tf, ok := timeFormat[strings.ToLower(format)]
-	if !ok {
-		return ""
-	}
-
-	if timezone != nil && timezone[0] != "" {
-		loc, err := time.LoadLocation(timezone[0])
-		if err != nil {
-			return ""
-		}
-		return t.In(loc).Format(tf)
-	}
-	return t.Format(tf)
 }
 
 func ParseToTime(str, format string, timezone ...string) (time.Time, error) {
