@@ -2,6 +2,7 @@ package eventUtil
 
 import (
 	"errors"
+	"github.com/Tomatosky/jo-util/poolUtil"
 	"github.com/panjf2000/ants/v2"
 	"sync"
 	"time"
@@ -13,7 +14,7 @@ type EventHandler func(data interface{})
 // EventManager 事件管理器结构
 type EventManager struct {
 	handlers   map[string][]EventHandler
-	pool       *Pool
+	pool       *poolUtil.Pool
 	lock       sync.RWMutex
 	destroying bool
 }
@@ -22,7 +23,7 @@ type EventManager struct {
 func NewEventManager() (*EventManager, error) {
 	return &EventManager{
 		handlers: make(map[string][]EventHandler),
-		pool:     NewPool(ants.DefaultAntsPoolSize),
+		pool:     poolUtil.NewPool(ants.DefaultAntsPoolSize),
 	}, nil
 }
 
