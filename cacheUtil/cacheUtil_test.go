@@ -1,6 +1,7 @@
 package cacheUtil
 
 import (
+	"sync"
 	"testing"
 	"time"
 )
@@ -141,4 +142,130 @@ func TestCache_JanitorCleanup(t *testing.T) {
 	if _, found := items["temp2"]; !found {
 		t.Error("Expected temp2 to still exist")
 	}
+}
+
+func TestCache_GetWithExpiration(t *testing.T) {
+	// 测试用例1: 获取存在的未过期项
+	t.Run("Get existing and not expired item", func(t *testing.T) {
+		c := New[string, int](time.Minute) // 假设有NewCache构造函数
+		key := "test_key"
+		value := 42
+		c.Set(key, value)
+
+		v, exp, found := c.GetWithExpiration(key)
+		if !found {
+			t.Error("Expected to find the item, but it was not found")
+		}
+		if v != value {
+			t.Errorf("Expected value %d, got %d", value, v)
+		}
+		if exp.Before(time.Now()) {
+			t.Error("Expiration time should be in the future")
+		}
+	})
+
+	// 测试用例2: 获取不存在的项
+	t.Run("Get non-existent item", func(t *testing.T) {
+		c := New[string, int](time.Minute)
+		key := "non_existent"
+
+		v, exp, found := c.GetWithExpiration(key)
+		if found {
+			t.Error("Expected not to find the item, but it was found")
+		}
+		if v != 0 { // int的零值
+			t.Errorf("Expected zero value, got %d", v)
+		}
+		if !exp.IsZero() {
+			t.Error("Expected zero time for non-existent item")
+		}
+	})
+
+	// 测试用例3: 获取已过期的项
+	t.Run("Get expired item", func(t *testing.T) {
+		c := New[string, int](time.Millisecond) // 非常短的过期时间
+		key := "expired_key"
+		value := 100
+		c.Set(key, value)
+
+		// 等待项目过期
+		time.Sleep(2 * time.Millisecond)
+
+		v, exp, found := c.GetWithExpiration(key)
+		if found {
+			t.Error("Expected not to find expired item, but it was found")
+		}
+		if v != 0 {
+			t.Errorf("Expected zero value for expired item, got %d", v)
+		}
+		if !exp.IsZero() {
+			t.Error("Expected zero time for expired item")
+		}
+	})
+
+	// 测试用例4: 并发访问测试
+	t.Run("Concurrent access", func(t *testing.T) {
+		c := New[string, int](time.Minute)
+		key := "concurrent_key"
+		value := 200
+		c.Set(key, value)
+
+		var wg sync.WaitGroup
+		for i := 0; i < 100; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				v, _, found := c.GetWithExpiration(key)
+				if !found {
+					t.Error("Item not found in concurrent access")
+				}
+				if v != value {
+					t.Errorf("Expected %d, got %d in concurrent access", value, v)
+				}
+			}()
+		}
+		wg.Wait()
+	})
+
+	// 测试用例5: 零值测试
+	t.Run("Zero value test", func(t *testing.T) {
+		c := New[string, string](time.Minute)
+		key := "zero_value_key"
+		value := "" // 字符串的零值
+		c.Set(key, value)
+
+		v, exp, found := c.GetWithExpiration(key)
+		if !found {
+			t.Error("Expected to find the zero value item, but it was not found")
+		}
+		if v != value {
+			t.Errorf("Expected empty string, got '%s'", v)
+		}
+		if exp.Before(time.Now()) {
+			t.Error("Expiration time should be in the future for zero value")
+		}
+	})
+
+	// 测试用例6: 自定义类型测试
+	t.Run("Custom type test", func(t *testing.T) {
+		type customStruct struct {
+			Field1 string
+			Field2 int
+		}
+		c := New[string, customStruct](time.Minute)
+		key := "custom_type_key"
+		value := customStruct{"test", 123}
+		c.Set(key, value)
+
+		v, exp, found := c.GetWithExpiration(key)
+		if !found {
+			t.Error("Expected to find the custom type item, but it was not found")
+		}
+		if v != value {
+			t.Errorf("Expected %+v, got %+v", value, v)
+		}
+		if exp.Before(time.Now()) {
+			t.Error("Expiration time should be in the future for custom type")
+		}
+	})
 }
