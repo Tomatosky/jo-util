@@ -6,34 +6,54 @@ import (
 )
 
 func TestGetTime(t *testing.T) {
-	// 1640995200 是 UTC 时间 2022-01-01 00:00:00
-	// 在 Asia/Shanghai (UTC+8) 应该是 2022-01-01 08:00:00
-	timestamp := int64(1640995200)
-	expected := time.Date(2022, 1, 1, 8, 0, 0, 0, loc)
-	result := GetTime(timestamp)
+	tests := []struct {
+		name      string
+		timestamp int64
+		expected  time.Time
+	}{
+		{"Zero timestamp", 0, time.Unix(0, 0).In(loc)},
+		{"Current timestamp", time.Now().Unix(), time.Unix(time.Now().Unix(), 0).In(loc)},
+		{"Future timestamp", 1893456000, time.Unix(1893456000, 0).In(loc)}, // 2030-01-01 00:00:00
+	}
 
-	if !result.Equal(expected) {
-		t.Errorf("GetTime() = %v, want %v", result, expected)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := GetTime(tt.timestamp)
+			if !got.Equal(tt.expected) {
+				t.Errorf("GetTime() = %v, want %v", got, tt.expected)
+			}
+		})
 	}
 }
 
 func TestBeginOfDay(t *testing.T) {
 	tests := []struct {
-		name      string
-		timestamp int64
-		want      int64
+		name     string
+		input    time.Time
+		expected time.Time
 	}{
-		// 1641024000 是 UTC 时间 2022-01-01 08:00:00 (Asia/Shanghai 16:00:00)
-		// 当天开始时间应该是 Asia/Shanghai 00:00:00 (UTC 前一天 16:00:00)
-		{"noon", 1641024000, 1640966400},       // 2022-01-01 16:00:00 CST -> 2022-01-01 00:00:00 CST
-		{"midnight", 1640966400, 1640966400},   // 2022-01-01 00:00:00 CST -> same
-		{"end of day", 1641052799, 1640966400}, // 2022-01-01 23:59:59 CST -> 2022-01-01 00:00:00 CST
+		{
+			"Normal time",
+			time.Date(2023, 5, 15, 14, 30, 15, 123, loc),
+			time.Date(2023, 5, 15, 0, 0, 0, 0, loc),
+		},
+		{
+			"Already at midnight",
+			time.Date(2023, 5, 15, 0, 0, 0, 0, loc),
+			time.Date(2023, 5, 15, 0, 0, 0, 0, loc),
+		},
+		{
+			"Leap day",
+			time.Date(2020, 2, 29, 23, 59, 59, 999, loc),
+			time.Date(2020, 2, 29, 0, 0, 0, 0, loc),
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := BeginOfDay(tt.timestamp); got != tt.want {
-				t.Errorf("BeginOfDay() = %v, want %v", got, tt.want)
+			got := BeginOfDay(tt.input)
+			if !got.Equal(tt.expected) {
+				t.Errorf("BeginOfDay() = %v, want %v", got, tt.expected)
 			}
 		})
 	}
@@ -41,21 +61,37 @@ func TestBeginOfDay(t *testing.T) {
 
 func TestBeginOfWeek(t *testing.T) {
 	tests := []struct {
-		name      string
-		timestamp int64
-		want      int64
+		name     string
+		input    time.Time
+		expected time.Time
 	}{
-		// 2022-01-03 (Monday) 00:00:00 CST = 2022-01-02 16:00:00 UTC (1641168000)
-		{"Monday", 1641168000, 1641139200},    // 2022-01-03 (Monday) -> same
-		{"Wednesday", 1641340800, 1641139200}, // 2022-01-05 -> 2022-01-03
-		{"Sunday", 1641686400, 1641139200},    // 2022-01-09 (Sunday) -> 2022-01-03
-		{"next week", 1641772800, 1641744000}, // 2022-01-10 (next Monday) -> same
+		{
+			"Monday",
+			time.Date(2023, 5, 15, 0, 0, 0, 0, loc), // 周一
+			time.Date(2023, 5, 15, 0, 0, 0, 0, loc),
+		},
+		{
+			"Wednesday",
+			time.Date(2023, 5, 17, 12, 0, 0, 0, loc), // 周三
+			time.Date(2023, 5, 15, 0, 0, 0, 0, loc),
+		},
+		{
+			"Sunday",
+			time.Date(2023, 5, 21, 23, 59, 59, 999, loc), // 周日
+			time.Date(2023, 5, 15, 0, 0, 0, 0, loc),
+		},
+		{
+			"Year boundary",
+			time.Date(2023, 1, 1, 0, 0, 0, 0, loc), // 周日
+			time.Date(2022, 12, 26, 0, 0, 0, 0, loc),
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := BeginOfWeek(tt.timestamp); got != tt.want {
-				t.Errorf("BeginOfWeek() = %v, want %v", got, tt.want)
+			got := BeginOfWeek(tt.input)
+			if !got.Equal(tt.expected) {
+				t.Errorf("BeginOfWeek() = %v, want %v", got, tt.expected)
 			}
 		})
 	}
@@ -63,19 +99,37 @@ func TestBeginOfWeek(t *testing.T) {
 
 func TestBeginOfMonth(t *testing.T) {
 	tests := []struct {
-		name      string
-		timestamp int64
-		want      int64
+		name     string
+		input    time.Time
+		expected time.Time
 	}{
-		{"first day", 1640966400, 1640966400},    // 2022-01-01 00:00:00 CST -> same
-		{"middle month", 1643644800, 1643644800}, // 2022-02-01 00:00:00 CST -> same
-		{"end month", 1646063999, 1643644800},    // 2022-02-28 23:59:59 CST -> 2022-02-01 00:00:00 CST
+		{
+			"Normal date",
+			time.Date(2023, 5, 15, 14, 30, 0, 0, loc),
+			time.Date(2023, 5, 1, 0, 0, 0, 0, loc),
+		},
+		{
+			"Already first day",
+			time.Date(2023, 5, 1, 0, 0, 0, 0, loc),
+			time.Date(2023, 5, 1, 0, 0, 0, 0, loc),
+		},
+		{
+			"February leap year",
+			time.Date(2020, 2, 29, 23, 59, 59, 999, loc),
+			time.Date(2020, 2, 1, 0, 0, 0, 0, loc),
+		},
+		{
+			"December to January",
+			time.Date(2023, 12, 31, 0, 0, 0, 0, loc),
+			time.Date(2023, 12, 1, 0, 0, 0, 0, loc),
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := BeginOfMonth(tt.timestamp); got != tt.want {
-				t.Errorf("BeginOfMonth() = %v, want %v", got, tt.want)
+			got := BeginOfMonth(tt.input)
+			if !got.Equal(tt.expected) {
+				t.Errorf("BeginOfMonth() = %v, want %v", got, tt.expected)
 			}
 		})
 	}
@@ -83,21 +137,54 @@ func TestBeginOfMonth(t *testing.T) {
 
 func TestBetweenDay(t *testing.T) {
 	tests := []struct {
-		name string
-		t1   int64
-		t2   int64
-		want int
+		name     string
+		t1       time.Time
+		t2       time.Time
+		expected int
 	}{
-		{"same day", 1640966400, 1640995200, 0},  // 2022-01-01 00:00:00 CST and 2022-01-01 08:00:00 CST
-		{"one day", 1640966400, 1641052800, 1},   // 2022-01-01 and 2022-01-02
-		{"four days", 1640966400, 1641312000, 4}, // 2022-01-01 and 2022-01-05
-		{"negative", 1641052800, 1640966400, 1},  // should return absolute value
+		{
+			"Same day",
+			time.Date(2023, 5, 15, 0, 0, 0, 0, loc),
+			time.Date(2023, 5, 15, 23, 59, 59, 999, loc),
+			0,
+		},
+		{
+			"Consecutive days",
+			time.Date(2023, 5, 15, 0, 0, 0, 0, loc),
+			time.Date(2023, 5, 16, 0, 0, 0, 0, loc),
+			1,
+		},
+		{
+			"One week apart",
+			time.Date(2023, 5, 15, 0, 0, 0, 0, loc),
+			time.Date(2023, 5, 22, 0, 0, 0, 0, loc),
+			7,
+		},
+		{
+			"Month boundary",
+			time.Date(2023, 4, 30, 23, 59, 59, 999, loc),
+			time.Date(2023, 5, 1, 0, 0, 0, 0, loc),
+			1,
+		},
+		{
+			"Year boundary",
+			time.Date(2022, 12, 31, 23, 59, 59, 999, loc),
+			time.Date(2023, 1, 1, 0, 0, 0, 0, loc),
+			1,
+		},
+		{
+			"Leap year",
+			time.Date(2020, 2, 28, 0, 0, 0, 0, loc),
+			time.Date(2020, 3, 1, 0, 0, 0, 0, loc),
+			2,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := BetweenDay(tt.t1, tt.t2); got != tt.want {
-				t.Errorf("BetweenDay() = %v, want %v", got, tt.want)
+			got := BetweenDay(tt.t1, tt.t2)
+			if got != tt.expected {
+				t.Errorf("BetweenDay() = %v, want %v", got, tt.expected)
 			}
 		})
 	}
@@ -105,18 +192,32 @@ func TestBetweenDay(t *testing.T) {
 
 func TestEndOfDay(t *testing.T) {
 	tests := []struct {
-		name      string
-		timestamp int64
-		want      int64
+		name     string
+		input    time.Time
+		expected time.Time
 	}{
-		{"noon", 1640995200, 1641052799},     // 2022-01-01 08:00:00 UTC -> 2022-01-01 23:59:59 CST
-		{"midnight", 1640966400, 1641052799}, // 2022-01-01 00:00:00 CST -> 2022-01-01 23:59:59 CST
+		{
+			"Normal time",
+			time.Date(2023, 5, 15, 14, 30, 15, 123, loc),
+			time.Date(2023, 5, 15, 23, 59, 59, 0, loc),
+		},
+		{
+			"Already at end of day",
+			time.Date(2023, 5, 15, 23, 59, 59, 0, loc),
+			time.Date(2023, 5, 15, 23, 59, 59, 0, loc),
+		},
+		{
+			"Leap day",
+			time.Date(2020, 2, 29, 0, 0, 0, 0, loc),
+			time.Date(2020, 2, 29, 23, 59, 59, 0, loc),
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := EndOfDay(tt.timestamp); got != tt.want {
-				t.Errorf("EndOfDay() = %v, want %v", got, tt.want)
+			got := EndOfDay(tt.input)
+			if !got.Equal(tt.expected) {
+				t.Errorf("EndOfDay() = %v, want %v", got, tt.expected)
 			}
 		})
 	}
@@ -124,19 +225,37 @@ func TestEndOfDay(t *testing.T) {
 
 func TestEndOfWeek(t *testing.T) {
 	tests := []struct {
-		name      string
-		timestamp int64
-		want      int64
+		name     string
+		input    time.Time
+		expected time.Time
 	}{
-		{"Monday", 1641168000, 1641743999},    // 2022-01-03 (Monday) -> 2022-01-09 23:59:59 CST
-		{"Wednesday", 1641340800, 1641743999}, // 2022-01-05 -> 2022-01-09 23:59:59 CST
-		{"Sunday", 1641686400, 1641743999},    // 2022-01-09 (Sunday) -> same day 23:59:59 CST
+		{
+			"Monday",
+			time.Date(2023, 5, 15, 0, 0, 0, 0, loc), // 周一
+			time.Date(2023, 5, 21, 23, 59, 59, 0, loc),
+		},
+		{
+			"Wednesday",
+			time.Date(2023, 5, 17, 12, 0, 0, 0, loc), // 周三
+			time.Date(2023, 5, 21, 23, 59, 59, 0, loc),
+		},
+		{
+			"Sunday",
+			time.Date(2023, 5, 21, 23, 59, 59, 999, loc), // 周日
+			time.Date(2023, 5, 21, 23, 59, 59, 0, loc),
+		},
+		{
+			"Year boundary",
+			time.Date(2023, 1, 1, 0, 0, 0, 0, loc), // 周日
+			time.Date(2023, 1, 1, 23, 59, 59, 0, loc),
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := EndOfWeek(tt.timestamp); got != tt.want {
-				t.Errorf("EndOfWeek() = %v, want %v", got, tt.want)
+			got := EndOfWeek(tt.input)
+			if !got.Equal(tt.expected) {
+				t.Errorf("EndOfWeek() = %v, want %v", got, tt.expected)
 			}
 		})
 	}
@@ -144,19 +263,42 @@ func TestEndOfWeek(t *testing.T) {
 
 func TestEndOfMonth(t *testing.T) {
 	tests := []struct {
-		name      string
-		timestamp int64
-		want      int64
+		name     string
+		input    time.Time
+		expected time.Time
 	}{
-		{"January", 1640966400, 1643644799},       // 2022-01-01 -> 2022-01-31 23:59:59 CST
-		{"February", 1643644800, 1646063999},      // 2022-02-01 -> 2022-02-28 23:59:59 CST
-		{"February leap", 1582992000, 1585670399}, // 2020-02-01 -> 2020-02-29 23:59:59 CST
+		{
+			"Normal month",
+			time.Date(2023, 5, 15, 14, 30, 0, 0, loc),
+			time.Date(2023, 5, 31, 23, 59, 59, 0, loc),
+		},
+		{
+			"Already last day",
+			time.Date(2023, 5, 31, 23, 59, 59, 0, loc),
+			time.Date(2023, 5, 31, 23, 59, 59, 0, loc),
+		},
+		{
+			"February leap year",
+			time.Date(2020, 2, 1, 0, 0, 0, 0, loc),
+			time.Date(2020, 2, 29, 23, 59, 59, 0, loc),
+		},
+		{
+			"February non-leap year",
+			time.Date(2023, 2, 1, 0, 0, 0, 0, loc),
+			time.Date(2023, 2, 28, 23, 59, 59, 0, loc),
+		},
+		{
+			"December",
+			time.Date(2023, 12, 1, 0, 0, 0, 0, loc),
+			time.Date(2023, 12, 31, 23, 59, 59, 0, loc),
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := EndOfMonth(tt.timestamp); got != tt.want {
-				t.Errorf("EndOfMonth() = %v, want %v", got, tt.want)
+			got := EndOfMonth(tt.input)
+			if !got.Equal(tt.expected) {
+				t.Errorf("EndOfMonth() = %v, want %v", got, tt.expected)
 			}
 		})
 	}
@@ -164,67 +306,152 @@ func TestEndOfMonth(t *testing.T) {
 
 func TestIsSameDay(t *testing.T) {
 	tests := []struct {
-		name string
-		t1   int64
-		t2   int64
-		want bool
+		name     string
+		t1       time.Time
+		t2       time.Time
+		expected bool
 	}{
-		{"same time", 1640995200, 1640995200, true},
-		{"same day", 1640995200, 1641009600, true},       // 2022-01-01 08:00:00 and 2022-01-01 12:00:00 CST
-		{"different day", 1640995200, 1641081600, false}, // 2022-01-01 and 2022-01-02
+		{
+			"Same time",
+			time.Date(2023, 5, 15, 14, 30, 0, 0, loc),
+			time.Date(2023, 5, 15, 14, 30, 0, 0, loc),
+			true,
+		},
+		{
+			"Same day different time",
+			time.Date(2023, 5, 15, 0, 0, 0, 0, loc),
+			time.Date(2023, 5, 15, 23, 59, 59, 999, loc),
+			true,
+		},
+		{
+			"Different day same time",
+			time.Date(2023, 5, 15, 14, 30, 0, 0, loc),
+			time.Date(2023, 5, 16, 14, 30, 0, 0, loc),
+			false,
+		},
+		{
+			"Month boundary",
+			time.Date(2023, 4, 30, 23, 59, 59, 999, loc),
+			time.Date(2023, 5, 1, 0, 0, 0, 0, loc),
+			false,
+		},
+		{
+			"Year boundary",
+			time.Date(2022, 12, 31, 23, 59, 59, 999, loc),
+			time.Date(2023, 1, 1, 0, 0, 0, 0, loc),
+			false,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := IsSameDay(tt.t1, tt.t2); got != tt.want {
-				t.Errorf("IsSameDay() = %v, want %v", got, tt.want)
+			got := IsSameDay(tt.t1, tt.t2)
+			if got != tt.expected {
+				t.Errorf("IsSameDay() = %v, want %v", got, tt.expected)
 			}
 		})
 	}
 }
 
 func TestIsSameWeek(t *testing.T) {
-	now := time.Now().Unix()
-	oneDay := int64(24 * 60 * 60)
-	oneWeek := 7 * oneDay
 	tests := []struct {
-		name string
-		t1   int64
-		t2   int64
-		want bool
+		name     string
+		t1       time.Time
+		t2       time.Time
+		expected bool
 	}{
-		{"Same time", now, now, true},
-		{"Same week different day", now, now + oneDay, true},
-		{"Different week", now, now + oneWeek, false},
-		{"Different year", 1609459200, 1640995200, false}, // 2021-01-01 and 2021-12-31
+		{
+			"Same day",
+			time.Date(2023, 5, 15, 0, 0, 0, 0, loc), // 周一
+			time.Date(2023, 5, 15, 23, 59, 59, 999, loc),
+			true,
+		},
+		{
+			"Same week",
+			time.Date(2023, 5, 15, 0, 0, 0, 0, loc),      // 周一
+			time.Date(2023, 5, 21, 23, 59, 59, 999, loc), // 周日
+			true,
+		},
+		{
+			"Different week",
+			time.Date(2023, 5, 15, 0, 0, 0, 0, loc), // 周一
+			time.Date(2023, 5, 22, 0, 0, 0, 0, loc), // 下周一
+			false,
+		},
+		{
+			"Year boundary same week",
+			time.Date(2022, 12, 31, 0, 0, 0, 0, loc), // 周六
+			time.Date(2023, 1, 1, 0, 0, 0, 0, loc),   // 周日
+			true,
+		},
+		{
+			"Year boundary different week",
+			time.Date(2022, 12, 25, 0, 0, 0, 0, loc), // 周日
+			time.Date(2022, 12, 26, 0, 0, 0, 0, loc), // 周一
+			false,
+		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := IsSameWeek(tt.t1, tt.t2); got != tt.want {
-				t.Errorf("IsSameWeek() = %v, want %v", got, tt.want)
+			got := IsSameWeek(tt.t1, tt.t2)
+			if got != tt.expected {
+				t.Errorf("IsSameWeek() = %v, want %v", got, tt.expected)
 			}
 		})
 	}
 }
+
 func TestIsSameMonth(t *testing.T) {
-	now := time.Now().Unix()
-	oneDay := int64(24 * 60 * 60)
-	oneMonth := 31 * oneDay // Approximate
 	tests := []struct {
-		name string
-		t1   int64
-		t2   int64
-		want bool
+		name     string
+		t1       time.Time
+		t2       time.Time
+		expected bool
 	}{
-		{"Same time", now, now, true},
-		{"Same month different day", now, now + oneDay, true},
-		{"Different month", now, now + oneMonth, false},
-		{"Same month different year", 1609459200, 1640995200, false}, // Jan 2021 and Jan 2022
+		{
+			"Same day",
+			time.Date(2023, 5, 15, 0, 0, 0, 0, loc),
+			time.Date(2023, 5, 15, 23, 59, 59, 999, loc),
+			true,
+		},
+		{
+			"Same month different day",
+			time.Date(2023, 5, 1, 0, 0, 0, 0, loc),
+			time.Date(2023, 5, 31, 23, 59, 59, 999, loc),
+			true,
+		},
+		{
+			"Different month same day",
+			time.Date(2023, 5, 15, 0, 0, 0, 0, loc),
+			time.Date(2023, 6, 15, 0, 0, 0, 0, loc),
+			false,
+		},
+		{
+			"Year boundary same month",
+			time.Date(2022, 12, 1, 0, 0, 0, 0, loc),
+			time.Date(2022, 12, 31, 23, 59, 59, 999, loc),
+			true,
+		},
+		{
+			"Year boundary different month",
+			time.Date(2022, 12, 31, 23, 59, 59, 999, loc),
+			time.Date(2023, 1, 1, 0, 0, 0, 0, loc),
+			false,
+		},
+		{
+			"Leap year February",
+			time.Date(2020, 2, 1, 0, 0, 0, 0, loc),
+			time.Date(2020, 2, 29, 23, 59, 59, 999, loc),
+			true,
+		},
 	}
+	
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := IsSameMonth(tt.t1, tt.t2); got != tt.want {
-				t.Errorf("IsSameMonth() = %v, want %v", got, tt.want)
+			got := IsSameMonth(tt.t1, tt.t2)
+			if got != tt.expected {
+				t.Errorf("IsSameMonth() = %v, want %v", got, tt.expected)
 			}
 		})
 	}

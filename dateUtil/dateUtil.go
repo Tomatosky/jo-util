@@ -42,18 +42,15 @@ func GetTime(timestamp int64) time.Time {
 	return time.Unix(timestamp, 0).In(loc)
 }
 
-// BeginOfDay 获取某天的起始时间戳(秒时间戳)
-func BeginOfDay(timestamp int64) int64 {
-	t := GetTime(timestamp)
+// BeginOfDay 获取某天的起始时间
+func BeginOfDay(t time.Time) time.Time {
 	year, month, day := t.Date()
 	begin := time.Date(year, month, day, 0, 0, 0, 0, loc)
-	return begin.Unix()
+	return begin
 }
 
-// BeginOfWeek 获取本周一零点时间戳(秒时间戳)
-func BeginOfWeek(timestamp int64) int64 {
-	t := GetTime(timestamp)
-
+// BeginOfWeek 获取本周一零点时间
+func BeginOfWeek(t time.Time) time.Time {
 	// 计算与周一的日期差
 	weekday := t.Weekday()
 	offsetDays := int(weekday - time.Monday)
@@ -64,77 +61,65 @@ func BeginOfWeek(timestamp int64) int64 {
 	// 获取周一日期并构造零点时间
 	monday := t.AddDate(0, 0, -offsetDays)
 	year, month, day := monday.Date()
-	return time.Date(year, month, day, 0, 0, 0, 0, loc).Unix()
+	return time.Date(year, month, day, 0, 0, 0, 0, loc)
 }
 
-// BeginOfMonth 获取当月第一天零点时间戳(秒时间戳)
-func BeginOfMonth(timestamp int64) int64 {
-	t := GetTime(timestamp)
+// BeginOfMonth 获取当月第一天零点时间
+func BeginOfMonth(t time.Time) time.Time {
 	year, month, _ := t.Date()
-	return time.Date(year, month, 1, 0, 0, 0, 0, loc).Unix()
+	return time.Date(year, month, 1, 0, 0, 0, 0, loc)
 }
 
-// BetweenDay 计算两个时间戳之间的天数差
-func BetweenDay(t1, t2 int64) int {
+// BetweenDay 计算两个时间之间的天数差
+func BetweenDay(t1, t2 time.Time) int {
 	// 计算两时间的零点时间差
 	midnight1 := BeginOfDay(t1)
 	midnight2 := BeginOfDay(t2)
-	diffSeconds := midnight1 - midnight2
+	diffSeconds := midnight1.Unix() - midnight2.Unix()
 
 	// 计算绝对值天数差
 	days := int(math.Abs(float64(diffSeconds)) / 86400)
 	return days
 }
 
-// EndOfDay 获取某天的结束时间戳(秒时间戳)
-func EndOfDay(timestamp int64) int64 {
-	begin := BeginOfDay(timestamp)
-	return begin + 86400 - 1
+// EndOfDay 获取某天的结束时间(23:59:59)
+func EndOfDay(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), t.Day(), 23, 59, 59, 0, t.Location())
 }
 
-// EndOfWeek 获取本周日23:59:59时间戳(秒时间戳)
-func EndOfWeek(timestamp int64) int64 {
-	begin := BeginOfWeek(timestamp)
-	return begin + 7*86400 - 1
+// EndOfWeek 获取本周日23:59:59时间
+func EndOfWeek(t time.Time) time.Time {
+	// 计算到本周日的天数差(周日是0，周一是1...周六是6)
+	daysUntilSunday := (7 - int(t.Weekday())) % 7
+	endOfWeek := t.AddDate(0, 0, daysUntilSunday)
+	return EndOfDay(endOfWeek)
 }
 
-// EndOfMonth 获取当月最后一天23:59:59时间戳(秒时间戳)
-func EndOfMonth(timestamp int64) int64 {
-	t := GetTime(timestamp)
-	// 计算下个月第一天的零点时间戳，减1秒即为当月最后时间
-	nextMonthFirstDay := time.Date(t.Year(), t.Month()+1, 1, 0, 0, 0, 0, loc)
-	return nextMonthFirstDay.Unix() - 1
+// EndOfMonth 获取当月最后一天23:59:59时间
+func EndOfMonth(t time.Time) time.Time {
+	// 下个月的第0天就是本月的最后一天
+	firstOfNextMonth := time.Date(t.Year(), t.Month()+1, 1, 0, 0, 0, 0, t.Location())
+	endOfMonth := firstOfNextMonth.Add(-time.Second)
+	return endOfMonth
 }
 
 // IsSameDay 判断两个时间戳是否在同一天
-func IsSameDay(t1, t2 int64) bool {
-	time1 := GetTime(t1)
-	time2 := GetTime(t2)
-
-	y1, m1, d1 := time1.Date()
-	y2, m2, d2 := time2.Date()
-
+func IsSameDay(t1, t2 time.Time) bool {
+	y1, m1, d1 := t1.Date()
+	y2, m2, d2 := t2.Date()
 	return y1 == y2 && m1 == m2 && d1 == d2
 }
 
-func IsSameWeek(t1, t2 int64) bool {
-	time1 := GetTime(t1)
-	time2 := GetTime(t2)
-
+func IsSameWeek(t1, t2 time.Time) bool {
 	// 获取年份和周数
-	y1, w1 := time1.ISOWeek()
-	y2, w2 := time2.ISOWeek()
-
+	y1, w1 := t1.ISOWeek()
+	y2, w2 := t2.ISOWeek()
 	return y1 == y2 && w1 == w2
 }
 
-func IsSameMonth(t1, t2 int64) bool {
-	time1 := GetTime(t1)
-	time2 := GetTime(t2)
-
-	y1, m1, _ := time1.Date()
-	y2, m2, _ := time2.Date()
-
+func IsSameMonth(t1, t2 time.Time) bool {
+	y1, m1, _ := t1.Date()
+	y2, m2, _ := t2.Date()
 	return y1 == y2 && m1 == m2
 }
 
