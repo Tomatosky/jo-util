@@ -2,6 +2,7 @@ package mapUtil
 
 import (
 	"encoding/json"
+	"go.mongodb.org/mongo-driver/bson"
 	"sync"
 )
 
@@ -131,4 +132,34 @@ func (cm *ConcurrentHashMap[K, V]) ToString() string {
 		panic(err)
 	}
 	return string(bytes)
+}
+
+// MarshalJSON 实现 json.Marshaler 接口
+func (cm *ConcurrentHashMap[K, V]) MarshalJSON() ([]byte, error) {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	return json.Marshal(cm.m) // 只序列化内部的 map
+}
+
+// UnmarshalJSON 实现 json.Unmarshaler 接口
+func (cm *ConcurrentHashMap[K, V]) UnmarshalJSON(data []byte) error {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	cm.m = make(map[K]V)
+	return json.Unmarshal(data, &cm.m)
+}
+
+// MarshalBSON 实现 bson.Marshaler 接口
+func (cm *ConcurrentHashMap[K, V]) MarshalBSON() ([]byte, error) {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	return bson.Marshal(cm.m)
+}
+
+// UnmarshalBSON 实现 bson.Unmarshaler 接口
+func (cm *ConcurrentHashMap[K, V]) UnmarshalBSON(data []byte) error {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	cm.m = make(map[K]V)
+	return bson.Unmarshal(data, &cm.m)
 }

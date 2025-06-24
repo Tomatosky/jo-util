@@ -2,6 +2,7 @@ package mapUtil
 
 import (
 	"encoding/json"
+	"go.mongodb.org/mongo-driver/bson"
 	"sync"
 	"testing"
 )
@@ -232,5 +233,49 @@ func TestConcurrentAccess(t *testing.T) {
 		if val := cm.Get(j); val != j {
 			t.Errorf("Expected %d, got %d", j, val)
 		}
+	}
+}
+
+func TestJSONMarshalUnmarshal(t *testing.T) {
+	cm := NewConcurrentHashMap[string, int]()
+	cm.Put("x", 10)
+	cm.Put("y", 20)
+	// 测试序列化
+	data, err := json.Marshal(cm)
+	if err != nil {
+		t.Error("JSON序列化失败:", err)
+	}
+	// 测试反序列化
+	var newCm ConcurrentHashMap[string, int]
+	if err := json.Unmarshal(data, &newCm); err != nil {
+		t.Error("JSON反序列化失败:", err)
+	}
+	if newCm.Size() != 2 {
+		t.Error("反序列化后的map大小不正确")
+	}
+	if newCm.Get("x") != 10 {
+		t.Error("反序列化后的值不正确")
+	}
+}
+
+func TestBSONMarshalUnmarshal(t *testing.T) {
+	cm := NewConcurrentHashMap[string, float64]()
+	cm.Put("pi", 3.14)
+	cm.Put("e", 2.718)
+	// 测试BSON序列化
+	data, err := bson.Marshal(cm)
+	if err != nil {
+		t.Error("BSON序列化失败:", err)
+	}
+	// 测试BSON反序列化
+	var newCm ConcurrentHashMap[string, float64]
+	if err := bson.Unmarshal(data, &newCm); err != nil {
+		t.Error("BSON反序列化失败:", err)
+	}
+	if newCm.Size() != 2 {
+		t.Error("反序列化后的map大小不正确")
+	}
+	if newCm.Get("pi") != 3.14 {
+		t.Error("反序列化后的值不正确")
 	}
 }
