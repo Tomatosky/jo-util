@@ -1,6 +1,9 @@
 package setUtil
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"go.mongodb.org/mongo-driver/bson"
+)
 
 // HashSet 非并发安全的哈希集合实现
 type HashSet[T comparable] struct {
@@ -78,4 +81,34 @@ func (s *HashSet[T]) ToString() string {
 		panic(err)
 	}
 	return string(bytes)
+}
+
+// MarshalJSON 实现 json.Marshaler 接口
+func (s *HashSet[T]) MarshalJSON() ([]byte, error) {
+	return json.Marshal(s.ToSlice())
+}
+
+// UnmarshalJSON 实现 json.Unmarshaler 接口
+func (s *HashSet[T]) UnmarshalJSON(data []byte) error {
+	var elements []T
+	if err := json.Unmarshal(data, &elements); err != nil {
+		return err
+	}
+	s.AddAll(elements...)
+	return nil
+}
+
+// MarshalBSON 添加 BSON 序列化接口实现
+func (s *HashSet[T]) MarshalBSON() ([]byte, error) {
+	return bson.Marshal(s.m)
+}
+
+// UnmarshalBSON 添加 BSON 反序列化接口实现
+func (s *HashSet[T]) UnmarshalBSON(data []byte) error {
+	var elements map[T]struct{}
+	if err := bson.Unmarshal(data, &elements); err != nil {
+		return err
+	}
+	s.m = elements
+	return nil
 }
