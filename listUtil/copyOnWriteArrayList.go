@@ -29,6 +29,16 @@ func (c *CopyOnWriteArrayList[T]) Add(element T) {
 	c.data = newData
 }
 
+func (c *CopyOnWriteArrayList[T]) AddAll(elements ...T) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// 创建新数组并追加所有元素
+	newData := append([]T(nil), c.data...)
+	newData = append(newData, elements...)
+	c.data = newData
+}
+
 // Insert 在指定索引插入元素
 func (c *CopyOnWriteArrayList[T]) Insert(index int, element T) {
 	c.mu.Lock()
@@ -150,4 +160,23 @@ func (c *CopyOnWriteArrayList[T]) ToString() string {
 		panic(err)
 	}
 	return string(bytes)
+}
+
+// MarshalJSON 实现 json.Marshaler 接口
+func (c *CopyOnWriteArrayList[T]) MarshalJSON() ([]byte, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return json.Marshal(c.data[:])
+}
+
+// UnmarshalJSON 实现 json.Unmarshaler 接口
+func (c *CopyOnWriteArrayList[T]) UnmarshalJSON(data []byte) error {
+	var tmp []T
+	err := json.Unmarshal(data, &tmp)
+	if err != nil {
+		return err
+	}
+	c.data = []T{}
+	c.AddAll(tmp...)
+	return nil
 }

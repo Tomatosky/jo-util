@@ -251,3 +251,164 @@ func TestNegativeIndexPanic(t *testing.T) {
 	list.Add(1)
 	list.Get(-2) // Should panic
 }
+
+func TestCopyOnWriteArrayList_JSON(t *testing.T) {
+	// 测试用例1：空列表
+	t.Run("Empty List", func(t *testing.T) {
+		list := NewCopyOnWriteArrayList[int]()
+		data, err := list.MarshalJSON()
+		if err != nil {
+			t.Error("MarshalJSON failed for empty list:", err)
+		}
+
+		// 验证序列化结果是否为"[]"
+		if string(data) != "[]" {
+			t.Errorf("Expected '[]', got '%s'", string(data))
+		}
+
+		newList := NewCopyOnWriteArrayList[int]()
+		err = newList.UnmarshalJSON(data)
+		if err != nil {
+			t.Error("UnmarshalJSON failed for empty list:", err)
+		}
+
+		if newList.Size() != 0 {
+			t.Error("Unmarshaled empty list should be empty")
+		}
+	})
+
+	// 测试用例2：整数列表
+	t.Run("Integer List", func(t *testing.T) {
+		original := NewCopyOnWriteArrayList[int]()
+		original.AddAll(1, 2, 3, 4, 5)
+
+		data, err := original.MarshalJSON()
+		if err != nil {
+			t.Error("MarshalJSON failed for integer list:", err)
+		}
+
+		unmarshaled := NewCopyOnWriteArrayList[int]()
+		err = unmarshaled.UnmarshalJSON(data)
+		if err != nil {
+			t.Error("UnmarshalJSON failed for integer list:", err)
+		}
+
+		if unmarshaled.Size() != original.Size() {
+			t.Error("Unmarshaled list size doesn't match original")
+		}
+
+		for i := 0; i < original.Size(); i++ {
+			if original.Get(i) != unmarshaled.Get(i) {
+				t.Errorf("Element at index %d doesn't match: expected %v, got %v",
+					i, original.Get(i), unmarshaled.Get(i))
+			}
+		}
+	})
+
+	// 测试用例3：字符串列表
+	t.Run("String List", func(t *testing.T) {
+		original := NewCopyOnWriteArrayList[string]()
+		original.AddAll("a", "b", "c", "d", "e")
+
+		data, err := original.MarshalJSON()
+		if err != nil {
+			t.Error("MarshalJSON failed for string list:", err)
+		}
+
+		unmarshaled := NewCopyOnWriteArrayList[string]()
+		err = unmarshaled.UnmarshalJSON(data)
+		if err != nil {
+			t.Error("UnmarshalJSON failed for string list:", err)
+		}
+
+		if unmarshaled.Size() != original.Size() {
+			t.Error("Unmarshaled list size doesn't match original")
+		}
+
+		for i := 0; i < original.Size(); i++ {
+			if original.Get(i) != unmarshaled.Get(i) {
+				t.Errorf("Element at index %d doesn't match: expected %v, got %v",
+					i, original.Get(i), unmarshaled.Get(i))
+			}
+		}
+	})
+
+	// 测试用例4：结构体列表
+	t.Run("Struct List", func(t *testing.T) {
+		type person struct {
+			Name string `json:"name"`
+			Age  int    `json:"age"`
+		}
+
+		original := NewCopyOnWriteArrayList[person]()
+		original.AddAll(
+			person{Name: "Alice", Age: 30},
+			person{Name: "Bob", Age: 25},
+		)
+
+		data, err := original.MarshalJSON()
+		if err != nil {
+			t.Error("MarshalJSON failed for struct list:", err)
+		}
+
+		unmarshaled := NewCopyOnWriteArrayList[person]()
+		err = unmarshaled.UnmarshalJSON(data)
+		if err != nil {
+			t.Error("UnmarshalJSON failed for struct list:", err)
+		}
+
+		if unmarshaled.Size() != original.Size() {
+			t.Error("Unmarshaled list size doesn't match original")
+		}
+
+		for i := 0; i < original.Size(); i++ {
+			orig := original.Get(i)
+			unm := unmarshaled.Get(i)
+			if orig.Name != unm.Name || orig.Age != unm.Age {
+				t.Errorf("Element at index %d doesn't match: expected %v, got %v",
+					i, orig, unm)
+			}
+		}
+	})
+
+	// 测试用例5：无效JSON数据
+	t.Run("Invalid JSON Data", func(t *testing.T) {
+		list := NewCopyOnWriteArrayList[int]()
+		err := list.UnmarshalJSON([]byte("invalid json data"))
+		if err == nil {
+			t.Error("Expected error for invalid JSON data, but got nil")
+		}
+	})
+
+	// 测试用例6：部分JSON数据
+	t.Run("Partial JSON Data", func(t *testing.T) {
+		list := NewCopyOnWriteArrayList[int]()
+		err := list.UnmarshalJSON([]byte("[1, 2, 3"))
+		if err == nil {
+			t.Error("Expected error for partial JSON data, but got nil")
+		}
+	})
+
+	// 测试用例7：并发序列化
+	t.Run("Concurrent Marshal", func(t *testing.T) {
+		list := NewCopyOnWriteArrayList[int]()
+		list.AddAll(1, 2, 3, 4, 5)
+
+		// 启动多个goroutine同时进行序列化
+		done := make(chan bool)
+		for i := 0; i < 10; i++ {
+			go func() {
+				_, err := list.MarshalJSON()
+				if err != nil {
+					t.Error("Concurrent MarshalJSON failed:", err)
+				}
+				done <- true
+			}()
+		}
+
+		// 等待所有goroutine完成
+		for i := 0; i < 10; i++ {
+			<-done
+		}
+	})
+}
