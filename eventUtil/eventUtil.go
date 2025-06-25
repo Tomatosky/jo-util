@@ -2,8 +2,9 @@ package eventUtil
 
 import (
 	"errors"
+	"fmt"
 	"github.com/Tomatosky/jo-util/poolUtil"
-	"github.com/panjf2000/ants/v2"
+	"go.uber.org/zap"
 	"sync"
 	"time"
 )
@@ -17,14 +18,19 @@ type EventManager struct {
 	pool       *poolUtil.Pool
 	lock       sync.RWMutex
 	destroying bool
+	logger     *zap.Logger
 }
 
 // NewEventManager 创建一个新的事件管理器
-func NewEventManager() (*EventManager, error) {
-	return &EventManager{
+func NewEventManager(poolSize int, logger ...*zap.Logger) *EventManager {
+	manager := &EventManager{
 		handlers: make(map[string][]EventHandler),
-		pool:     poolUtil.NewPool(ants.DefaultAntsPoolSize),
-	}, nil
+		pool:     poolUtil.NewPool(poolSize),
+	}
+	if len(logger) > 0 {
+		manager.logger = logger[0]
+	}
+	return manager
 }
 
 // Register 注册事件处理函数
@@ -82,8 +88,24 @@ func (em *EventManager) triggerSync(eventName string, data interface{}) {
 
 	// 同步执行所有处理函数
 	for _, handler := range handlers {
-		handler(data)
+		em.triggerHandle(handler, data)
 	}
+}
+
+// triggerHandle 触发事件
+func (em *EventManager) triggerHandle(f EventHandler, data interface{}) {
+	defer func() {
+		err := recover()
+		if err != nil {
+			if em.logger != nil {
+				em.logger.Error(fmt.Sprintf("error: %v", err))
+			} else {
+				fmt.Printf("panic: %v", err)
+			}
+		}
+	}()
+
+	f(data)
 }
 
 // HasEvent 检查事件是否存在
