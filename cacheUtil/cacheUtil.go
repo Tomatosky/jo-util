@@ -105,6 +105,9 @@ func (c *cache[K, V]) GetWithExpiration(k K) (V, time.Time, bool) {
 
 	// 将纳秒时间戳转换为time.Time
 	expirationTime := time.Unix(0, item.Expiration)
+	if c.expiration == 0 {
+		expirationTime = time.Unix(0, 0)
+	}
 	return item.Object, expirationTime, true
 }
 
@@ -138,7 +141,7 @@ func (c *cache[K, V]) Items() map[K]Item[V] {
 	m := make(map[K]Item[V], len(c.items))
 	now := time.Now().UnixNano()
 	for k, v := range c.items {
-		if v.Expiration > 0 {
+		if c.expiration > 0 && v.Expiration > 0 {
 			if now > v.Expiration {
 				continue
 			}
@@ -159,7 +162,7 @@ type janitor[K comparable, V any] struct {
 	stop     chan bool
 }
 
-func (j *janitor[K, V]) Run(c *cache[K, V]) {
+func (j *janitor[K, V]) run(c *cache[K, V]) {
 	ticker := time.NewTicker(j.Interval)
 	for {
 		select {
@@ -182,7 +185,7 @@ func runJanitor[K comparable, V any](c *cache[K, V]) {
 		stop:     make(chan bool),
 	}
 	c.janitor = j
-	go j.Run(c)
+	go j.run(c)
 }
 
 func New[K comparable, V any](expiration time.Duration) *Cache[K, V] {
