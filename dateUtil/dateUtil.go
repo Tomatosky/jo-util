@@ -103,7 +103,7 @@ func EndOfMonth(t time.Time) time.Time {
 	return endOfMonth
 }
 
-// IsSameDay 判断两个时间戳是否在同一天
+// IsSameDay 判断两个时间是否在同一天
 func IsSameDay(t1, t2 time.Time) bool {
 	y1, m1, d1 := t1.Date()
 	y2, m2, d2 := t2.Date()
