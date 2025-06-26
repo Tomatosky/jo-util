@@ -1,274 +1,378 @@
 package httpUtil
 
 import (
+	"bytes"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 )
 
-func TestNewRequestClient(t *testing.T) {
-	client := NewRequestClient()
-	if client.Client == nil {
-		t.Error("Expected http.Client to be initialized, got nil")
-	}
-}
-
-func TestDownload(t *testing.T) {
-	// 创建测试服务器
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("test response"))
-	}))
-	defer ts.Close()
-
-	client := NewRequestClient()
-
-	// 测试正常下载
-	body, err := client.Download(ts.URL, &GetOptions{})
-	if err != nil {
-		t.Errorf("Expected no error, got %v", err)
-	}
-	if string(body) != "test response" {
-		t.Errorf("Expected 'test response', got '%s'", string(body))
-	}
-
-	// 测试带header的下载
-	headers := map[string]string{"X-Test": "value"}
-	body, err = client.Download(ts.URL, &GetOptions{Headers: headers})
-	if err != nil {
-		t.Errorf("Expected no error with headers, got %v", err)
-	}
-
-	// 测试超时
-	_, err = client.Download(ts.URL, &GetOptions{Timeout: 1})
-	if err != nil {
-		t.Errorf("Expected no error with timeout, got %v", err)
-	}
-
-	// 测试无效URL
-	_, err = client.Download("invalid-url", &GetOptions{})
-	if err == nil {
-		t.Error("Expected error with invalid URL, got nil")
-	}
-}
-
 func TestGet(t *testing.T) {
+	// 创建一个测试HTTP服务器
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("test get response"))
+		// 检查请求方法
+		if r.Method != "GET" {
+			t.Error("Expected GET request")
+		}
+
+		// 测试不同的路径返回不同的响应
+		switch r.URL.Path {
+		case "/success":
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("success response"))
+		case "/error":
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("error response"))
+		case "/headers":
+			// 测试请求头
+			if r.Header.Get("Test-Header") != "test-value" {
+				t.Error("Expected Test-Header to be 'test-value'")
+			}
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("headers test"))
+		case "/timeout":
+			// 测试超时
+			time.Sleep(2 * time.Second)
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("should timeout"))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte("not found"))
+		}
 	}))
 	defer ts.Close()
 
+	// 创建测试客户端
 	client := NewRequestClient()
 
-	// 测试正常GET请求
-	response, err := client.Get(ts.URL, &GetOptions{})
-	if err != nil {
-		t.Errorf("Expected no error, got %v", err)
+	tests := []struct {
+		name     string
+		url      string
+		options  *GetOptions
+		wantErr  bool
+		wantBody string
+	}{
+		{
+			name:     "成功请求",
+			url:      ts.URL + "/success",
+			options:  nil,
+			wantErr:  false,
+			wantBody: "success response",
+		},
+		{
+			name:     "服务器错误",
+			url:      ts.URL + "/error",
+			options:  nil,
+			wantErr:  false, // 注意：服务器返回500错误，但请求本身是成功的
+			wantBody: "error response",
+		},
+		{
+			name: "带请求头的请求",
+			url:  ts.URL + "/headers",
+			options: &GetOptions{
+				Headers: map[string]string{
+					"Test-Header": "test-value",
+				},
+			},
+			wantErr:  false,
+			wantBody: "headers test",
+		},
+		{
+			name: "超时请求",
+			url:  ts.URL + "/timeout",
+			options: &GetOptions{
+				Timeout: 1, // 1秒超时
+			},
+			wantErr: true,
+		},
+		{
+			name:     "无效URL",
+			url:      "http://invalid.url",
+			options:  nil,
+			wantErr:  true,
+			wantBody: "",
+		},
 	}
-	if response != "test get response" {
-		t.Errorf("Expected 'test get response', got '%s'", response)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp := client.Get(tt.url, tt.options)
+
+			if tt.wantErr {
+				if resp.Err == nil {
+					t.Error("Expected error, got nil")
+				}
+				return
+			}
+
+			if resp.Err != nil {
+				t.Errorf("Unexpected error: %v", resp.Err)
+				return
+			}
+
+			if got := resp.Text(); got != tt.wantBody {
+				t.Errorf("Expected body '%s', got '%s'", tt.wantBody, got)
+			}
+		})
 	}
+}
+
+func TestRespMethods(t *testing.T) {
+	// 测试Resp的各种方法
+	jsonBody := `{"key":"value","num":123}`
+	resp := &Resp{
+		Body: []byte(jsonBody),
+	}
+
+	t.Run("Raw", func(t *testing.T) {
+		if string(resp.Raw()) != jsonBody {
+			t.Error("Raw() did not return expected body")
+		}
+	})
+
+	t.Run("Text", func(t *testing.T) {
+		if resp.Text() != jsonBody {
+			t.Error("Text() did not return expected body")
+		}
+	})
+
+	t.Run("Json", func(t *testing.T) {
+		jsonData, _ := resp.Json()
+		if jsonData["key"] != "value" || jsonData["num"] != float64(123) {
+			t.Error("Json() did not return expected data")
+		}
+	})
+
+	t.Run("Json with invalid data", func(t *testing.T) {
+		res := &Resp{
+			Body: []byte("invalid json"),
+		}
+		// 这里不会panic，但返回的map可能是空的
+		_, _ = res.Json()
+	})
 }
 
 func TestPost(t *testing.T) {
 	// 创建一个测试用的HTTP服务器
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// 检查Content-Type头
+		// 检查请求头
 		contentType := r.Header.Get("Content-Type")
 
-		// 根据不同的Content-Type处理请求
+		// 读取请求体
+		_, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Error("读取请求体失败:", err)
+			return
+		}
+
+		// 根据不同的Content-Type返回不同的响应
 		switch {
 		case strings.Contains(contentType, "multipart/form-data"):
-			// 正确解析multipart表单的方法
-			reader, err := r.MultipartReader()
-			if err != nil {
-				t.Error("创建MultipartReader失败:", err)
-				return
-			}
-
-			// 读取multipart内容
-			for {
-				part, err := reader.NextPart()
-				if err == io.EOF {
-					break
-				}
-				if err != nil {
-					t.Error("读取part失败:", err)
-					return
-				}
-
-				// 这里可以检查part的内容
-				_, err = io.ReadAll(part)
-				if err != nil {
-					t.Error("读取part内容失败:", err)
-					return
-				}
-			}
-			w.Write([]byte("multipart received"))
-
-		case contentType == "application/json":
-			body, err := io.ReadAll(r.Body)
-			if err != nil {
-				t.Error("读取请求体失败:", err)
-				return
-			}
-			w.Write([]byte("json received: " + string(body)))
-
-		case contentType == "application/x-www-form-urlencoded":
-			body, err := io.ReadAll(r.Body)
-			if err != nil {
-				t.Error("读取请求体失败:", err)
-				return
-			}
-			w.Write([]byte("form received: " + string(body)))
+			w.Write([]byte("multipart response"))
+		case strings.Contains(contentType, "application/json"):
+			w.Write([]byte("json response"))
+		case strings.Contains(contentType, "application/x-www-form-urlencoded"):
+			w.Write([]byte("form response"))
+		default:
+			w.Write([]byte("unknown format"))
 		}
 	}))
 	defer ts.Close()
 
-	// 创建测试用的RequestClient
+	// 创建测试用的临时文件
+	tmpFile, err := os.CreateTemp("", "testfile")
+	if err != nil {
+		t.Fatal("创建临时文件失败:", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	tmpFile.WriteString("test file content")
+	tmpFile.Close()
+
+	// 测试用例
+	tests := []struct {
+		name    string
+		data    map[string]interface{}
+		options *PostOptions
+		want    string
+		wantErr bool
+	}{
+		{
+			name: "测试JSON格式请求",
+			data: map[string]interface{}{"key1": "value1", "key2": 2},
+			options: &PostOptions{
+				IsJson: true,
+				Headers: map[string]string{
+					"X-Custom-Header": "test",
+				},
+			},
+			want:    "json response",
+			wantErr: false,
+		},
+		{
+			name: "测试表单格式请求",
+			data: map[string]interface{}{"key1": "value1", "key2": 2},
+			options: &PostOptions{
+				IsJson:      false,
+				IsMultipart: false,
+			},
+			want:    "form response",
+			wantErr: false,
+		},
+		{
+			name: "测试Multipart格式请求(带文件)",
+			data: map[string]interface{}{
+				"file": func() *os.File {
+					f, _ := os.Open(tmpFile.Name())
+					return f
+				}(),
+				"field": "value",
+			},
+			options: &PostOptions{
+				IsMultipart: true,
+			},
+			want:    "multipart response",
+			wantErr: false,
+		},
+		{
+			name: "测试Multipart格式请求(不带文件)",
+			data: map[string]interface{}{"key1": "value1", "key2": 2},
+			options: &PostOptions{
+				IsMultipart: true,
+			},
+			want:    "multipart response",
+			wantErr: false,
+		},
+		{
+			name: "测试超时设置",
+			data: map[string]interface{}{"key": "value"},
+			options: &PostOptions{
+				Timeout: 1, // 1秒超时
+			},
+			want:    "form response",
+			wantErr: false,
+		},
+		{
+			name:    "测试无效URL",
+			data:    map[string]interface{}{"key": "value"},
+			options: &PostOptions{},
+			want:    "",
+			wantErr: true,
+		},
+	}
+
 	rc := NewRequestClient()
 
-	// 测试用例1: 普通表单POST请求
-	t.Run("普通表单POST", func(t *testing.T) {
-		data := map[string]interface{}{
-			"name":  "张三",
-			"age":   25,
-			"email": "zhangsan@example.com",
-		}
-		options := &PostOptions{
-			Headers: map[string]string{
-				"X-Test-Header": "test-value",
-			},
-			Timeout: 5,
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			url := ts.URL
+			if tt.name == "测试无效URL" {
+				url = "http://invalid.url"
+			}
 
-		resp, err := rc.Post(ts.URL, data, options)
+			resp := rc.Post(url, tt.data, tt.options)
+
+			if (resp.Err != nil) != tt.wantErr {
+				t.Errorf("Post() error = %v, wantErr %v", resp.Err, tt.wantErr)
+				return
+			}
+
+			if !tt.wantErr && resp.Text() != tt.want {
+				t.Errorf("Post() = %v, want %v", resp.Text(), tt.want)
+			}
+		})
+	}
+}
+
+func TestPost_FileHandling(t *testing.T) {
+	// 创建一个测试用的HTTP服务器
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// 解析multipart表单
+		err := r.ParseMultipartForm(10 << 20) // 10MB
 		if err != nil {
-			t.Error("POST请求失败:", err)
+			t.Error("解析multipart表单失败:", err)
 			return
 		}
 
-		if !strings.Contains(resp, "form received") {
-			t.Error("响应不符合预期:", resp)
-		}
-	})
-
-	// 测试用例2: JSON POST请求
-	t.Run("JSON POST", func(t *testing.T) {
-		data := map[string]interface{}{
-			"name":  "李四",
-			"age":   30,
-			"email": "lisi@example.com",
-		}
-		options := &PostOptions{
-			IsJson: true,
-		}
-
-		resp, err := rc.Post(ts.URL, data, options)
+		// 检查文件是否存在
+		file, header, err := r.FormFile("file")
 		if err != nil {
-			t.Error("POST请求失败:", err)
+			t.Error("获取上传文件失败:", err)
 			return
-		}
-
-		if !strings.Contains(resp, "json received") {
-			t.Error("响应不符合预期:", resp)
-		}
-	})
-
-	// 测试用例3: Multipart POST请求(包含文件上传)
-	t.Run("Multipart POST with file", func(t *testing.T) {
-		// 创建一个临时文件用于测试
-		tempFile, err := os.CreateTemp("", "testfile-*.txt")
-		if err != nil {
-			t.Fatal("创建临时文件失败:", err)
-		}
-		defer os.Remove(tempFile.Name())
-
-		_, err = tempFile.WriteString("这是一个测试文件内容")
-		if err != nil {
-			t.Fatal("写入临时文件失败:", err)
-		}
-		tempFile.Close()
-
-		// 重新打开文件用于上传
-		file, err := os.Open(tempFile.Name())
-		if err != nil {
-			t.Fatal("打开临时文件失败:", err)
 		}
 		defer file.Close()
 
-		data := map[string]interface{}{
-			"username": "王五",
-			"avatar":   file,
-		}
-		options := &PostOptions{
-			IsMultipart: true,
+		// 检查文件名
+		if header.Filename != filepath.Base(header.Filename) {
+			t.Error("文件名不正确")
 		}
 
-		resp, err := rc.Post(ts.URL, data, options)
-		if err != nil {
-			t.Error("POST请求失败:", err)
-			return
+		// 检查文件内容
+		buf := new(bytes.Buffer)
+		buf.ReadFrom(file)
+		if buf.String() != "test file content" {
+			t.Error("文件内容不正确")
 		}
 
-		if resp != "multipart received" {
-			t.Error("响应不符合预期:", resp)
-		}
+		w.Write([]byte("file upload success"))
+	}))
+	defer ts.Close()
+
+	// 创建测试用的临时文件
+	tmpFile, err := os.CreateTemp("", "testfile")
+	if err != nil {
+		t.Fatal("创建临时文件失败:", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	tmpFile.WriteString("test file content")
+	tmpFile.Close()
+
+	// 打开文件用于测试
+	file, err := os.Open(tmpFile.Name())
+	if err != nil {
+		t.Fatal("打开临时文件失败:", err)
+	}
+	defer file.Close()
+
+	rc := NewRequestClient()
+	resp := rc.Post(ts.URL, map[string]interface{}{
+		"file":  file,
+		"field": "value",
+	}, &PostOptions{
+		IsMultipart: true,
 	})
 
-	// 测试用例4: 超时测试
-	t.Run("超时测试", func(t *testing.T) {
-		// 创建一个会延迟响应的测试服务器
-		slowServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			time.Sleep(2 * time.Second) // 延迟2秒响应
-			w.Write([]byte("ok"))
-		}))
-		defer slowServer.Close()
+	if resp.Err != nil {
+		t.Error("文件上传请求失败:", resp.Err)
+	}
 
-		data := map[string]interface{}{
-			"test": "timeout",
-		}
-		options := &PostOptions{
-			Timeout: 1, // 设置1秒超时
-		}
+	if resp.Text() != "file upload success" {
+		t.Error("文件上传响应不正确:", resp.Text())
+	}
+}
 
-		_, err := rc.Post(slowServer.URL, data, options)
-		if err == nil {
-			t.Error("预期超时错误但未发生")
-		}
+func TestPost_Timeout(t *testing.T) {
+	// 创建一个慢速响应的测试服务器
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(2 * time.Second) // 延迟2秒响应
+		w.Write([]byte("response"))
+	}))
+	defer ts.Close()
+
+	rc := NewRequestClient()
+
+	// 设置1秒超时
+	resp := rc.Post(ts.URL, map[string]interface{}{"key": "value"}, &PostOptions{
+		Timeout: 1,
 	})
 
-	// 测试用例5: 错误URL测试
-	t.Run("错误URL测试", func(t *testing.T) {
-		data := map[string]interface{}{
-			"test": "invalid url",
-		}
-		options := &PostOptions{}
-
-		_, err := rc.Post("http://invalid.url.test", data, options)
-		if err == nil {
-			t.Error("预期URL错误但未发生")
-		}
-	})
-
-	// 测试用例6: 空数据测试
-	t.Run("空数据测试", func(t *testing.T) {
-		data := map[string]interface{}{}
-		options := &PostOptions{}
-
-		resp, err := rc.Post(ts.URL, data, options)
-		if err != nil {
-			t.Error("POST请求失败:", err)
-			return
-		}
-
-		if !strings.Contains(resp, "form received") {
-			t.Error("响应不符合预期:", resp)
-		}
-	})
+	if resp.Err == nil {
+		t.Error("预期超时错误，但未发生")
+	}
 }
 
 func TestUrlEncode(t *testing.T) {

@@ -34,51 +34,61 @@ func NewRequestClient() *RequestClient {
 	}
 }
 
+type Resp struct {
+	Err  error
+	Body []byte
+}
+
+func (r *Resp) Raw() []byte {
+	return r.Body
+}
+
+func (r *Resp) Text() string {
+	return string(r.Body)
+}
+
+func (r *Resp) Json() (map[string]any, error) {
+	jsonData := map[string]any{}
+	err := json.Unmarshal(r.Body, &jsonData)
+	return jsonData, err
+}
+
 type GetOptions struct {
 	Headers map[string]string
 	Timeout int
 }
 
-// Download 发送GET请求
-func (rc *RequestClient) Download(url string, getOptions *GetOptions) ([]byte, error) {
+// Get 发送GET请求
+func (rc *RequestClient) Get(url string, getOptions *GetOptions) *Resp {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return nil, err
+		return &Resp{Err: err}
 	}
 
 	// 设置请求头
-	if getOptions.Headers != nil {
+	if getOptions != nil && getOptions.Headers != nil {
 		for key, value := range getOptions.Headers {
 			req.Header.Set(key, value)
 		}
 	}
 
 	// 发送请求
-	if getOptions.Timeout > 0 {
+	if getOptions != nil && getOptions.Timeout > 0 {
 		rc.Client.Timeout = time.Duration(getOptions.Timeout) * time.Second
 	}
 	resp, err := rc.Client.Do(req)
 	if err != nil {
-		return nil, err
+		return &Resp{Err: err}
 	}
 	defer resp.Body.Close()
 
 	// 读取响应体
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return &Resp{Err: err}
 	}
 
-	return body, nil
-}
-
-// Get 发送GET请求
-func (rc *RequestClient) Get(url string, getOptions *GetOptions) (string, error) {
-	body, err := rc.Download(url, getOptions)
-	if err != nil {
-		return "", err
-	}
-	return string(body), nil
+	return &Resp{Err: nil, Body: body}
 }
 
 type PostOptions struct {
@@ -89,7 +99,7 @@ type PostOptions struct {
 }
 
 // Post 发送POST请求
-func (rc *RequestClient) Post(postUrl string, data map[string]interface{}, postOptions *PostOptions) (string, error) {
+func (rc *RequestClient) Post(postUrl string, data map[string]interface{}, postOptions *PostOptions) *Resp {
 	var (
 		reqBody     io.Reader
 		contentType string
@@ -106,11 +116,11 @@ func (rc *RequestClient) Post(postUrl string, data map[string]interface{}, postO
 			if file, ok := value.(*os.File); ok {
 				part, err := writer.CreateFormFile(key, filepath.Base(file.Name()))
 				if err != nil {
-					return "", err
+					return &Resp{Err: err}
 				}
 				_, err = io.Copy(part, file)
 				if err != nil {
-					return "", err
+					return &Resp{Err: err}
 				}
 				continue
 			}
@@ -119,13 +129,13 @@ func (rc *RequestClient) Post(postUrl string, data map[string]interface{}, postO
 			strValue := fmt.Sprintf("%v", value)
 			err := writer.WriteField(key, strValue)
 			if err != nil {
-				return "", err
+				return &Resp{Err: err}
 			}
 		}
 
 		err := writer.Close()
 		if err != nil {
-			return "", err
+			return &Resp{Err: err}
 		}
 
 		reqBody = body
@@ -135,7 +145,7 @@ func (rc *RequestClient) Post(postUrl string, data map[string]interface{}, postO
 		// JSON 格式
 		jsonData, err := json.Marshal(data)
 		if err != nil {
-			return "", err
+			return &Resp{Err: err}
 		}
 		reqBody = bytes.NewBuffer(jsonData)
 		contentType = "application/json"
@@ -153,7 +163,7 @@ func (rc *RequestClient) Post(postUrl string, data map[string]interface{}, postO
 	// 创建 HTTP 请求
 	req, err := http.NewRequest("POST", postUrl, reqBody)
 	if err != nil {
-		return "", err
+		return &Resp{Err: err}
 	}
 	// 设置请求头
 	req.Header.Set("Content-Type", contentType)
@@ -169,15 +179,15 @@ func (rc *RequestClient) Post(postUrl string, data map[string]interface{}, postO
 	// 发送请求
 	resp, err := rc.Client.Do(req)
 	if err != nil {
-		return "", err
+		return &Resp{Err: err}
 	}
 	defer resp.Body.Close()
 	// 读取响应
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", err
+		return &Resp{Err: err}
 	}
-	return string(body), nil
+	return &Resp{Err: nil, Body: body}
 }
 
 func UrlEncode(params map[string]interface{}) string {
