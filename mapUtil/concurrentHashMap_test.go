@@ -2,6 +2,7 @@ package mapUtil
 
 import (
 	"encoding/json"
+	"github.com/Tomatosky/jo-util/dateUtil"
 	"go.mongodb.org/mongo-driver/bson"
 	"sync"
 	"testing"
@@ -278,4 +279,20 @@ func TestBSONMarshalUnmarshal(t *testing.T) {
 	if newCm.Get("pi") != 3.14 {
 		t.Error("反序列化后的值不正确")
 	}
+}
+
+func TestCreatTimeInterval(t *testing.T) {
+	timer := dateUtil.NewTimer()
+	m := make(map[int]int)
+	for i := 0; i < 1000000; i++ {
+		m[i] = i
+	}
+	t.Logf("耗时：%d ms", timer.Interval())
+	m = make(map[int]int)
+
+	cm := NewConcurrentHashMap[int, int]()
+	for i := 0; i < 1000000; i++ {
+		cm.Put(i, i)
+	}
+	t.Logf("耗时：%d ms", timer.Interval())
 }

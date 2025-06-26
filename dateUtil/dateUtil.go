@@ -42,6 +42,18 @@ func GetTime(timestamp int64) time.Time {
 	return time.Unix(timestamp, 0).In(loc)
 }
 
+func DayOfWeek(t time.Time) int {
+	weekday := t.Weekday()
+	if weekday == time.Sunday {
+		return 7
+	}
+	return int(weekday)
+}
+
+func OffsetDay(t time.Time, offset int) time.Time {
+	return t.AddDate(0, 0, offset)
+}
+
 // BeginOfDay 获取某天的起始时间
 func BeginOfDay(t time.Time) time.Time {
 	year, month, day := t.Date()
