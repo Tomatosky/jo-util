@@ -135,6 +135,12 @@ func IsSameMonth(t1, t2 time.Time) bool {
 	return y1 == y2 && m1 == m2
 }
 
+func IsSameYear(t1, t2 time.Time) bool {
+	y1, _, _ := t1.Date()
+	y2, _, _ := t2.Date()
+	return y1 == y2
+}
+
 func ParseToTime(str, format string, timezone ...string) (time.Time, error) {
 	tf, ok := timeFormat[strings.ToLower(format)]
 	if !ok {
