@@ -608,3 +608,119 @@ func TestIsSameWeek(t *testing.T) {
 		})
 	}
 }
+
+func TestParseToTime(t *testing.T) {
+	// 定义测试用例
+	tests := []struct {
+		name     string
+		str      string
+		format   string
+		timezone []string
+		want     time.Time
+		wantErr  bool
+	}{
+		// 测试常见日期时间格式
+		{
+			name:    "标准日期时间格式",
+			str:     "2023-05-15 14:30:00",
+			format:  "yyyy-mm-dd hh:mm:ss",
+			want:    time.Date(2023, 5, 15, 14, 30, 0, 0, time.UTC),
+			wantErr: false,
+		},
+		{
+			name:    "简略日期格式",
+			str:     "2023-05-15",
+			format:  "yyyy-mm-dd",
+			want:    time.Date(2023, 5, 15, 0, 0, 0, 0, time.UTC),
+			wantErr: false,
+		},
+		{
+			name:    "年月格式",
+			str:     "2023-05",
+			format:  "yyyy-mm",
+			want:    time.Date(2023, 5, 1, 0, 0, 0, 0, time.UTC),
+			wantErr: false,
+		},
+		{
+			name:    "时间格式",
+			str:     "14:30:00",
+			format:  "hh:mm:ss",
+			want:    time.Date(0, 1, 1, 14, 30, 0, 0, time.UTC),
+			wantErr: false,
+		},
+		{
+			name:    "斜杠日期格式",
+			str:     "2023/05/15 14:30:00",
+			format:  "yyyy/mm/dd hh:mm:ss",
+			want:    time.Date(2023, 5, 15, 14, 30, 0, 0, time.UTC),
+			wantErr: false,
+		},
+		{
+			name:    "紧凑日期格式",
+			str:     "20230515",
+			format:  "yyyymmdd",
+			want:    time.Date(2023, 5, 15, 0, 0, 0, 0, time.UTC),
+			wantErr: false,
+		},
+
+		// 测试时区
+		{
+			name:     "带时区转换",
+			str:      "2023-05-15 14:30:00",
+			format:   "yyyy-mm-dd hh:mm:ss",
+			timezone: []string{"Asia/Shanghai"},
+			want:     time.Date(2023, 5, 15, 14, 30, 0, 0, time.FixedZone("CST", 8*60*60)),
+			wantErr:  false,
+		},
+		{
+			name:     "无效时区",
+			str:      "2023-05-15 14:30:00",
+			format:   "yyyy-mm-dd hh:mm:ss",
+			timezone: []string{"Invalid/Zone"},
+			wantErr:  true,
+		},
+
+		// 测试错误情况
+		{
+			name:    "不支持的格式",
+			str:     "2023-05-15",
+			format:  "invalid-format",
+			wantErr: true,
+		},
+		{
+			name:    "日期与格式不匹配",
+			str:     "2023-05-15",
+			format:  "yyyy-mm-dd hh:mm:ss",
+			wantErr: true,
+		},
+		{
+			name:    "无效日期",
+			str:     "2023-02-30", // 2月没有30号
+			format:  "yyyy-mm-dd",
+			wantErr: true,
+		},
+		{
+			name:    "空字符串",
+			str:     "",
+			format:  "yyyy-mm-dd",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParseToTime(tt.str, tt.format, tt.timezone...)
+
+			// 检查错误情况是否符合预期
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ParseToTime() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			// 如果没有错误，检查结果是否正确
+			if !tt.wantErr && !got.Equal(tt.want) {
+				t.Errorf("ParseToTime() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
