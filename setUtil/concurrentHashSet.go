@@ -95,17 +95,18 @@ func (s *ConcurrentHashSet[T]) UnmarshalJSON(data []byte) error {
 
 // MarshalBSON 添加 BSON 序列化接口实现
 func (s *ConcurrentHashSet[T]) MarshalBSON() ([]byte, error) {
-	return bson.Marshal(s.m)
+	doc := bson.D{{Key: "data", Value: s.ToSlice()}}
+	return bson.Marshal(doc)
 }
 
 // UnmarshalBSON 添加 BSON 反序列化接口实现
 func (s *ConcurrentHashSet[T]) UnmarshalBSON(data []byte) error {
-	var elements map[T]struct{}
-	if err := bson.Unmarshal(data, &elements); err != nil {
+	var doc struct {
+		Data []T `bson:"data"`
+	}
+	if err := bson.Unmarshal(data, &doc); err != nil {
 		return err
 	}
-	for k := range elements {
-		s.Add(k)
-	}
+	s.AddAll(doc.Data...)
 	return nil
 }
