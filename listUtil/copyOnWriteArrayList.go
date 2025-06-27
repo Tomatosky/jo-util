@@ -2,6 +2,8 @@ package listUtil
 
 import (
 	"encoding/json"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/bsontype"
 	"sync"
 )
 
@@ -178,5 +180,20 @@ func (c *CopyOnWriteArrayList[T]) UnmarshalJSON(data []byte) error {
 	}
 	c.data = []T{}
 	c.AddAll(tmp...)
+	return nil
+}
+
+func (c *CopyOnWriteArrayList[T]) MarshalBSONValue() (bsontype.Type, []byte, error) {
+	elements := c.ToSlice()
+	return bson.MarshalValue(elements)
+}
+
+func (c *CopyOnWriteArrayList[T]) UnmarshalBSONValue(t bsontype.Type, data []byte) error {
+	var elements []T
+	if err := bson.UnmarshalValue(t, data, &elements); err != nil {
+		return err
+	}
+	c.data = []T{}
+	c.AddAll(elements...)
 	return nil
 }

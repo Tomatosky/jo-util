@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/Tomatosky/jo-util/mapUtil"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/bsontype"
 )
 
 // ConcurrentHashSet 基于 ConcurrentHashMap 实现的并发安全集合
@@ -93,21 +94,17 @@ func (s *ConcurrentHashSet[T]) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// MarshalBSON 添加 BSON 序列化接口实现
-func (s *ConcurrentHashSet[T]) MarshalBSON() ([]byte, error) {
-	return bson.Marshal(bson.M{
-		"elements": s.ToSlice(), // 将集合元素作为数组存储在字段中
-	})
+func (s *ConcurrentHashSet[T]) MarshalBSONValue() (bsontype.Type, []byte, error) {
+	elements := s.ToSlice()
+	return bson.MarshalValue(elements)
 }
 
-// UnmarshalBSON 添加 BSON 反序列化接口实现
-func (s *ConcurrentHashSet[T]) UnmarshalBSON(data []byte) error {
-	var doc struct {
-		Elements []T `bson:"elements"`
-	}
-	if err := bson.Unmarshal(data, &doc); err != nil {
+func (s *ConcurrentHashSet[T]) UnmarshalBSONValue(t bsontype.Type, data []byte) error {
+	var elements []T
+	if err := bson.UnmarshalValue(t, data, &elements); err != nil {
 		return err
 	}
-	s.AddAll(doc.Elements...)
+	s.Clear()
+	s.AddAll(elements...)
 	return nil
 }

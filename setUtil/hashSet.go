@@ -3,6 +3,7 @@ package setUtil
 import (
 	"encoding/json"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/bsontype"
 )
 
 // HashSet 非并发安全的哈希集合实现
@@ -98,17 +99,17 @@ func (s *HashSet[T]) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// MarshalBSON 添加 BSON 序列化接口实现
-func (s *HashSet[T]) MarshalBSON() ([]byte, error) {
-	return bson.Marshal(s.m)
+func (s *HashSet[T]) MarshalBSONValue() (bsontype.Type, []byte, error) {
+	elements := s.ToSlice()
+	return bson.MarshalValue(elements)
 }
 
-// UnmarshalBSON 添加 BSON 反序列化接口实现
-func (s *HashSet[T]) UnmarshalBSON(data []byte) error {
-	var elements map[T]struct{}
-	if err := bson.Unmarshal(data, &elements); err != nil {
+func (s *HashSet[T]) UnmarshalBSONValue(t bsontype.Type, data []byte) error {
+	var elements []T
+	if err := bson.UnmarshalValue(t, data, &elements); err != nil {
 		return err
 	}
-	s.m = elements
+	s.Clear()
+	s.AddAll(elements...)
 	return nil
 }
