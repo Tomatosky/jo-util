@@ -35,8 +35,10 @@ func NewRequestClient() *RequestClient {
 }
 
 type Resp struct {
-	Err  error
-	Body []byte
+	Err        error
+	Body       []byte
+	StatusCode int
+	Headers    map[string]string
 }
 
 func (r *Resp) Raw() []byte {
@@ -88,7 +90,20 @@ func (rc *RequestClient) Get(url string, getOptions *GetOptions) *Resp {
 		return &Resp{Err: err}
 	}
 
-	return &Resp{Err: nil, Body: body}
+	// 收集响应头
+	headers := make(map[string]string)
+	for k, v := range resp.Header {
+		if len(v) > 0 {
+			headers[k] = v[0] // 只取第一个值
+		}
+	}
+
+	return &Resp{
+		Err:        nil,
+		Body:       body,
+		StatusCode: resp.StatusCode,
+		Headers:    headers,
+	}
 }
 
 type PostOptions struct {
@@ -187,7 +202,21 @@ func (rc *RequestClient) Post(postUrl string, data map[string]interface{}, postO
 	if err != nil {
 		return &Resp{Err: err}
 	}
-	return &Resp{Err: nil, Body: body}
+
+	// 收集响应头
+	headers := make(map[string]string)
+	for k, v := range resp.Header {
+		if len(v) > 0 {
+			headers[k] = v[0] // 只取第一个值
+		}
+	}
+
+	return &Resp{
+		Err:        nil,
+		Body:       body,
+		StatusCode: resp.StatusCode,
+		Headers:    headers,
+	}
 }
 
 func UrlEncode(params map[string]interface{}) string {
