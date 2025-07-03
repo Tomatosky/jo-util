@@ -41,10 +41,6 @@ type Resp struct {
 	Headers    map[string]string
 }
 
-func (r *Resp) Raw() []byte {
-	return r.Body
-}
-
 func (r *Resp) Text() string {
 	return string(r.Body)
 }
