@@ -1,6 +1,7 @@
 package strUtil
 
 import (
+	"reflect"
 	"testing"
 )
 
@@ -173,4 +174,150 @@ func TestToString(t *testing.T) {
 			}
 		})
 	}
+}
+
+// 测试结构体
+type Person struct {
+	ID   int
+	Name string
+	Age  int
+}
+
+type Product struct {
+	SKU   string
+	Name  string
+	Price float64
+}
+
+func TestSlice2Map(t *testing.T) {
+	t.Run("正常情况-使用ID字段", func(t *testing.T) {
+		slice := []Person{
+			{ID: 1, Name: "Alice", Age: 20},
+			{ID: 2, Name: "Bob", Age: 25},
+		}
+		want := map[any]Person{
+			1: {ID: 1, Name: "Alice", Age: 20},
+			2: {ID: 2, Name: "Bob", Age: 25},
+		}
+
+		got, err := Slice2Map(slice, "ID")
+		if err != nil {
+			t.Errorf("Slice2Map() unexpected error = %v", err)
+			return
+		}
+
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("Slice2Map() = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("正常情况-使用Name字段", func(t *testing.T) {
+		slice := []Person{
+			{ID: 1, Name: "Alice", Age: 20},
+			{ID: 2, Name: "Bob", Age: 25},
+		}
+		want := map[any]Person{
+			"Alice": {ID: 1, Name: "Alice", Age: 20},
+			"Bob":   {ID: 2, Name: "Bob", Age: 25},
+		}
+
+		got, err := Slice2Map(slice, "Name")
+		if err != nil {
+			t.Errorf("Slice2Map() unexpected error = %v", err)
+			return
+		}
+
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("Slice2Map() = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("空切片", func(t *testing.T) {
+		slice := []Person{}
+		want := map[any]Person{}
+
+		got, err := Slice2Map(slice, "ID")
+		if err != nil {
+			t.Errorf("Slice2Map() unexpected error = %v", err)
+			return
+		}
+
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("Slice2Map() = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("非结构体切片", func(t *testing.T) {
+		slice := []int{1, 2, 3}
+		wantErr := "expected struct type, got int"
+
+		_, err := Slice2Map(slice, "ID")
+		if err == nil {
+			t.Error("Slice2Map() expected error but got none")
+			return
+		}
+
+		if err.Error() != wantErr {
+			t.Errorf("Slice2Map() error = %v, want %v", err.Error(), wantErr)
+		}
+	})
+
+	t.Run("指针结构体切片", func(t *testing.T) {
+		slice := []*Person{
+			{ID: 1, Name: "Alice", Age: 20},
+			{ID: 2, Name: "Bob", Age: 25},
+		}
+		want := map[any]*Person{
+			1: {ID: 1, Name: "Alice", Age: 20},
+			2: {ID: 2, Name: "Bob", Age: 25},
+		}
+
+		got, err := Slice2Map(slice, "ID")
+		if err != nil {
+			t.Errorf("Slice2Map() unexpected error = %v", err)
+			return
+		}
+
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("Slice2Map() = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("字段不存在", func(t *testing.T) {
+		slice := []Person{
+			{ID: 1, Name: "Alice", Age: 20},
+		}
+		wantErr := "field Address not found in struct"
+
+		_, err := Slice2Map(slice, "Address")
+		if err == nil {
+			t.Error("Slice2Map() expected error but got none")
+			return
+		}
+
+		if err.Error() != wantErr {
+			t.Errorf("Slice2Map() error = %v, want %v", err.Error(), wantErr)
+		}
+	})
+
+	t.Run("不同类型结构体", func(t *testing.T) {
+		slice := []Product{
+			{SKU: "P001", Name: "Laptop", Price: 999.99},
+			{SKU: "P002", Name: "Phone", Price: 699.99},
+		}
+		want := map[any]Product{
+			"P001": {SKU: "P001", Name: "Laptop", Price: 999.99},
+			"P002": {SKU: "P002", Name: "Phone", Price: 699.99},
+		}
+
+		got, err := Slice2Map(slice, "SKU")
+		if err != nil {
+			t.Errorf("Slice2Map() unexpected error = %v", err)
+			return
+		}
+
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("Slice2Map() = %v, want %v", got, want)
+		}
+	})
 }
