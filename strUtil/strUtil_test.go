@@ -1,7 +1,6 @@
 package strUtil
 
 import (
-	"reflect"
 	"testing"
 )
 
@@ -177,147 +176,141 @@ func TestToString(t *testing.T) {
 }
 
 // 测试结构体
-type Person struct {
+type testUser struct {
 	ID   int
 	Name string
 	Age  int
 }
 
-type Product struct {
-	SKU   string
-	Name  string
+// 测试指针结构体
+type testProduct struct {
+	Code  string
 	Price float64
 }
 
 func TestSlice2Map(t *testing.T) {
-	t.Run("正常情况-使用ID字段", func(t *testing.T) {
-		slice := []Person{
-			{ID: 1, Name: "Alice", Age: 20},
-			{ID: 2, Name: "Bob", Age: 25},
-		}
-		want := map[any]Person{
-			1: {ID: 1, Name: "Alice", Age: 20},
-			2: {ID: 2, Name: "Bob", Age: 25},
+	// 测试用例1：正常情况，使用int类型作为key
+	t.Run("Normal case with int key", func(t *testing.T) {
+		users := []testUser{
+			{ID: 1, Name: "Alice", Age: 25},
+			{ID: 2, Name: "Bob", Age: 30},
 		}
 
-		got, err := Slice2Map(slice, "ID")
+		result, err := Slice2Map[int, testUser]("ID", users)
 		if err != nil {
-			t.Errorf("Slice2Map() unexpected error = %v", err)
-			return
+			t.Error("Unexpected error:", err)
 		}
 
-		if !reflect.DeepEqual(got, want) {
-			t.Errorf("Slice2Map() = %v, want %v", got, want)
+		if len(result) != 2 {
+			t.Error("Expected map length 2, got", len(result))
+		}
+
+		if result[1].Name != "Alice" || result[2].Name != "Bob" {
+			t.Error("Map content incorrect")
 		}
 	})
 
-	t.Run("正常情况-使用Name字段", func(t *testing.T) {
-		slice := []Person{
-			{ID: 1, Name: "Alice", Age: 20},
-			{ID: 2, Name: "Bob", Age: 25},
-		}
-		want := map[any]Person{
-			"Alice": {ID: 1, Name: "Alice", Age: 20},
-			"Bob":   {ID: 2, Name: "Bob", Age: 25},
+	// 测试用例2：正常情况，使用string类型作为key
+	t.Run("Normal case with string key", func(t *testing.T) {
+		users := []testUser{
+			{ID: 1, Name: "Alice", Age: 25},
+			{ID: 2, Name: "Bob", Age: 30},
 		}
 
-		got, err := Slice2Map(slice, "Name")
+		result, err := Slice2Map[string, testUser]("Name", users)
 		if err != nil {
-			t.Errorf("Slice2Map() unexpected error = %v", err)
-			return
+			t.Error("Unexpected error:", err)
 		}
 
-		if !reflect.DeepEqual(got, want) {
-			t.Errorf("Slice2Map() = %v, want %v", got, want)
+		if result["Alice"].ID != 1 || result["Bob"].Age != 30 {
+			t.Error("Map content incorrect")
 		}
 	})
 
-	t.Run("空切片", func(t *testing.T) {
-		slice := []Person{}
-		want := map[any]Person{}
-
-		got, err := Slice2Map(slice, "ID")
-		if err != nil {
-			t.Errorf("Slice2Map() unexpected error = %v", err)
-			return
+	// 测试用例3：测试指针结构体
+	t.Run("Pointer struct case", func(t *testing.T) {
+		products := []*testProduct{
+			{Code: "P001", Price: 9.99},
+			{Code: "P002", Price: 19.99},
 		}
 
-		if !reflect.DeepEqual(got, want) {
-			t.Errorf("Slice2Map() = %v, want %v", got, want)
+		result, err := Slice2Map[string, *testProduct]("Code", products)
+		if err != nil {
+			t.Error("Unexpected error:", err)
+		}
+
+		if result["P001"].Price != 9.99 || result["P002"].Price != 19.99 {
+			t.Error("Map content incorrect")
 		}
 	})
 
-	t.Run("非结构体切片", func(t *testing.T) {
-		slice := []int{1, 2, 3}
-		wantErr := "expected struct type, got int"
+	// 测试用例4：字段不存在的情况
+	t.Run("Field not found case", func(t *testing.T) {
+		users := []testUser{
+			{ID: 1, Name: "Alice", Age: 25},
+		}
 
-		_, err := Slice2Map(slice, "ID")
+		_, err := Slice2Map[int, testUser]("NonExistentField", users)
 		if err == nil {
-			t.Error("Slice2Map() expected error but got none")
-			return
-		}
-
-		if err.Error() != wantErr {
-			t.Errorf("Slice2Map() error = %v, want %v", err.Error(), wantErr)
+			t.Error("Expected error for non-existent field, got nil")
 		}
 	})
 
-	t.Run("指针结构体切片", func(t *testing.T) {
-		slice := []*Person{
-			{ID: 1, Name: "Alice", Age: 20},
-			{ID: 2, Name: "Bob", Age: 25},
-		}
-		want := map[any]*Person{
-			1: {ID: 1, Name: "Alice", Age: 20},
-			2: {ID: 2, Name: "Bob", Age: 25},
+	// 测试用例5：字段类型不匹配的情况
+	t.Run("Field type mismatch case", func(t *testing.T) {
+		users := []testUser{
+			{ID: 1, Name: "Alice", Age: 25},
 		}
 
-		got, err := Slice2Map(slice, "ID")
-		if err != nil {
-			t.Errorf("Slice2Map() unexpected error = %v", err)
-			return
-		}
-
-		if !reflect.DeepEqual(got, want) {
-			t.Errorf("Slice2Map() = %v, want %v", got, want)
-		}
-	})
-
-	t.Run("字段不存在", func(t *testing.T) {
-		slice := []Person{
-			{ID: 1, Name: "Alice", Age: 20},
-		}
-		wantErr := "field Address not found in struct"
-
-		_, err := Slice2Map(slice, "Address")
+		_, err := Slice2Map[string, testUser]("ID", users)
 		if err == nil {
-			t.Error("Slice2Map() expected error but got none")
-			return
-		}
-
-		if err.Error() != wantErr {
-			t.Errorf("Slice2Map() error = %v, want %v", err.Error(), wantErr)
+			t.Error("Expected error for type mismatch, got nil")
 		}
 	})
 
-	t.Run("不同类型结构体", func(t *testing.T) {
-		slice := []Product{
-			{SKU: "P001", Name: "Laptop", Price: 999.99},
-			{SKU: "P002", Name: "Phone", Price: 699.99},
-		}
-		want := map[any]Product{
-			"P001": {SKU: "P001", Name: "Laptop", Price: 999.99},
-			"P002": {SKU: "P002", Name: "Phone", Price: 699.99},
-		}
+	// 测试用例6：非结构体类型的情况
+	t.Run("Non-struct type case", func(t *testing.T) {
+		numbers := []int{1, 2, 3}
 
-		got, err := Slice2Map(slice, "SKU")
+		_, err := Slice2Map[int, int]("Field", numbers)
+		if err == nil {
+			t.Error("Expected error for non-struct type, got nil")
+		}
+	})
+
+	// 测试用例7：空切片的情况
+	t.Run("Empty slice case", func(t *testing.T) {
+		var users []testUser
+
+		result, err := Slice2Map[int, testUser]("ID", users)
 		if err != nil {
-			t.Errorf("Slice2Map() unexpected error = %v", err)
-			return
+			t.Error("Unexpected error:", err)
 		}
 
-		if !reflect.DeepEqual(got, want) {
-			t.Errorf("Slice2Map() = %v, want %v", got, want)
+		if len(result) != 0 {
+			t.Error("Expected empty map, got", len(result))
+		}
+	})
+
+	// 测试用例8：重复key的情况（应该覆盖）
+	t.Run("Duplicate key case", func(t *testing.T) {
+		users := []testUser{
+			{ID: 1, Name: "Alice", Age: 25},
+			{ID: 1, Name: "Bob", Age: 30}, // 相同ID
+		}
+
+		result, err := Slice2Map[int, testUser]("ID", users)
+		if err != nil {
+			t.Error("Unexpected error:", err)
+		}
+
+		if len(result) != 1 {
+			t.Error("Expected map length 1 due to duplicate keys, got", len(result))
+		}
+
+		// 应该保留最后一个值
+		if result[1].Name != "Bob" {
+			t.Error("Expected last value to be kept for duplicate key")
 		}
 	})
 }

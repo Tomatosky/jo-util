@@ -96,8 +96,8 @@ func ToString(value any) string {
 }
 
 // Slice2Map Struct Slice 转 Map
-func Slice2Map[T any](slice []T, fieldName string) (map[any]T, error) {
-	result := make(map[any]T)
+func Slice2Map[K comparable, T any](fieldName string, slice []T) (map[K]T, error) {
+	result := make(map[K]T)
 	for _, item := range slice {
 		// 使用反射获取字段值
 		val := reflect.ValueOf(item)
@@ -111,7 +111,11 @@ func Slice2Map[T any](slice []T, fieldName string) (map[any]T, error) {
 		if !field.IsValid() {
 			return nil, fmt.Errorf("field %s not found in struct", fieldName)
 		}
-		key := field.Interface()
+		// 将字段值转换为 K 类型
+		key, ok := field.Interface().(K)
+		if !ok {
+			return nil, fmt.Errorf("field %s is not of type %T", fieldName, *new(K))
+		}
 		result[key] = item
 	}
 	return result, nil
