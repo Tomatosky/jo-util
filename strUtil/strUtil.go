@@ -2,8 +2,6 @@ package strUtil
 
 import (
 	"encoding/json"
-	"fmt"
-	"reflect"
 	"strconv"
 )
 
@@ -93,30 +91,4 @@ func ToString(value any) string {
 		}
 		return string(b)
 	}
-}
-
-// Slice2Map Struct Slice 转 Map
-func Slice2Map[K comparable, T any](fieldName string, slice []T) (map[K]T, error) {
-	result := make(map[K]T)
-	for _, item := range slice {
-		// 使用反射获取字段值
-		val := reflect.ValueOf(item)
-		if val.Kind() == reflect.Ptr {
-			val = val.Elem()
-		}
-		if val.Kind() != reflect.Struct {
-			return nil, fmt.Errorf("expected struct type, got %v", val.Kind())
-		}
-		field := val.FieldByName(fieldName)
-		if !field.IsValid() {
-			return nil, fmt.Errorf("field %s not found in struct", fieldName)
-		}
-		// 将字段值转换为 K 类型
-		key, ok := field.Interface().(K)
-		if !ok {
-			return nil, fmt.Errorf("field %s is not of type %T", fieldName, *new(K))
-		}
-		result[key] = item
-	}
-	return result, nil
 }

@@ -296,3 +296,254 @@ func TestInsertByIndex(t *testing.T) {
 		})
 	}
 }
+
+// 测试结构体
+type testUser struct {
+	ID   int
+	Name string
+	Age  int
+}
+
+// 测试指针结构体
+type testProduct struct {
+	Code  string
+	Price float64
+}
+
+func TestToMap(t *testing.T) {
+	// 测试用例1：正常情况，使用int类型作为key
+	t.Run("Normal case with int key", func(t *testing.T) {
+		users := []testUser{
+			{ID: 1, Name: "Alice", Age: 25},
+			{ID: 2, Name: "Bob", Age: 30},
+		}
+
+		result, err := ToMap[int, testUser]("ID", users)
+		if err != nil {
+			t.Error("Unexpected error:", err)
+		}
+
+		if len(result) != 2 {
+			t.Error("Expected map length 2, got", len(result))
+		}
+
+		if result[1].Name != "Alice" || result[2].Name != "Bob" {
+			t.Error("Map content incorrect")
+		}
+	})
+
+	// 测试用例2：正常情况，使用string类型作为key
+	t.Run("Normal case with string key", func(t *testing.T) {
+		users := []testUser{
+			{ID: 1, Name: "Alice", Age: 25},
+			{ID: 2, Name: "Bob", Age: 30},
+		}
+
+		result, err := ToMap[string, testUser]("Name", users)
+		if err != nil {
+			t.Error("Unexpected error:", err)
+		}
+
+		if result["Alice"].ID != 1 || result["Bob"].Age != 30 {
+			t.Error("Map content incorrect")
+		}
+	})
+
+	// 测试用例3：测试指针结构体
+	t.Run("Pointer struct case", func(t *testing.T) {
+		products := []*testProduct{
+			{Code: "P001", Price: 9.99},
+			{Code: "P002", Price: 19.99},
+		}
+
+		result, err := ToMap[string, *testProduct]("Code", products)
+		if err != nil {
+			t.Error("Unexpected error:", err)
+		}
+
+		if result["P001"].Price != 9.99 || result["P002"].Price != 19.99 {
+			t.Error("Map content incorrect")
+		}
+	})
+
+	// 测试用例4：字段不存在的情况
+	t.Run("Field not found case", func(t *testing.T) {
+		users := []testUser{
+			{ID: 1, Name: "Alice", Age: 25},
+		}
+
+		_, err := ToMap[int, testUser]("NonExistentField", users)
+		if err == nil {
+			t.Error("Expected error for non-existent field, got nil")
+		}
+	})
+
+	// 测试用例5：字段类型不匹配的情况
+	t.Run("Field type mismatch case", func(t *testing.T) {
+		users := []testUser{
+			{ID: 1, Name: "Alice", Age: 25},
+		}
+
+		_, err := ToMap[string, testUser]("ID", users)
+		if err == nil {
+			t.Error("Expected error for type mismatch, got nil")
+		}
+	})
+
+	// 测试用例6：非结构体类型的情况
+	t.Run("Non-struct type case", func(t *testing.T) {
+		numbers := []int{1, 2, 3}
+
+		_, err := ToMap[int, int]("Field", numbers)
+		if err == nil {
+			t.Error("Expected error for non-struct type, got nil")
+		}
+	})
+
+	// 测试用例7：空切片的情况
+	t.Run("Empty slice case", func(t *testing.T) {
+		var users []testUser
+
+		result, err := ToMap[int, testUser]("ID", users)
+		if err != nil {
+			t.Error("Unexpected error:", err)
+		}
+
+		if len(result) != 0 {
+			t.Error("Expected empty map, got", len(result))
+		}
+	})
+
+	// 测试用例8：重复key的情况（应该覆盖）
+	t.Run("Duplicate key case", func(t *testing.T) {
+		users := []testUser{
+			{ID: 1, Name: "Alice", Age: 25},
+			{ID: 1, Name: "Bob", Age: 30}, // 相同ID
+		}
+
+		result, err := ToMap[int, testUser]("ID", users)
+		if err != nil {
+			t.Error("Unexpected error:", err)
+		}
+
+		if len(result) != 1 {
+			t.Error("Expected map length 1 due to duplicate keys, got", len(result))
+		}
+
+		// 应该保留最后一个值
+		if result[1].Name != "Bob" {
+			t.Error("Expected last value to be kept for duplicate key")
+		}
+	})
+}
+
+func TestEvery(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    []int
+		elements []int
+		expected bool
+	}{
+		{
+			name:     "空集合和空元素",
+			input:    []int{},
+			elements: []int{},
+			expected: true,
+		},
+		{
+			name:     "空集合但非空元素",
+			input:    []int{},
+			elements: []int{1, 2},
+			expected: false,
+		},
+		{
+			name:     "非空集合和空元素",
+			input:    []int{1, 2, 3},
+			elements: []int{},
+			expected: true,
+		},
+		{
+			name:     "包含所有元素",
+			input:    []int{1, 2, 3, 4, 5},
+			elements: []int{2, 4},
+			expected: true,
+		},
+		{
+			name:     "不包含所有元素",
+			input:    []int{1, 2, 3, 4, 5},
+			elements: []int{2, 6},
+			expected: false,
+		},
+		{
+			name:     "重复元素在集合中",
+			input:    []int{1, 2, 2, 3, 3, 3},
+			elements: []int{2, 3},
+			expected: true,
+		},
+		{
+			name:     "重复元素在查找列表中",
+			input:    []int{1, 2, 3},
+			elements: []int{2, 2, 3},
+			expected: true,
+		},
+		{
+			name:     "完全匹配",
+			input:    []int{1, 2, 3},
+			elements: []int{1, 2, 3},
+			expected: true,
+		},
+		{
+			name:     "部分匹配",
+			input:    []int{1, 2, 3},
+			elements: []int{1, 2, 4},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ContainAll(tt.input, tt.elements...)
+			if result != tt.expected {
+				t.Errorf("Every(%v, %v) = %v, want %v", tt.input, tt.elements, result, tt.expected)
+			}
+		})
+	}
+}
+
+// 测试字符串类型的Every函数
+func TestEveryString(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    []string
+		elements []string
+		expected bool
+	}{
+		{
+			name:     "字符串匹配",
+			input:    []string{"a", "b", "c", "d"},
+			elements: []string{"b", "d"},
+			expected: true,
+		},
+		{
+			name:     "字符串不匹配",
+			input:    []string{"a", "b", "c", "d"},
+			elements: []string{"b", "e"},
+			expected: false,
+		},
+		{
+			name:     "空字符串",
+			input:    []string{"", "b", "c"},
+			elements: []string{""},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ContainAll(tt.input, tt.elements...)
+			if result != tt.expected {
+				t.Errorf("Every(%v, %v) = %v, want %v", tt.input, tt.elements, result, tt.expected)
+			}
+		})
+	}
+}

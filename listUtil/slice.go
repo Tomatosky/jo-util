@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"reflect"
 	"time"
 )
 
@@ -127,4 +128,57 @@ func InsertByIndex[T any](slice []T, index int, value T) ([]T, error) {
 	slice[index] = value
 
 	return slice, nil
+}
+
+// IndexOf 返回元素在切片中的索引，如果不存在则返回-1
+func IndexOf[T comparable](slice []T, target T) int {
+	for i, v := range slice {
+		if v == target {
+			return i
+		}
+	}
+	return -1
+}
+
+// ToMap Struct Slice 转 Map
+func ToMap[K comparable, T any](fieldName string, slice []T) (map[K]T, error) {
+	result := make(map[K]T)
+	for _, item := range slice {
+		// 使用反射获取字段值
+		val := reflect.ValueOf(item)
+		if val.Kind() == reflect.Ptr {
+			val = val.Elem()
+		}
+		if val.Kind() != reflect.Struct {
+			return nil, fmt.Errorf("expected struct type, got %v", val.Kind())
+		}
+		field := val.FieldByName(fieldName)
+		if !field.IsValid() {
+			return nil, fmt.Errorf("field %s not found in struct", fieldName)
+		}
+		// 将字段值转换为 K 类型
+		key, ok := field.Interface().(K)
+		if !ok {
+			return nil, fmt.Errorf("field %s is not of type %T", fieldName, *new(K))
+		}
+		result[key] = item
+	}
+	return result, nil
+}
+
+// ContainAll 检查集合中是否包含所有指定元素
+func ContainAll[T comparable](in []T, elements ...T) bool {
+	// 创建元素查找map
+	elementMap := make(map[T]struct{})
+	for _, v := range elements {
+		elementMap[v] = struct{}{}
+	}
+	// 检查集合中的每个元素
+	for _, item := range in {
+		if _, exists := elementMap[item]; exists {
+			delete(elementMap, item)
+		}
+	}
+	// 如果所有元素都被找到，map应该为空
+	return len(elementMap) == 0
 }
