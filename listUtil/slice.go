@@ -182,3 +182,21 @@ func ContainAll[T comparable](in []T, elements ...T) bool {
 	// 如果所有元素都被找到，map应该为空
 	return len(elementMap) == 0
 }
+
+// ContainOne 检查集合中是否包含指定元素中的一个
+func ContainOne[T comparable](in []T, elements ...T) bool {
+	// 创建一个map用于快速查找
+	elementSet := make(map[T]struct{}, len(elements))
+	for _, e := range elements {
+		elementSet[e] = struct{}{}
+	}
+
+	// 检查切片中的每个元素
+	for _, v := range in {
+		if _, ok := elementSet[v]; ok {
+			return true
+		}
+	}
+
+	return false
+}

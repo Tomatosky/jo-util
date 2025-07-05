@@ -547,3 +547,160 @@ func TestEveryString(t *testing.T) {
 		})
 	}
 }
+
+func TestContainOne(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    []int
+		elements []int
+		want     bool
+	}{
+		{
+			name:     "空切片和空元素",
+			input:    []int{},
+			elements: []int{},
+			want:     false,
+		},
+		{
+			name:     "空切片但有元素",
+			input:    []int{},
+			elements: []int{1, 2, 3},
+			want:     false,
+		},
+		{
+			name:     "非空切片但空元素",
+			input:    []int{1, 2, 3},
+			elements: []int{},
+			want:     false,
+		},
+		{
+			name:     "包含单个匹配元素",
+			input:    []int{1, 2, 3},
+			elements: []int{2},
+			want:     true,
+		},
+		{
+			name:     "包含多个匹配元素中的一个",
+			input:    []int{1, 2, 3},
+			elements: []int{4, 2, 5},
+			want:     true,
+		},
+		{
+			name:     "不包含任何元素",
+			input:    []int{1, 2, 3},
+			elements: []int{4, 5, 6},
+			want:     false,
+		},
+		{
+			name:     "重复元素且匹配",
+			input:    []int{1, 1, 2, 2, 3},
+			elements: []int{2},
+			want:     true,
+		},
+		{
+			name:     "重复元素但不匹配",
+			input:    []int{1, 1, 2, 2, 3},
+			elements: []int{4},
+			want:     false,
+		},
+		{
+			name:     "大切片测试",
+			input:    make([]int, 1000), // 1000个0
+			elements: []int{0, 999},
+			want:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ContainOne(tt.input, tt.elements...); got != tt.want {
+				t.Errorf("ContainOne() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// 测试字符串类型的ContainOne
+func TestContainOneString(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    []string
+		elements []string
+		want     bool
+	}{
+		{
+			name:     "字符串匹配",
+			input:    []string{"apple", "banana", "orange"},
+			elements: []string{"banana", "grape"},
+			want:     true,
+		},
+		{
+			name:     "字符串不匹配",
+			input:    []string{"apple", "banana", "orange"},
+			elements: []string{"pear", "grape"},
+			want:     false,
+		},
+		{
+			name:     "空字符串测试",
+			input:    []string{"", "banana", "orange"},
+			elements: []string{""},
+			want:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ContainOne(tt.input, tt.elements...); got != tt.want {
+				t.Errorf("ContainOne() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// 测试自定义结构体类型的ContainOne
+func TestContainOneStruct(t *testing.T) {
+	type person struct {
+		name string
+		age  int
+	}
+
+	tests := []struct {
+		name     string
+		input    []person
+		elements []person
+		want     bool
+	}{
+		{
+			name: "结构体匹配",
+			input: []person{
+				{"Alice", 20},
+				{"Bob", 30},
+			},
+			elements: []person{
+				{"Bob", 30},
+				{"Charlie", 40},
+			},
+			want: true,
+		},
+		{
+			name: "结构体不匹配",
+			input: []person{
+				{"Alice", 20},
+				{"Bob", 30},
+			},
+			elements: []person{
+				{"Alice", 30}, // 同名但不同年龄
+				{"Bob", 20},   // 同年龄但不同名
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ContainOne(tt.input, tt.elements...); got != tt.want {
+				t.Errorf("ContainOne() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
