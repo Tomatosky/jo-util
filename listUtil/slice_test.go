@@ -297,146 +297,6 @@ func TestInsertByIndex(t *testing.T) {
 	}
 }
 
-// 测试结构体
-type testUser struct {
-	ID   int
-	Name string
-	Age  int
-}
-
-// 测试指针结构体
-type testProduct struct {
-	Code  string
-	Price float64
-}
-
-func TestToMap(t *testing.T) {
-	// 测试用例1：正常情况，使用int类型作为key
-	t.Run("Normal case with int key", func(t *testing.T) {
-		users := []testUser{
-			{ID: 1, Name: "Alice", Age: 25},
-			{ID: 2, Name: "Bob", Age: 30},
-		}
-
-		result, err := ToMap[int, testUser]("ID", users)
-		if err != nil {
-			t.Error("Unexpected error:", err)
-		}
-
-		if len(result) != 2 {
-			t.Error("Expected map length 2, got", len(result))
-		}
-
-		if result[1].Name != "Alice" || result[2].Name != "Bob" {
-			t.Error("Map content incorrect")
-		}
-	})
-
-	// 测试用例2：正常情况，使用string类型作为key
-	t.Run("Normal case with string key", func(t *testing.T) {
-		users := []testUser{
-			{ID: 1, Name: "Alice", Age: 25},
-			{ID: 2, Name: "Bob", Age: 30},
-		}
-
-		result, err := ToMap[string, testUser]("Name", users)
-		if err != nil {
-			t.Error("Unexpected error:", err)
-		}
-
-		if result["Alice"].ID != 1 || result["Bob"].Age != 30 {
-			t.Error("Map content incorrect")
-		}
-	})
-
-	// 测试用例3：测试指针结构体
-	t.Run("Pointer struct case", func(t *testing.T) {
-		products := []*testProduct{
-			{Code: "P001", Price: 9.99},
-			{Code: "P002", Price: 19.99},
-		}
-
-		result, err := ToMap[string, *testProduct]("Code", products)
-		if err != nil {
-			t.Error("Unexpected error:", err)
-		}
-
-		if result["P001"].Price != 9.99 || result["P002"].Price != 19.99 {
-			t.Error("Map content incorrect")
-		}
-	})
-
-	// 测试用例4：字段不存在的情况
-	t.Run("Field not found case", func(t *testing.T) {
-		users := []testUser{
-			{ID: 1, Name: "Alice", Age: 25},
-		}
-
-		_, err := ToMap[int, testUser]("NonExistentField", users)
-		if err == nil {
-			t.Error("Expected error for non-existent field, got nil")
-		}
-	})
-
-	// 测试用例5：字段类型不匹配的情况
-	t.Run("Field type mismatch case", func(t *testing.T) {
-		users := []testUser{
-			{ID: 1, Name: "Alice", Age: 25},
-		}
-
-		_, err := ToMap[string, testUser]("ID", users)
-		if err == nil {
-			t.Error("Expected error for type mismatch, got nil")
-		}
-	})
-
-	// 测试用例6：非结构体类型的情况
-	t.Run("Non-struct type case", func(t *testing.T) {
-		numbers := []int{1, 2, 3}
-
-		_, err := ToMap[int, int]("Field", numbers)
-		if err == nil {
-			t.Error("Expected error for non-struct type, got nil")
-		}
-	})
-
-	// 测试用例7：空切片的情况
-	t.Run("Empty slice case", func(t *testing.T) {
-		var users []testUser
-
-		result, err := ToMap[int, testUser]("ID", users)
-		if err != nil {
-			t.Error("Unexpected error:", err)
-		}
-
-		if len(result) != 0 {
-			t.Error("Expected empty map, got", len(result))
-		}
-	})
-
-	// 测试用例8：重复key的情况（应该覆盖）
-	t.Run("Duplicate key case", func(t *testing.T) {
-		users := []testUser{
-			{ID: 1, Name: "Alice", Age: 25},
-			{ID: 1, Name: "Bob", Age: 30}, // 相同ID
-		}
-
-		result, err := ToMap[int, testUser]("ID", users)
-		if err != nil {
-			t.Error("Unexpected error:", err)
-		}
-
-		if len(result) != 1 {
-			t.Error("Expected map length 1 due to duplicate keys, got", len(result))
-		}
-
-		// 应该保留最后一个值
-		if result[1].Name != "Bob" {
-			t.Error("Expected last value to be kept for duplicate key")
-		}
-	})
-}
-
 func TestEvery(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -807,4 +667,114 @@ func TestUnion(t *testing.T) {
 			}
 		})
 	}
+}
+
+// 测试结构体
+type Person struct {
+	Name string
+	Age  int
+}
+
+func TestFieldExtractor(t *testing.T) {
+	t.Run("提取Person的Name字段", func(t *testing.T) {
+		people := []Person{
+			{Name: "Alice", Age: 25},
+			{Name: "Bob", Age: 30},
+		}
+		got := FieldExtractor(people, func(p Person) string { return p.Name })
+		want := []string{"Alice", "Bob"}
+		if len(got) != len(want) {
+			t.Errorf("长度不匹配，期望 %d，得到 %d", len(want), len(got))
+		}
+		for i := range got {
+			if got[i] != want[i] {
+				t.Errorf("索引 %d 不匹配，期望 %v，得到 %v", i, want[i], got[i])
+			}
+		}
+	})
+
+	t.Run("提取Person的Age字段", func(t *testing.T) {
+		people := []Person{
+			{Name: "Alice", Age: 25},
+			{Name: "Bob", Age: 30},
+		}
+		got := FieldExtractor(people, func(p Person) int { return p.Age })
+		want := []int{25, 30}
+		if len(got) != len(want) {
+			t.Errorf("长度不匹配，期望 %d，得到 %d", len(want), len(got))
+		}
+		for i := range got {
+			if got[i] != want[i] {
+				t.Errorf("索引 %d 不匹配，期望 %v，得到 %v", i, want[i], got[i])
+			}
+		}
+	})
+
+	t.Run("空切片", func(t *testing.T) {
+		var people []Person
+		got := FieldExtractor(people, func(p Person) string { return p.Name })
+		if len(got) != 0 {
+			t.Errorf("期望空切片，得到长度 %d", len(got))
+		}
+	})
+}
+
+func TestToMap(t *testing.T) {
+	// 测试用例1：正常情况，多个Person结构体
+	t.Run("Normal case with multiple persons", func(t *testing.T) {
+		people := []Person{
+			{Name: "Alice", Age: 25},
+			{Name: "Bob", Age: 30},
+			{Name: "Charlie", Age: 35},
+		}
+		// 使用Name作为key
+		result := ToMap(people, func(p Person) string { return p.Name })
+		if len(result) != 3 {
+			t.Errorf("Expected map length 3, got %d", len(result))
+		}
+		if result["Alice"].Age != 25 {
+			t.Errorf("Expected Alice's age 25, got %d", result["Alice"].Age)
+		}
+		if result["Bob"].Name != "Bob" {
+			t.Errorf("Expected Bob's name Bob, got %s", result["Bob"].Name)
+		}
+	})
+	// 测试用例2：空切片
+	t.Run("Empty slice", func(t *testing.T) {
+		var empty []Person
+		result := ToMap(empty, func(p Person) string { return p.Name })
+		if len(result) != 0 {
+			t.Errorf("Expected empty map, got %d", len(result))
+		}
+	})
+	// 测试用例3：重复Name的情况（后出现的会覆盖前面的）
+	t.Run("Duplicate names", func(t *testing.T) {
+		people := []Person{
+			{Name: "Alice", Age: 25},
+			{Name: "Alice", Age: 30}, // 同名，年龄不同
+			{Name: "Bob", Age: 35},
+		}
+		result := ToMap(people, func(p Person) string { return p.Name })
+		if len(result) != 2 {
+			t.Errorf("Expected 2 unique names, got %d", len(result))
+		}
+		if result["Alice"].Age != 30 {
+			t.Errorf("Expected last Alice's age 30, got %d", result["Alice"].Age)
+		}
+	})
+	// 测试用例4：使用Age作为key（测试不同类型的key）
+	t.Run("Using age as key", func(t *testing.T) {
+		people := []Person{
+			{Name: "Alice", Age: 25},
+			{Name: "Bob", Age: 30},
+			{Name: "Charlie", Age: 25}, // 相同年龄
+		}
+		result := ToMap(people, func(p Person) int { return p.Age })
+		if len(result) != 2 {
+			t.Errorf("Expected 2 unique ages, got %d", len(result))
+		}
+		if result[25].Name != "Charlie" {
+			t.Errorf("Expected last person with age 25 to be Charlie, got %s", result[25].Name)
+		}
+	})
 }

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
-	"reflect"
 	"time"
 )
 
@@ -141,29 +140,22 @@ func IndexOf[T comparable](slice []T, target T) int {
 }
 
 // ToMap Struct Slice 转 Map
-func ToMap[K comparable, T any](fieldName string, slice []T) (map[K]T, error) {
-	result := make(map[K]T)
+func ToMap[K comparable, T any](slice []T, getKey func(T) K) map[K]T {
+	result := make(map[K]T, len(slice))
 	for _, item := range slice {
-		// 使用反射获取字段值
-		val := reflect.ValueOf(item)
-		if val.Kind() == reflect.Ptr {
-			val = val.Elem()
-		}
-		if val.Kind() != reflect.Struct {
-			return nil, fmt.Errorf("expected struct type, got %v", val.Kind())
-		}
-		field := val.FieldByName(fieldName)
-		if !field.IsValid() {
-			return nil, fmt.Errorf("field %s not found in struct", fieldName)
-		}
-		// 将字段值转换为 K 类型
-		key, ok := field.Interface().(K)
-		if !ok {
-			return nil, fmt.Errorf("field %s is not of type %T", fieldName, *new(K))
-		}
+		key := getKey(item)
 		result[key] = item
 	}
-	return result, nil
+	return result
+}
+
+// FieldExtractor 用于从结构体切片中提取特定字段
+func FieldExtractor[T any, F any](slice []T, getField func(T) F) []F {
+	result := make([]F, len(slice))
+	for i, item := range slice {
+		result[i] = getField(item)
+	}
+	return result
 }
 
 // ContainAll 检查集合中是否包含所有指定元素
