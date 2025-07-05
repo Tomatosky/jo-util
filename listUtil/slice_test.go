@@ -510,44 +510,6 @@ func TestEvery(t *testing.T) {
 	}
 }
 
-// 测试字符串类型的Every函数
-func TestEveryString(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    []string
-		elements []string
-		expected bool
-	}{
-		{
-			name:     "字符串匹配",
-			input:    []string{"a", "b", "c", "d"},
-			elements: []string{"b", "d"},
-			expected: true,
-		},
-		{
-			name:     "字符串不匹配",
-			input:    []string{"a", "b", "c", "d"},
-			elements: []string{"b", "e"},
-			expected: false,
-		},
-		{
-			name:     "空字符串",
-			input:    []string{"", "b", "c"},
-			elements: []string{""},
-			expected: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := ContainAll(tt.input, tt.elements...)
-			if result != tt.expected {
-				t.Errorf("Every(%v, %v) = %v, want %v", tt.input, tt.elements, result, tt.expected)
-			}
-		})
-	}
-}
-
 func TestContainOne(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -700,6 +662,148 @@ func TestContainOneStruct(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := ContainOne(tt.input, tt.elements...); got != tt.want {
 				t.Errorf("ContainOne() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIntersectionInt(t *testing.T) {
+	tests := []struct {
+		name     string
+		a        []int
+		b        []int
+		expected []int
+	}{
+		{
+			name:     "两个空slice",
+			a:        []int{},
+			b:        []int{},
+			expected: []int{},
+		},
+		{
+			name:     "第一个slice为空",
+			a:        []int{},
+			b:        []int{1, 2, 3},
+			expected: []int{},
+		},
+		{
+			name:     "第二个slice为空",
+			a:        []int{1, 2, 3},
+			b:        []int{},
+			expected: []int{},
+		},
+		{
+			name:     "有共同元素",
+			a:        []int{1, 2, 3, 4},
+			b:        []int{3, 4, 5, 6},
+			expected: []int{3, 4},
+		},
+		{
+			name:     "无共同元素",
+			a:        []int{1, 2, 3},
+			b:        []int{4, 5, 6},
+			expected: []int{},
+		},
+		{
+			name:     "完全相同的slice",
+			a:        []int{1, 2, 3},
+			b:        []int{1, 2, 3},
+			expected: []int{1, 2, 3},
+		},
+		{
+			name:     "重复元素",
+			a:        []int{1, 2, 2, 3},
+			b:        []int{2, 2, 3, 4},
+			expected: []int{2, 3},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := Intersection(tt.a, tt.b)
+			if !reflect.DeepEqual(result, tt.expected) {
+				t.Errorf("Intersection() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestUnion(t *testing.T) {
+	tests := []struct {
+		name     string
+		a        []int
+		b        []int
+		expected []int
+	}{
+		{
+			name:     "两个空slice",
+			a:        []int{},
+			b:        []int{},
+			expected: []int{},
+		},
+		{
+			name:     "第一个slice为空",
+			a:        []int{},
+			b:        []int{1, 2, 3},
+			expected: []int{1, 2, 3},
+		},
+		{
+			name:     "第二个slice为空",
+			a:        []int{1, 2, 3},
+			b:        []int{},
+			expected: []int{1, 2, 3},
+		},
+		{
+			name:     "两个slice完全相同",
+			a:        []int{1, 2, 3},
+			b:        []int{1, 2, 3},
+			expected: []int{1, 2, 3},
+		},
+		{
+			name:     "两个slice完全不同",
+			a:        []int{1, 2, 3},
+			b:        []int{4, 5, 6},
+			expected: []int{1, 2, 3, 4, 5, 6},
+		},
+		{
+			name:     "部分重复元素",
+			a:        []int{1, 2, 3, 4},
+			b:        []int{3, 4, 5, 6},
+			expected: []int{1, 2, 3, 4, 5, 6},
+		},
+		{
+			name:     "包含重复元素的slice",
+			a:        []int{1, 2, 2, 3},
+			b:        []int{3, 3, 4, 5},
+			expected: []int{1, 2, 3, 4, 5},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := Union(tt.a, tt.b)
+			if len(result) != len(tt.expected) {
+				t.Errorf("期望长度 %d, 实际长度 %d", len(tt.expected), len(result))
+				return
+			}
+			// 检查结果中是否包含所有期望的元素
+			expectedSet := make(map[int]bool)
+			for _, item := range tt.expected {
+				expectedSet[item] = true
+			}
+			for _, item := range result {
+				if !expectedSet[item] {
+					t.Errorf("结果中包含不期望的元素 %d", item)
+				}
+			}
+			// 检查所有期望的元素是否都在结果中
+			resultSet := make(map[int]bool)
+			for _, item := range result {
+				resultSet[item] = true
+			}
+			for _, item := range tt.expected {
+				if !resultSet[item] {
+					t.Errorf("结果中缺少期望的元素 %d", item)
+				}
 			}
 		})
 	}

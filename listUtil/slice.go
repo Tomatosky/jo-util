@@ -200,3 +200,51 @@ func ContainOne[T comparable](in []T, elements ...T) bool {
 
 	return false
 }
+
+// Fill 用给定的值填充切片
+func Fill[T any](in []T, fillValue T) []T {
+	for i := range in {
+		in[i] = fillValue
+	}
+	return in
+}
+
+// Intersection 获取两个slice的交集
+func Intersection[T comparable](a, b []T) []T {
+	set := make(map[T]bool)
+	for _, item := range a {
+		set[item] = true
+	}
+	var result []T
+	for _, item := range b {
+		if set[item] {
+			result = append(result, item)
+			set[item] = false
+		}
+	}
+	if result == nil {
+		return make([]T, 0)
+	}
+	return result
+}
+
+// Union 获取两个slice的并集
+func Union[T comparable](a, b []T) []T {
+	set := make(map[T]bool)
+	var result []T
+	// 遍历第一个 slice，存入 map 并记录结果
+	for _, item := range a {
+		if !set[item] {
+			set[item] = true
+			result = append(result, item)
+		}
+	}
+	// 遍历第二个 slice，只添加未重复的元素
+	for _, item := range b {
+		if !set[item] {
+			set[item] = true
+			result = append(result, item)
+		}
+	}
+	return result
+}
