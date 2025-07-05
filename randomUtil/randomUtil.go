@@ -1,20 +1,15 @@
 package randomUtil
 
 import (
+	"github.com/Tomatosky/jo-util/numberUtil"
 	"math/rand"
 	"time"
 )
 
 var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
 
-// Number 约束，限制为所有整数类型
-type Number interface {
-	~int | ~int8 | ~int16 | ~int32 | ~int64 |
-		~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr
-}
-
 // RandomInt 生成指定范围 [start, end) 的随机整数
-func RandomInt[T Number](start, end T) T {
+func RandomInt[T numberUtil.Number](start, end T) T {
 	if start >= end {
 		panic("invalid range: start >= end")
 	}
@@ -50,7 +45,7 @@ func RandomEleSet[T any](slice []T, n int) []T {
 }
 
 // RandomWeightedKey 根据权重随机选择一个键
-func RandomWeightedKey[K comparable, V Number](weights map[K]V) K {
+func RandomWeightedKey[K comparable, V numberUtil.Number](weights map[K]V) K {
 	// 计算总权重
 	var sum int
 	for _, w := range weights {

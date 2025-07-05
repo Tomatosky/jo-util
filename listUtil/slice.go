@@ -7,9 +7,45 @@ import (
 	"time"
 )
 
+// Contain 切片是否包含某个元素
 func Contain[T comparable](slice []T, target T) bool {
 	for _, item := range slice {
 		if item == target {
+			return true
+		}
+	}
+
+	return false
+}
+
+// ContainAll 检查集合中是否包含所有指定元素
+func ContainAll[T comparable](in []T, elements ...T) bool {
+	// 创建元素查找map
+	elementMap := make(map[T]struct{})
+	for _, v := range elements {
+		elementMap[v] = struct{}{}
+	}
+	// 检查集合中的每个元素
+	for _, item := range in {
+		if _, exists := elementMap[item]; exists {
+			delete(elementMap, item)
+		}
+	}
+	// 如果所有元素都被找到，map应该为空
+	return len(elementMap) == 0
+}
+
+// ContainOne 检查集合中是否包含指定元素中的一个
+func ContainOne[T comparable](in []T, elements ...T) bool {
+	// 创建一个map用于快速查找
+	elementSet := make(map[T]struct{}, len(elements))
+	for _, e := range elements {
+		elementSet[e] = struct{}{}
+	}
+
+	// 检查切片中的每个元素
+	for _, v := range in {
+		if _, ok := elementSet[v]; ok {
 			return true
 		}
 	}
@@ -42,12 +78,14 @@ func ToString[T comparable](slice []T) string {
 	return string(marshal)
 }
 
+// Reverse 反转切片
 func Reverse[T any](slice []T) {
 	for i, j := 0, len(slice)-1; i < j; i, j = i+1, j-1 {
 		slice[i], slice[j] = slice[j], slice[i]
 	}
 }
 
+// Shuffle 打乱切片
 func Shuffle[T any](slice []T) []T {
 	rand.New(rand.NewSource(time.Now().UnixNano()))
 
@@ -58,6 +96,7 @@ func Shuffle[T any](slice []T) []T {
 	return slice
 }
 
+// AddIfAbsent 要是切片中不存在元素，则添加
 func AddIfAbsent[T comparable](slice *[]T, item T) {
 	for _, v := range *slice {
 		if v == item {
@@ -156,41 +195,6 @@ func FieldExtractor[T any, F any](slice []T, getField func(T) F) []F {
 		result[i] = getField(item)
 	}
 	return result
-}
-
-// ContainAll 检查集合中是否包含所有指定元素
-func ContainAll[T comparable](in []T, elements ...T) bool {
-	// 创建元素查找map
-	elementMap := make(map[T]struct{})
-	for _, v := range elements {
-		elementMap[v] = struct{}{}
-	}
-	// 检查集合中的每个元素
-	for _, item := range in {
-		if _, exists := elementMap[item]; exists {
-			delete(elementMap, item)
-		}
-	}
-	// 如果所有元素都被找到，map应该为空
-	return len(elementMap) == 0
-}
-
-// ContainOne 检查集合中是否包含指定元素中的一个
-func ContainOne[T comparable](in []T, elements ...T) bool {
-	// 创建一个map用于快速查找
-	elementSet := make(map[T]struct{}, len(elements))
-	for _, e := range elements {
-		elementSet[e] = struct{}{}
-	}
-
-	// 检查切片中的每个元素
-	for _, v := range in {
-		if _, ok := elementSet[v]; ok {
-			return true
-		}
-	}
-
-	return false
 }
 
 // Fill 用给定的值填充切片
