@@ -178,7 +178,13 @@ func IndexOf[T comparable](slice []T, target T) int {
 	return -1
 }
 
-// ToMap Struct Slice 转 Map
+// ToMap 函数用于将结构体切片转换为 map。
+// 它接收一个泛型切片和一个用于从切片元素中提取键的函数，返回一个以提取的键为键、切片元素为值的 map。
+// 参数 K 是 map 的键类型，需满足 comparable 约束，即键必须是可比较的类型。
+// 参数 T 是切片元素的类型，可以是任意类型。
+// 参数 slice 是要转换的结构体切片。
+// 参数 getKey 是一个函数，用于从切片的每个元素中提取键。
+// 返回值是一个以 K 为键、T 为值的 map。
 func ToMap[K comparable, T any](slice []T, getKey func(T) K) map[K]T {
 	result := make(map[K]T, len(slice))
 	for _, item := range slice {
@@ -188,7 +194,13 @@ func ToMap[K comparable, T any](slice []T, getKey func(T) K) map[K]T {
 	return result
 }
 
-// FieldExtractor 用于从结构体切片中提取特定字段
+// FieldExtractor 用于从结构体切片中提取特定字段，返回一个包含提取字段值的切片。
+// 这是一个泛型函数，支持任意类型的结构体切片和提取的字段类型。
+// 参数 T 表示结构体切片中元素的类型。
+// 参数 F 表示要提取的字段的类型。
+// 参数 slice 是包含结构体元素的切片。
+// 参数 getField 是一个函数，用于从结构体元素中提取指定字段的值。
+// 返回值为一个包含提取字段值的切片。
 func FieldExtractor[T any, F any](slice []T, getField func(T) F) []F {
 	result := make([]F, len(slice))
 	for i, item := range slice {
@@ -197,7 +209,11 @@ func FieldExtractor[T any, F any](slice []T, getField func(T) F) []F {
 	return result
 }
 
-// Fill 用给定的值填充切片
+// Fill 用给定的值填充切片中的所有元素，并返回填充后的切片。
+// 该函数会修改传入的切片本身。
+// 参数 in 是要填充的切片，支持任意类型。
+// 参数 fillValue 是用于填充切片元素的值，类型与切片元素类型一致。
+// 返回值为填充后的切片，实际上与传入的切片是同一个实例。
 func Fill[T any](in []T, fillValue T) []T {
 	for i := range in {
 		in[i] = fillValue
