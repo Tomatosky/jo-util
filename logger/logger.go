@@ -1,7 +1,6 @@
 package logger
 
 import (
-	"fmt"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"io"
@@ -40,24 +39,4 @@ func InitLog(w io.Writer) {
 	}
 
 	Log = zap.New(zapcore.NewTee(coreArr...), zap.AddCaller(), zap.AddStacktrace(zap.ErrorLevel))
-}
-
-func DebugF(format string, v ...interface{}) {
-	Log.Debug(fmt.Sprintf(format, v...))
-}
-
-func InfoF(format string, v ...interface{}) {
-	Log.Info(fmt.Sprintf(format, v...))
-}
-
-func WarnF(format string, v ...interface{}) {
-	Log.Warn(fmt.Sprintf(format, v...))
-}
-
-func ErrorF(format string, v ...interface{}) {
-	Log.Error(fmt.Sprintf(format, v...))
-}
-
-func FatalF(format string, v ...interface{}) {
-	Log.Fatal(fmt.Sprintf(format, v...))
 }
