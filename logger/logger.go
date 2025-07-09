@@ -58,6 +58,6 @@ func ErrorF(format string, v ...interface{}) {
 	Log.Error(fmt.Sprintf(format, v...))
 }
 
-func Fatal(format string, v ...interface{}) {
+func FatalF(format string, v ...interface{}) {
 	Log.Fatal(fmt.Sprintf(format, v...))
 }
