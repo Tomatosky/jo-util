@@ -12,30 +12,10 @@ func TestContainsKey(t *testing.T) {
 		key      string
 		expected bool
 	}{
-		{
-			name:     "key exists",
-			m:        map[string]int{"a": 1, "b": 2},
-			key:      "a",
-			expected: true,
-		},
-		{
-			name:     "key does not exist",
-			m:        map[string]int{"a": 1, "b": 2},
-			key:      "c",
-			expected: false,
-		},
-		{
-			name:     "empty map",
-			m:        map[string]int{},
-			key:      "a",
-			expected: false,
-		},
-		{
-			name:     "nil map",
-			m:        nil,
-			key:      "a",
-			expected: false,
-		},
+		{name: "key exists", m: map[string]int{"a": 1, "b": 2}, key: "a", expected: true},
+		{name: "key does not exist", m: map[string]int{"a": 1, "b": 2}, key: "c", expected: false},
+		{name: "empty map", m: map[string]int{}, key: "a", expected: false},
+		{name: "nil map", m: nil, key: "a", expected: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -78,21 +58,9 @@ func TestKeys(t *testing.T) {
 		m    map[string]int
 		want []string
 	}{
-		{
-			name: "empty map",
-			m:    map[string]int{},
-			want: []string{},
-		},
-		{
-			name: "single element",
-			m:    map[string]int{"a": 1},
-			want: []string{"a"},
-		},
-		{
-			name: "multiple elements",
-			m:    map[string]int{"a": 1, "b": 2, "c": 3},
-			want: []string{"a", "b", "c"},
-		},
+		{name: "empty map", m: map[string]int{}, want: []string{}},
+		{name: "single element", m: map[string]int{"a": 1}, want: []string{"a"}},
+		{name: "multiple elements", m: map[string]int{"a": 1, "b": 2, "c": 3}, want: []string{"a", "b", "c"}},
 	}
 
 	for _, tt := range tests {
@@ -174,27 +142,9 @@ func TestGetOrDefault(t *testing.T) {
 		defaultValue int
 		want         int
 	}{
-		{
-			name:         "key exists",
-			m:            map[string]int{"a": 1, "b": 2},
-			key:          "a",
-			defaultValue: 0,
-			want:         1,
-		},
-		{
-			name:         "key does not exist",
-			m:            map[string]int{"a": 1, "b": 2},
-			key:          "c",
-			defaultValue: 3,
-			want:         3,
-		},
-		{
-			name:         "empty map",
-			m:            map[string]int{},
-			key:          "a",
-			defaultValue: 1,
-			want:         1,
-		},
+		{name: "key exists", m: map[string]int{"a": 1, "b": 2}, key: "a", defaultValue: 0, want: 1},
+		{name: "key does not exist", m: map[string]int{"a": 1, "b": 2}, key: "c", defaultValue: 3, want: 3},
+		{name: "empty map", m: map[string]int{}, key: "a", defaultValue: 1, want: 1},
 	}
 
 	for _, tt := range tests {
@@ -258,21 +208,9 @@ func TestToString(t *testing.T) {
 		m    map[string]int
 		want string
 	}{
-		{
-			name: "empty map",
-			m:    map[string]int{},
-			want: "{}",
-		},
-		{
-			name: "single element",
-			m:    map[string]int{"a": 1},
-			want: `{"a":1}`,
-		},
-		{
-			name: "multiple elements",
-			m:    map[string]int{"a": 1, "b": 2},
-			want: `{"a":1,"b":2}`,
-		},
+		{name: "empty map", m: map[string]int{}, want: "{}"},
+		{name: "single element", m: map[string]int{"a": 1}, want: `{"a":1}`},
+		{name: "multiple elements", m: map[string]int{"a": 1, "b": 2}, want: `{"a":1,"b":2}`},
 	}
 
 	for _, tt := range tests {
@@ -309,30 +247,10 @@ func TestSortByValue(t *testing.T) {
 		reverse  bool
 		expected []string
 	}{
-		{
-			name:     "empty map",
-			input:    map[string]int{},
-			reverse:  false,
-			expected: []string{},
-		},
-		{
-			name:     "ascending sort",
-			input:    map[string]int{"a": 3, "b": 1, "c": 2},
-			reverse:  false,
-			expected: []string{"b", "c", "a"},
-		},
-		{
-			name:     "descending sort",
-			input:    map[string]int{"a": 3, "b": 1, "c": 2},
-			reverse:  true,
-			expected: []string{"a", "c", "b"},
-		},
-		{
-			name:     "same values ascending",
-			input:    map[string]int{"a": 1, "b": 1, "c": 1},
-			reverse:  false,
-			expected: []string{"a", "b", "c"}, // 顺序不重要，但需要稳定
-		},
+		{name: "empty map", input: map[string]int{}, reverse: false, expected: []string{}},
+		{name: "ascending sort", input: map[string]int{"a": 3, "b": 1, "c": 2}, reverse: false, expected: []string{"b", "c", "a"}},
+		{name: "descending sort", input: map[string]int{"a": 3, "b": 1, "c": 2}, reverse: true, expected: []string{"a", "c", "b"}},
+		{name: "same values ascending", input: map[string]int{"a": 1, "b": 1, "c": 1}, reverse: false, expected: []string{"a", "b", "c"}}, // 顺序不重要，但需要稳定
 	}
 
 	for _, tt := range tests {

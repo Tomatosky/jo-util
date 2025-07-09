@@ -150,55 +150,13 @@ func TestRemove2(t *testing.T) {
 		all      bool
 		expected []int
 	}{
-		{
-			name:     "Remove first occurrence",
-			input:    []int{1, 2, 3, 2, 4},
-			target:   2,
-			all:      false,
-			expected: []int{1, 3, 2, 4},
-		},
-		{
-			name:     "Remove all occurrences",
-			input:    []int{1, 2, 3, 2, 4},
-			target:   2,
-			all:      true,
-			expected: []int{1, 3, 4},
-		},
-		{
-			name:     "Target not found",
-			input:    []int{1, 2, 3},
-			target:   4,
-			all:      false,
-			expected: []int{1, 2, 3},
-		},
-		{
-			name:     "Empty slice",
-			input:    []int{},
-			target:   1,
-			all:      false,
-			expected: []int{},
-		},
-		{
-			name:     "Remove all from empty slice",
-			input:    []int{},
-			target:   1,
-			all:      true,
-			expected: []int{},
-		},
-		{
-			name:     "Remove first from single element",
-			input:    []int{5},
-			target:   5,
-			all:      false,
-			expected: []int{},
-		},
-		{
-			name:     "Remove all from single element",
-			input:    []int{5},
-			target:   5,
-			all:      true,
-			expected: []int{},
-		},
+		{name: "Remove first occurrence", input: []int{1, 2, 3, 2, 4}, target: 2, all: false, expected: []int{1, 3, 2, 4}},
+		{name: "Remove all occurrences", input: []int{1, 2, 3, 2, 4}, target: 2, all: true, expected: []int{1, 3, 4}},
+		{name: "Target not found", input: []int{1, 2, 3}, target: 4, all: false, expected: []int{1, 2, 3}},
+		{name: "Empty slice", input: []int{}, target: 1, all: false, expected: []int{}},
+		{name: "Remove all from empty slice", input: []int{}, target: 1, all: true, expected: []int{}},
+		{name: "Remove first from single element", input: []int{5}, target: 5, all: false, expected: []int{}},
+		{name: "Remove all from single element", input: []int{5}, target: 5, all: true, expected: []int{}},
 	}
 
 	for _, tt := range tests {
@@ -304,60 +262,15 @@ func TestEvery(t *testing.T) {
 		elements []int
 		expected bool
 	}{
-		{
-			name:     "空集合和空元素",
-			input:    []int{},
-			elements: []int{},
-			expected: true,
-		},
-		{
-			name:     "空集合但非空元素",
-			input:    []int{},
-			elements: []int{1, 2},
-			expected: false,
-		},
-		{
-			name:     "非空集合和空元素",
-			input:    []int{1, 2, 3},
-			elements: []int{},
-			expected: true,
-		},
-		{
-			name:     "包含所有元素",
-			input:    []int{1, 2, 3, 4, 5},
-			elements: []int{2, 4},
-			expected: true,
-		},
-		{
-			name:     "不包含所有元素",
-			input:    []int{1, 2, 3, 4, 5},
-			elements: []int{2, 6},
-			expected: false,
-		},
-		{
-			name:     "重复元素在集合中",
-			input:    []int{1, 2, 2, 3, 3, 3},
-			elements: []int{2, 3},
-			expected: true,
-		},
-		{
-			name:     "重复元素在查找列表中",
-			input:    []int{1, 2, 3},
-			elements: []int{2, 2, 3},
-			expected: true,
-		},
-		{
-			name:     "完全匹配",
-			input:    []int{1, 2, 3},
-			elements: []int{1, 2, 3},
-			expected: true,
-		},
-		{
-			name:     "部分匹配",
-			input:    []int{1, 2, 3},
-			elements: []int{1, 2, 4},
-			expected: false,
-		},
+		{name: "空集合和空元素", input: []int{}, elements: []int{}, expected: true},
+		{name: "空集合但非空元素", input: []int{}, elements: []int{1, 2}, expected: false},
+		{name: "非空集合和空元素", input: []int{1, 2, 3}, elements: []int{}, expected: true},
+		{name: "包含所有元素", input: []int{1, 2, 3, 4, 5}, elements: []int{2, 4}, expected: true},
+		{name: "不包含所有元素", input: []int{1, 2, 3, 4, 5}, elements: []int{2, 6}, expected: false},
+		{name: "重复元素在集合中", input: []int{1, 2, 2, 3, 3, 3}, elements: []int{2, 3}, expected: true},
+		{name: "重复元素在查找列表中", input: []int{1, 2, 3}, elements: []int{2, 2, 3}, expected: true},
+		{name: "完全匹配", input: []int{1, 2, 3}, elements: []int{1, 2, 3}, expected: true},
+		{name: "部分匹配", input: []int{1, 2, 3}, elements: []int{1, 2, 4}, expected: false},
 	}
 
 	for _, tt := range tests {
@@ -377,60 +290,15 @@ func TestContainOne(t *testing.T) {
 		elements []int
 		want     bool
 	}{
-		{
-			name:     "空切片和空元素",
-			input:    []int{},
-			elements: []int{},
-			want:     false,
-		},
-		{
-			name:     "空切片但有元素",
-			input:    []int{},
-			elements: []int{1, 2, 3},
-			want:     false,
-		},
-		{
-			name:     "非空切片但空元素",
-			input:    []int{1, 2, 3},
-			elements: []int{},
-			want:     false,
-		},
-		{
-			name:     "包含单个匹配元素",
-			input:    []int{1, 2, 3},
-			elements: []int{2},
-			want:     true,
-		},
-		{
-			name:     "包含多个匹配元素中的一个",
-			input:    []int{1, 2, 3},
-			elements: []int{4, 2, 5},
-			want:     true,
-		},
-		{
-			name:     "不包含任何元素",
-			input:    []int{1, 2, 3},
-			elements: []int{4, 5, 6},
-			want:     false,
-		},
-		{
-			name:     "重复元素且匹配",
-			input:    []int{1, 1, 2, 2, 3},
-			elements: []int{2},
-			want:     true,
-		},
-		{
-			name:     "重复元素但不匹配",
-			input:    []int{1, 1, 2, 2, 3},
-			elements: []int{4},
-			want:     false,
-		},
-		{
-			name:     "大切片测试",
-			input:    make([]int, 1000), // 1000个0
-			elements: []int{0, 999},
-			want:     true,
-		},
+		{name: "空切片和空元素", input: []int{}, elements: []int{}, want: false},
+		{name: "空切片但有元素", input: []int{}, elements: []int{1, 2, 3}, want: false},
+		{name: "非空切片但空元素", input: []int{1, 2, 3}, elements: []int{}, want: false},
+		{name: "包含单个匹配元素", input: []int{1, 2, 3}, elements: []int{2}, want: true},
+		{name: "包含多个匹配元素中的一个", input: []int{1, 2, 3}, elements: []int{4, 2, 5}, want: true},
+		{name: "不包含任何元素", input: []int{1, 2, 3}, elements: []int{4, 5, 6}, want: false},
+		{name: "重复元素且匹配", input: []int{1, 1, 2, 2, 3}, elements: []int{2}, want: true},
+		{name: "重复元素但不匹配", input: []int{1, 1, 2, 2, 3}, elements: []int{4}, want: false},
+		{name: "大切片测试", input: make([]int, 1000), elements: []int{0, 999}, want: true},
 	}
 
 	for _, tt := range tests {
@@ -450,24 +318,9 @@ func TestContainOneString(t *testing.T) {
 		elements []string
 		want     bool
 	}{
-		{
-			name:     "字符串匹配",
-			input:    []string{"apple", "banana", "orange"},
-			elements: []string{"banana", "grape"},
-			want:     true,
-		},
-		{
-			name:     "字符串不匹配",
-			input:    []string{"apple", "banana", "orange"},
-			elements: []string{"pear", "grape"},
-			want:     false,
-		},
-		{
-			name:     "空字符串测试",
-			input:    []string{"", "banana", "orange"},
-			elements: []string{""},
-			want:     true,
-		},
+		{name: "字符串匹配", input: []string{"apple", "banana", "orange"}, elements: []string{"banana", "grape"}, want: true},
+		{name: "字符串不匹配", input: []string{"apple", "banana", "orange"}, elements: []string{"pear", "grape"}, want: false},
+		{name: "空字符串测试", input: []string{"", "banana", "orange"}, elements: []string{""}, want: true},
 	}
 
 	for _, tt := range tests {
@@ -534,48 +387,13 @@ func TestIntersectionInt(t *testing.T) {
 		b        []int
 		expected []int
 	}{
-		{
-			name:     "两个空slice",
-			a:        []int{},
-			b:        []int{},
-			expected: []int{},
-		},
-		{
-			name:     "第一个slice为空",
-			a:        []int{},
-			b:        []int{1, 2, 3},
-			expected: []int{},
-		},
-		{
-			name:     "第二个slice为空",
-			a:        []int{1, 2, 3},
-			b:        []int{},
-			expected: []int{},
-		},
-		{
-			name:     "有共同元素",
-			a:        []int{1, 2, 3, 4},
-			b:        []int{3, 4, 5, 6},
-			expected: []int{3, 4},
-		},
-		{
-			name:     "无共同元素",
-			a:        []int{1, 2, 3},
-			b:        []int{4, 5, 6},
-			expected: []int{},
-		},
-		{
-			name:     "完全相同的slice",
-			a:        []int{1, 2, 3},
-			b:        []int{1, 2, 3},
-			expected: []int{1, 2, 3},
-		},
-		{
-			name:     "重复元素",
-			a:        []int{1, 2, 2, 3},
-			b:        []int{2, 2, 3, 4},
-			expected: []int{2, 3},
-		},
+		{name: "两个空slice", a: []int{}, b: []int{}, expected: []int{}},
+		{name: "第一个slice为空", a: []int{}, b: []int{1, 2, 3}, expected: []int{}},
+		{name: "第二个slice为空", a: []int{1, 2, 3}, b: []int{}, expected: []int{}},
+		{name: "有共同元素", a: []int{1, 2, 3, 4}, b: []int{3, 4, 5, 6}, expected: []int{3, 4}},
+		{name: "无共同元素", a: []int{1, 2, 3}, b: []int{4, 5, 6}, expected: []int{}},
+		{name: "完全相同的slice", a: []int{1, 2, 3}, b: []int{1, 2, 3}, expected: []int{1, 2, 3}},
+		{name: "重复元素", a: []int{1, 2, 2, 3}, b: []int{2, 2, 3, 4}, expected: []int{2, 3}},
 	}
 
 	for _, tt := range tests {
@@ -595,48 +413,13 @@ func TestUnion(t *testing.T) {
 		b        []int
 		expected []int
 	}{
-		{
-			name:     "两个空slice",
-			a:        []int{},
-			b:        []int{},
-			expected: []int{},
-		},
-		{
-			name:     "第一个slice为空",
-			a:        []int{},
-			b:        []int{1, 2, 3},
-			expected: []int{1, 2, 3},
-		},
-		{
-			name:     "第二个slice为空",
-			a:        []int{1, 2, 3},
-			b:        []int{},
-			expected: []int{1, 2, 3},
-		},
-		{
-			name:     "两个slice完全相同",
-			a:        []int{1, 2, 3},
-			b:        []int{1, 2, 3},
-			expected: []int{1, 2, 3},
-		},
-		{
-			name:     "两个slice完全不同",
-			a:        []int{1, 2, 3},
-			b:        []int{4, 5, 6},
-			expected: []int{1, 2, 3, 4, 5, 6},
-		},
-		{
-			name:     "部分重复元素",
-			a:        []int{1, 2, 3, 4},
-			b:        []int{3, 4, 5, 6},
-			expected: []int{1, 2, 3, 4, 5, 6},
-		},
-		{
-			name:     "包含重复元素的slice",
-			a:        []int{1, 2, 2, 3},
-			b:        []int{3, 3, 4, 5},
-			expected: []int{1, 2, 3, 4, 5},
-		},
+		{name: "两个空slice", a: []int{}, b: []int{}, expected: []int{}},
+		{name: "第一个slice为空", a: []int{}, b: []int{1, 2, 3}, expected: []int{1, 2, 3}},
+		{name: "第二个slice为空", a: []int{1, 2, 3}, b: []int{}, expected: []int{1, 2, 3}},
+		{name: "两个slice完全相同", a: []int{1, 2, 3}, b: []int{1, 2, 3}, expected: []int{1, 2, 3}},
+		{name: "两个slice完全不同", a: []int{1, 2, 3}, b: []int{4, 5, 6}, expected: []int{1, 2, 3, 4, 5, 6}},
+		{name: "部分重复元素", a: []int{1, 2, 3, 4}, b: []int{3, 4, 5, 6}, expected: []int{1, 2, 3, 4, 5, 6}},
+		{name: "包含重复元素的slice", a: []int{1, 2, 2, 3}, b: []int{3, 3, 4, 5}, expected: []int{1, 2, 3, 4, 5}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

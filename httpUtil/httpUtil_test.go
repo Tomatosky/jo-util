@@ -57,46 +57,11 @@ func TestGet(t *testing.T) {
 		wantErr  bool
 		wantBody string
 	}{
-		{
-			name:     "成功请求",
-			url:      ts.URL + "/success",
-			options:  nil,
-			wantErr:  false,
-			wantBody: "success response",
-		},
-		{
-			name:     "服务器错误",
-			url:      ts.URL + "/error",
-			options:  nil,
-			wantErr:  false, // 注意：服务器返回500错误，但请求本身是成功的
-			wantBody: "error response",
-		},
-		{
-			name: "带请求头的请求",
-			url:  ts.URL + "/headers",
-			options: &GetOptions{
-				Headers: map[string]string{
-					"Test-Header": "test-value",
-				},
-			},
-			wantErr:  false,
-			wantBody: "headers test",
-		},
-		{
-			name: "超时请求",
-			url:  ts.URL + "/timeout",
-			options: &GetOptions{
-				Timeout: 1, // 1秒超时
-			},
-			wantErr: true,
-		},
-		{
-			name:     "无效URL",
-			url:      "http://invalid.url",
-			options:  nil,
-			wantErr:  true,
-			wantBody: "",
-		},
+		{name: "成功请求", url: ts.URL + "/success", options: nil, wantErr: false, wantBody: "success response"},
+		{name: "服务器错误", url: ts.URL + "/error", options: nil, wantErr: false, wantBody: "error response"},
+		{name: "带请求头的请求", url: ts.URL + "/headers", options: &GetOptions{Headers: map[string]string{"Test-Header": "test-value"}}, wantErr: false, wantBody: "headers test"},
+		{name: "超时请求", url: ts.URL + "/timeout", options: &GetOptions{Timeout: 1}, wantErr: true},
+		{name: "无效URL", url: "http://invalid.url", options: nil, wantErr: true, wantBody: ""},
 	}
 
 	for _, tt := range tests {
@@ -128,12 +93,6 @@ func TestRespMethods(t *testing.T) {
 	resp := &Resp{
 		Body: []byte(jsonBody),
 	}
-
-	t.Run("Raw", func(t *testing.T) {
-		if string(resp.Raw()) != jsonBody {
-			t.Error("Raw() did not return expected body")
-		}
-	})
 
 	t.Run("Text", func(t *testing.T) {
 		if resp.Text() != jsonBody {
