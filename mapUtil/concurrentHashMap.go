@@ -6,6 +6,8 @@ import (
 	"sync"
 )
 
+var _ MapInterface[string, int] = (*ConcurrentHashMap[string, int])(nil)
+
 type ConcurrentHashMap[K comparable, V any] struct {
 	mu sync.RWMutex
 	m  map[K]V
