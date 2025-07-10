@@ -233,7 +233,7 @@ func TestIdPool(t *testing.T) {
 		// 立即检查任务计数（可能还在队列中）
 		for id := 0; id < numIDs; id++ {
 			count := pool.GetTaskCount(int32(id))
-			if count < 0 || count > numTasksPerID {
+			if count <= 0 || count > numTasksPerID {
 				t.Errorf("Unexpected task count %d for id %d", count, id)
 			}
 		}
