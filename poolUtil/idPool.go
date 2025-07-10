@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"github.com/Tomatosky/jo-util/idUtil"
+	"github.com/Tomatosky/jo-util/logger"
 	"github.com/Tomatosky/jo-util/mapUtil"
 	"go.uber.org/zap"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -185,13 +187,26 @@ func (w *worker) drainQueue() {
 }
 
 func (w *worker) processTask(task *customTask) {
+	defer func() {
+		err := recover()
+		if err != nil {
+			if w.idPool.logger != nil {
+				logger.Log.Error(fmt.Sprintf("err=%v", err))
+			} else {
+				fmt.Println(fmt.Sprintf("err=%v", err))
+				debug.PrintStack()
+			}
+		}
+
+		// 清理任务映射并减少计数
+		id := w.idPool.taskIdMap.Get(task.taskID)
+		w.idPool.taskIdMap.Remove(task.taskID)
+		v := w.idPool.idTaskCounts.Get(id)
+		if v != nil {
+			v.Add(-1)
+		}
+	}()
+
 	// 执行任务
 	task.task()
-	// 清理任务映射并减少计数
-	id := w.idPool.taskIdMap.Get(task.taskID)
-	w.idPool.taskIdMap.Remove(task.taskID)
-	v := w.idPool.idTaskCounts.Get(id)
-	if v != nil {
-		v.Add(-1)
-	}
 }
