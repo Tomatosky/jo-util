@@ -12,7 +12,7 @@ import (
 )
 
 type IdPool struct {
-	workers      []*Worker
+	workers      []*worker
 	taskIdMap    *mapUtil.ConcurrentHashMap[string, int32]        // key: taskID(string), value: id
 	idTaskCounts *mapUtil.ConcurrentHashMap[int32, *atomic.Int32] // key: id, value: *atomic.Int32
 	cores        int32
@@ -22,13 +22,13 @@ type IdPool struct {
 	poolName     string
 }
 
-type Worker struct {
+type worker struct {
 	idPool *IdPool          // 反向引用 IdPool
-	queue  chan *CustomTask // 任务通道
+	queue  chan *customTask // 任务通道
 	done   chan struct{}    // 关闭信号
 }
 
-type CustomTask struct {
+type customTask struct {
 	taskID string
 	task   func()
 }
@@ -47,7 +47,7 @@ func NewIdPool(opt *IdPoolOpt) *IdPool {
 
 	idPool := &IdPool{
 		cores:        opt.PoolSize,
-		workers:      make([]*Worker, opt.PoolSize),
+		workers:      make([]*worker, opt.PoolSize),
 		taskIdMap:    mapUtil.NewConcurrentHashMap[string, int32](),
 		idTaskCounts: mapUtil.NewConcurrentHashMap[int32, *atomic.Int32](),
 	}
@@ -59,7 +59,7 @@ func NewIdPool(opt *IdPoolOpt) *IdPool {
 	for i := int32(0); i < opt.PoolSize; i++ {
 		idPool.workers[i] = newWorker(idPool, opt.QueueSize)
 		idPool.wg.Add(1) // 为每个worker增加计数
-		go func(w *Worker) {
+		go func(w *worker) {
 			defer idPool.wg.Done() // worker退出时减少计数
 			w.run()
 		}(idPool.workers[i])
@@ -80,10 +80,10 @@ func (i *IdPool) Submit(id int32, task func()) {
 	// 记录任务映射
 	i.taskIdMap.Put(taskID, id)
 	// 选择 worker（哈希取模）
-	worker := i.workers[id%i.cores]
+	w := i.workers[id%i.cores]
 	// 发送任务
 	select {
-	case worker.queue <- &CustomTask{taskID: taskID, task: task}:
+	case w.queue <- &customTask{taskID: taskID, task: task}:
 	default:
 		if i.logger != nil {
 			i.logger.Warn(fmt.Sprintf("%s queue is full", i.poolName))
@@ -119,8 +119,8 @@ func (i *IdPool) Shutdown(timeout time.Duration) {
 	i.running.Store(false)
 
 	// 通知所有 worker 停止
-	for _, worker := range i.workers {
-		close(worker.done) // 发送关闭信号
+	for _, w := range i.workers {
+		close(w.done) // 发送关闭信号
 	}
 
 	// 创建一个 channel 用于等待 WaitGroup
@@ -147,16 +147,16 @@ func (i *IdPool) Shutdown(timeout time.Duration) {
 	}
 }
 
-func newWorker(i *IdPool, queueSize int) *Worker {
-	return &Worker{
+func newWorker(i *IdPool, queueSize int) *worker {
+	return &worker{
 		idPool: i,
-		queue:  make(chan *CustomTask, queueSize), // 带缓冲的任务队列
+		queue:  make(chan *customTask, queueSize), // 带缓冲的任务队列
 		done:   make(chan struct{}),
 	}
 }
 
-// Worker 运行循环
-func (w *Worker) run() {
+// worker 运行循环
+func (w *worker) run() {
 	for {
 		select {
 		case task := <-w.queue:
@@ -170,7 +170,7 @@ func (w *Worker) run() {
 }
 
 // 排空剩余任务
-func (w *Worker) drainQueue() {
+func (w *worker) drainQueue() {
 	for {
 		select {
 		case task, ok := <-w.queue:
@@ -184,7 +184,7 @@ func (w *Worker) drainQueue() {
 	}
 }
 
-func (w *Worker) processTask(task *CustomTask) {
+func (w *worker) processTask(task *customTask) {
 	// 执行任务
 	task.task()
 	// 清理任务映射并减少计数
