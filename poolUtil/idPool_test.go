@@ -23,10 +23,10 @@ func TestIdPool(t *testing.T) {
 
 		// 测试任务提交和计数
 		var counter int32
-		pool.Submit(1, func() {
+		pool.SubmitWithId(1, func() {
 			atomic.AddInt32(&counter, 1)
 		})
-		pool.Submit(1, func() {
+		pool.SubmitWithId(1, func() {
 			atomic.AddInt32(&counter, 1)
 		})
 
@@ -60,7 +60,7 @@ func TestIdPool(t *testing.T) {
 			wg.Add(1)
 			go func(id int32) {
 				defer wg.Done()
-				pool.Submit(id%4, func() {
+				pool.SubmitWithId(id%4, func() {
 					atomic.AddInt32(&counter, 1)
 				})
 			}(int32(i))
@@ -101,7 +101,7 @@ func TestIdPool(t *testing.T) {
 			go func() {
 				defer wg.Done()
 				for i := 0; i < numTasks/numWorkers; i++ {
-					pool.Submit(int32(i%16), func() {
+					pool.SubmitWithId(int32(i%16), func() {
 						atomic.AddInt32(&counter, 1)
 					})
 				}
@@ -130,14 +130,14 @@ func TestIdPool(t *testing.T) {
 
 		// 填满队列
 		for i := 0; i < 2; i++ {
-			pool.Submit(0, func() {
+			pool.SubmitWithId(0, func() {
 				time.Sleep(100 * time.Millisecond)
 			})
 		}
 
 		// 尝试提交更多任务（应该会触发队列满警告）
-		pool.Submit(0, func() {})
-		pool.Submit(0, func() {})
+		pool.SubmitWithId(0, func() {})
+		pool.SubmitWithId(0, func() {})
 
 		pool.Shutdown(time.Second)
 	})
@@ -154,7 +154,7 @@ func TestIdPool(t *testing.T) {
 
 		// 提交一些长时间运行的任务
 		for i := 0; i < numTasks; i++ {
-			pool.Submit(0, func() {
+			pool.SubmitWithId(0, func() {
 				time.Sleep(200 * time.Millisecond)
 				atomic.AddInt32(&counter, 1)
 			})
@@ -179,7 +179,7 @@ func TestIdPool(t *testing.T) {
 		})
 
 		// 提交一个长时间运行的任务
-		pool.Submit(0, func() {
+		pool.SubmitWithId(0, func() {
 			time.Sleep(2 * time.Second)
 		})
 
@@ -198,7 +198,7 @@ func TestIdPool(t *testing.T) {
 
 		const numTasks = 100
 		for i := 0; i < numTasks; i++ {
-			pool.Submit(int32(randomUtil.RandomInt(0, 32)), func() {})
+			pool.SubmitWithId(int32(randomUtil.RandomInt(0, 32)), func() {})
 		}
 
 		time.Sleep(100 * time.Millisecond)
@@ -224,7 +224,7 @@ func TestIdPool(t *testing.T) {
 		// 提交任务
 		for id := 0; id < numIDs; id++ {
 			for i := 0; i < numTasksPerID; i++ {
-				pool.Submit(int32(id), func() {
+				pool.SubmitWithId(int32(id), func() {
 					time.Sleep(10 * time.Millisecond)
 				})
 			}

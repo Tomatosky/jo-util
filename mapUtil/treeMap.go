@@ -11,7 +11,7 @@ const (
 	BLACK = false // 红黑树黑色节点标识
 )
 
-var _ MapInterface[string, int] = (*TreeMap[string, int])(nil)
+var _ IMap[string, int] = (*TreeMap[string, int])(nil)
 
 // TreeMap 是一个基于红黑树实现的并发安全的有序映射
 type TreeMap[K comparable, V any] struct {

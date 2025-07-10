@@ -1,6 +1,6 @@
 package mapUtil
 
-type MapInterface[K comparable, V any] interface {
+type IMap[K comparable, V any] interface {
 	Get(key K) V
 	Put(key K, value V)
 	Remove(key K)

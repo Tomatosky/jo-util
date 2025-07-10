@@ -6,12 +6,15 @@ import (
 	"github.com/Tomatosky/jo-util/idUtil"
 	"github.com/Tomatosky/jo-util/logger"
 	"github.com/Tomatosky/jo-util/mapUtil"
+	"github.com/Tomatosky/jo-util/randomUtil"
 	"go.uber.org/zap"
 	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
 )
+
+var _ IPool = (*IdPool)(nil)
 
 type IdPool struct {
 	workers      []*worker
@@ -69,8 +72,12 @@ func NewIdPool(opt *IdPoolOpt) *IdPool {
 	return idPool
 }
 
-// Submit 添加任务
-func (i *IdPool) Submit(id int32, task func()) {
+func (i *IdPool) Submit(task func()) {
+	i.SubmitWithId(int32(randomUtil.RandomInt(0, 100000)), task)
+}
+
+// SubmitWithId 添加任务
+func (i *IdPool) SubmitWithId(id int32, task func()) {
 	if !i.running.Load() {
 		return
 	}
@@ -113,7 +120,7 @@ func (i *IdPool) MaxQueue() int {
 }
 
 // Shutdown 关闭服务
-func (i *IdPool) Shutdown(timeout time.Duration) {
+func (i *IdPool) Shutdown(timeout time.Duration) (isTimeout bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -135,17 +142,9 @@ func (i *IdPool) Shutdown(timeout time.Duration) {
 	// 等待所有 worker 退出或上下文取消
 	select {
 	case <-waitCh:
-		if i.logger != nil {
-			i.logger.Info(fmt.Sprintf("%s shutdown success", i.poolName))
-		} else {
-			fmt.Println(fmt.Sprintf("%s shutdown success", i.poolName))
-		}
+		return false
 	case <-ctx.Done():
-		if i.logger != nil {
-			i.logger.Warn(fmt.Sprintf("%s shutdown fail:%s", i.poolName, ctx.Err()))
-		} else {
-			fmt.Println(fmt.Sprintf("%s shutdown fail:%s", i.poolName, ctx.Err()))
-		}
+		return true
 	}
 }
 

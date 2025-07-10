@@ -6,7 +6,7 @@ import (
 	"iter"
 )
 
-var _ MapInterface[string, int] = (*OrderedMap[string, int])(nil)
+var _ IMap[string, int] = (*OrderedMap[string, int])(nil)
 
 type OrderedMap[K comparable, V any] struct {
 	kv     map[K]*Element[K, V]

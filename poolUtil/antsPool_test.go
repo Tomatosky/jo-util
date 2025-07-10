@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-func TestNewPool(t *testing.T) {
+func TestNewAntsPool(t *testing.T) {
 	tests := []struct {
 		name string
 		size int
@@ -18,9 +18,9 @@ func TestNewPool(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pool := NewPool(tt.size)
+			pool := NewAntsPool(tt.size)
 			if pool == nil {
-				t.Error("NewPool returned nil")
+				t.Error("NewAntsPool returned nil")
 			}
 			if pool.pool == nil {
 				t.Error("ants pool not initialized")
@@ -30,39 +30,30 @@ func TestNewPool(t *testing.T) {
 }
 
 func TestPool_Submit(t *testing.T) {
-	pool := NewPool(1)
-	defer pool.Release(time.Second)
+	pool := NewAntsPool(1)
+	defer pool.Shutdown(time.Second)
 
 	// 测试正常提交任务
 	var executed bool
-	err := pool.Submit(func() {
+	pool.Submit(func() {
 		executed = true
 	})
-	if err != nil {
-		t.Errorf("Submit failed: %v", err)
-	}
 	time.Sleep(100 * time.Millisecond) // 等待任务执行
 	if !executed {
 		t.Error("Task was not executed")
 	}
 
 	// 测试提交nil任务
-	err = pool.Submit(nil)
-	if err == nil {
-		t.Error("Expected error when submitting nil task")
-	}
+	pool.Submit(nil)
 
 	// 测试池已关闭的情况
-	pool.Release(time.Second)
-	err = pool.Submit(func() {})
-	if err == nil {
-		t.Error("Expected error when submitting to closed pool")
-	}
+	pool.Shutdown(time.Second)
+	pool.Submit(func() {})
 }
 
 func TestPool_ScheduleAtFixedRate(t *testing.T) {
-	pool := NewPool(2)
-	defer pool.Release(time.Second)
+	pool := NewAntsPool(2)
+	defer pool.Shutdown(time.Second)
 
 	var counter int
 	var mu sync.Mutex
@@ -109,8 +100,8 @@ func TestPool_ScheduleAtFixedRate(t *testing.T) {
 }
 
 func TestPool_ScheduleWithFixedDelay(t *testing.T) {
-	pool := NewPool(2)
-	defer pool.Release(time.Second)
+	pool := NewAntsPool(2)
+	defer pool.Shutdown(time.Second)
 
 	var counter int
 	var mu sync.Mutex
@@ -158,49 +149,49 @@ func TestPool_ScheduleWithFixedDelay(t *testing.T) {
 	mu.Unlock()
 }
 
-func TestPool_Release(t *testing.T) {
+func TestPool_Shutdown(t *testing.T) {
 	// 测试正常释放
-	pool := NewPool(2)
+	pool := NewAntsPool(2)
 	var wg sync.WaitGroup
 	wg.Add(1)
-	_ = pool.Submit(func() {
+	pool.Submit(func() {
 		defer wg.Done()
 		time.Sleep(200 * time.Millisecond)
 	})
 
 	// 超时时间足够
-	isTimeout := pool.Release(300 * time.Millisecond)
+	isTimeout := pool.Shutdown(300 * time.Millisecond)
 	if isTimeout {
 		t.Error("Expected no timeout when waiting for tasks")
 	}
 
 	// 测试超时情况
-	pool = NewPool(1)
+	pool = NewAntsPool(1)
 	wg.Add(1)
-	_ = pool.Submit(func() {
+	pool.Submit(func() {
 		defer wg.Done()
 		time.Sleep(500 * time.Millisecond)
 	})
 
 	// 超时时间不足
-	isTimeout = pool.Release(100 * time.Millisecond)
+	isTimeout = pool.Shutdown(100 * time.Millisecond)
 	if !isTimeout {
 		t.Error("Expected timeout when not waiting long enough")
 	}
 	wg.Wait() // 确保测试不会泄漏goroutine
 
 	// 测试多次释放
-	pool = NewPool(1)
-	pool.Release(time.Second)
-	isTimeout = pool.Release(time.Second) // 第二次释放应该无害
+	pool = NewAntsPool(1)
+	pool.Shutdown(time.Second)
+	isTimeout = pool.Shutdown(time.Second) // 第二次释放应该无害
 	if isTimeout {
-		t.Error("Second release should not timeout")
+		t.Error("Second Shutdown should not timeout")
 	}
 }
 
 func TestConcurrentUsage(t *testing.T) {
-	pool := NewPool(10)
-	defer pool.Release(time.Second)
+	pool := NewAntsPool(10)
+	defer pool.Shutdown(time.Second)
 
 	var counter int
 	var mu sync.Mutex
@@ -211,14 +202,11 @@ func TestConcurrentUsage(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			err := pool.Submit(func() {
+			pool.Submit(func() {
 				mu.Lock()
 				counter++
 				mu.Unlock()
 			})
-			if err != nil {
-				t.Errorf("Submit failed: %v", err)
-			}
 		}()
 	}
 
