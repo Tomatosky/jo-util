@@ -99,7 +99,7 @@ func TestPutIfAbsent2(t *testing.T) {
 	if loaded {
 		t.Error("Expected key 'a' not to exist")
 	}
-	if existing != 0 {
+	if existing != 1 {
 		t.Errorf("Expected existing value 0, got %d", existing)
 	}
 

@@ -95,6 +95,7 @@ func (cm *ConcurrentHashMap[K, V]) PutIfAbsent(key K, value V) (existing V, load
 
 	if existing, loaded = cm.m[key]; !loaded {
 		cm.m[key] = value
+		existing = value
 	}
 	return
 }
