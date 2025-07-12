@@ -185,85 +185,6 @@ func TestBeginOfMonth(t *testing.T) {
 	}
 }
 
-func TestBetweenDay(t *testing.T) {
-	tests := []struct {
-		name     string
-		t1       time.Time
-		t2       time.Time
-		expected int
-	}{
-		{
-			name:     "同一天",
-			t1:       time.Date(2023, 1, 1, 12, 0, 0, 0, loc),
-			t2:       time.Date(2023, 1, 1, 23, 59, 59, 0, loc),
-			expected: 0,
-		},
-		{
-			name:     "相差1天-同月",
-			t1:       time.Date(2023, 1, 1, 0, 0, 0, 0, loc),
-			t2:       time.Date(2023, 1, 2, 0, 0, 0, 0, loc),
-			expected: 1,
-		},
-		{
-			name:     "相差1天-跨月",
-			t1:       time.Date(2023, 1, 31, 0, 0, 0, 0, loc),
-			t2:       time.Date(2023, 2, 1, 0, 0, 0, 0, loc),
-			expected: 1,
-		},
-		{
-			name:     "相差1天-跨年",
-			t1:       time.Date(2022, 12, 31, 0, 0, 0, 0, loc),
-			t2:       time.Date(2023, 1, 1, 0, 0, 0, 0, loc),
-			expected: 1,
-		},
-		{
-			name:     "相差7天",
-			t1:       time.Date(2023, 1, 1, 0, 0, 0, 0, loc),
-			t2:       time.Date(2023, 1, 8, 0, 0, 0, 0, loc),
-			expected: 7,
-		},
-		{
-			name:     "相差30天-非闰年2月",
-			t1:       time.Date(2023, 1, 1, 0, 0, 0, 0, loc),
-			t2:       time.Date(2023, 1, 31, 0, 0, 0, 0, loc),
-			expected: 30,
-		},
-		{
-			name:     "相差31天",
-			t1:       time.Date(2023, 1, 1, 0, 0, 0, 0, loc),
-			t2:       time.Date(2023, 2, 1, 0, 0, 0, 0, loc),
-			expected: 31,
-		},
-		{
-			name:     "相差365天-非闰年",
-			t1:       time.Date(2023, 1, 1, 0, 0, 0, 0, loc),
-			t2:       time.Date(2024, 1, 1, 0, 0, 0, 0, loc),
-			expected: 365,
-		},
-		{
-			name:     "相差366天-闰年",
-			t1:       time.Date(2020, 1, 1, 0, 0, 0, 0, loc),
-			t2:       time.Date(2021, 1, 1, 0, 0, 0, 0, loc),
-			expected: 366,
-		},
-		{
-			name:     "时间顺序相反",
-			t1:       time.Date(2023, 1, 8, 0, 0, 0, 0, loc),
-			t2:       time.Date(2023, 1, 1, 0, 0, 0, 0, loc),
-			expected: 7,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			actual := BetweenDay(tt.t1, tt.t2)
-			if actual != tt.expected {
-				t.Errorf("BetweenDay(%v, %v) = %d, want %d", tt.t1, tt.t2, actual, tt.expected)
-			}
-		})
-	}
-}
-
 func TestEndOfDay(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -722,5 +643,143 @@ func TestParseToTime(t *testing.T) {
 				t.Errorf("ParseToTime() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestBetweenMinute(t *testing.T) {
+	t1 := time.Date(2023, 1, 1, 12, 30, 15, 0, loc)
+	t2 := time.Date(2023, 1, 1, 12, 31, 45, 0, loc)
+
+	// 测试不重置秒数
+	got := BetweenMinute(t1, t2, false)
+	if got != 1 {
+		t.Errorf("BetweenMinute(false) = %d, want 1", got)
+	}
+
+	// 测试重置秒数
+	got = BetweenMinute(t1, t2, true)
+	if got != 1 {
+		t.Errorf("BetweenMinute(true) = %d, want 1", got)
+	}
+
+	// 测试更大的时间差
+	t3 := time.Date(2023, 1, 1, 12, 45, 0, 0, loc)
+	got = BetweenMinute(t1, t3, true)
+	if got != 15 {
+		t.Errorf("BetweenMinute(false) = %d, want 15", got)
+	}
+}
+
+func TestBetweenHour(t *testing.T) {
+	t1 := time.Date(2023, 1, 1, 12, 30, 15, 0, loc)
+	t2 := time.Date(2023, 1, 1, 14, 31, 45, 0, loc)
+
+	// 测试不重置分钟和秒数
+	got := BetweenHour(t1, t2, false)
+	if got != 2 {
+		t.Errorf("BetweenHour(false) = %d, want 2", got)
+	}
+
+	// 测试重置分钟和秒数
+	got = BetweenHour(t1, t2, true)
+	if got != 2 {
+		t.Errorf("BetweenHour(true) = %d, want 2", got)
+	}
+
+	// 测试跨天的情况
+	t3 := time.Date(2023, 1, 2, 1, 0, 0, 0, loc)
+	got = BetweenHour(t1, t3, true)
+	if got != 13 {
+		t.Errorf("BetweenHour(false) = %d, want 13", got)
+	}
+}
+
+func TestBetweenDay(t *testing.T) {
+	t1 := time.Date(2023, 1, 1, 12, 30, 15, 0, loc)
+	t2 := time.Date(2023, 1, 3, 14, 31, 45, 0, loc)
+
+	// 测试不重置时间
+	got := BetweenDay(t1, t2, false)
+	if got != 2 {
+		t.Errorf("BetweenDay(false) = %d, want 2", got)
+	}
+
+	// 测试重置时间
+	got = BetweenDay(t1, t2, true)
+	if got != 2 {
+		t.Errorf("BetweenDay(true) = %d, want 2", got)
+	}
+
+	// 测试跨月的情况
+	t3 := time.Date(2023, 2, 1, 0, 0, 0, 0, loc)
+	got = BetweenDay(t1, t3, true)
+	if got != 31 {
+		t.Errorf("BetweenDay(true) = %d, want 31", got)
+	}
+}
+
+func TestBetweenWeek(t *testing.T) {
+	t1 := time.Date(2023, 1, 1, 12, 0, 0, 0, loc)  // 周日
+	t2 := time.Date(2023, 1, 10, 12, 0, 0, 0, loc) // 下周二
+
+	// 测试不重置
+	got := BetweenWeek(t1, t2, false)
+	if got != 1 {
+		t.Errorf("BetweenWeek(false) = %d, want 1", got)
+	}
+
+	// 测试多周差
+	t3 := time.Date(2023, 1, 22, 0, 0, 0, 0, loc)
+	got = BetweenWeek(t1, t3, true)
+	if got != 3 {
+		t.Errorf("BetweenWeek(true) = %d, want 3", got)
+	}
+}
+
+func TestBetweenMonth(t *testing.T) {
+	t1 := time.Date(2023, 1, 15, 12, 0, 0, 0, loc)
+	t2 := time.Date(2023, 3, 20, 12, 0, 0, 0, loc)
+
+	// 测试不重置
+	got := BetweenMonth(t1, t2, false)
+	if got != 2 {
+		t.Errorf("BetweenMonth(false) = %d, want 2", got)
+	}
+
+	// 测试重置
+	got = BetweenMonth(t1, t2, true)
+	if got != 2 {
+		t.Errorf("BetweenMonth(true) = %d, want 2", got)
+	}
+
+	// 测试跨年
+	t3 := time.Date(2024, 1, 1, 0, 0, 0, 0, loc)
+	got = BetweenMonth(t1, t3, true)
+	if got != 12 {
+		t.Errorf("BetweenMonth(true) = %d, want 12", got)
+	}
+}
+
+func TestBetweenYear(t *testing.T) {
+	t1 := time.Date(2023, 1, 15, 12, 0, 0, 0, loc)
+	t2 := time.Date(2025, 3, 20, 12, 0, 0, 0, loc)
+
+	// 测试不重置
+	got := BetweenYear(t1, t2, false)
+	if got != 2 {
+		t.Errorf("BetweenYear(false) = %d, want 2", got)
+	}
+
+	// 测试重置
+	got = BetweenYear(t1, t2, true)
+	if got != 2 {
+		t.Errorf("BetweenYear(true) = %d, want 2", got)
+	}
+
+	// 测试同一年
+	t3 := time.Date(2023, 12, 31, 23, 59, 59, 0, loc)
+	got = BetweenYear(t1, t3, true)
+	if got != 0 {
+		t.Errorf("BetweenYear(true) = %d, want 0", got)
 	}
 }

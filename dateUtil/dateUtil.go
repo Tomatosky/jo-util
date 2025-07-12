@@ -82,16 +82,8 @@ func BeginOfMonth(t time.Time) time.Time {
 	return time.Date(year, month, 1, 0, 0, 0, 0, loc)
 }
 
-// BetweenDay 计算两个时间之间的天数差
-func BetweenDay(t1, t2 time.Time) int {
-	// 计算两时间的零点时间差
-	midnight1 := BeginOfDay(t1)
-	midnight2 := BeginOfDay(t2)
-	diffSeconds := midnight1.Unix() - midnight2.Unix()
-
-	// 计算绝对值天数差
-	days := int(math.Abs(float64(diffSeconds)) / 86400)
-	return days
+func BeginOfYear(t time.Time) time.Time {
+	return time.Date(t.Year(), 1, 1, 0, 0, 0, 0, t.Location())
 }
 
 // EndOfDay 获取某天的结束时间(23:59:59)
@@ -113,6 +105,78 @@ func EndOfMonth(t time.Time) time.Time {
 	firstOfNextMonth := time.Date(t.Year(), t.Month()+1, 1, 0, 0, 0, 0, t.Location())
 	endOfMonth := firstOfNextMonth.Add(-time.Second)
 	return endOfMonth
+}
+
+func EndOfYear(t time.Time) time.Time {
+	return time.Date(t.Year(), 12, 31, 23, 59, 59, 0, t.Location())
+}
+
+func BetweenMinute(t1, t2 time.Time, isReset bool) int {
+	if isReset {
+		t1 = time.Date(t1.Year(), t1.Month(), t1.Day(), t1.Hour(), t1.Minute(), 0, 0, t1.Location())
+		t2 = time.Date(t2.Year(), t2.Month(), t2.Day(), t2.Hour(), t2.Minute(), 0, 0, t2.Location())
+	}
+	diffSeconds := t1.Unix() - t2.Unix()
+	minutes := int(math.Abs(float64(diffSeconds)) / 60)
+	return minutes
+}
+
+func BetweenHour(t1, t2 time.Time, isReset bool) int {
+	if isReset {
+		t1 = time.Date(t1.Year(), t1.Month(), t1.Day(), t1.Hour(), 0, 0, 0, t1.Location())
+		t2 = time.Date(t2.Year(), t2.Month(), t2.Day(), t2.Hour(), 0, 0, 0, t2.Location())
+	}
+	diffSeconds := t1.Unix() - t2.Unix()
+	hours := int(math.Abs(float64(diffSeconds)) / 3600)
+	return hours
+}
+
+// BetweenDay 计算两个时间之间的天数差
+func BetweenDay(t1, t2 time.Time, isReset bool) int {
+	if isReset {
+		t1 = BeginOfDay(t1)
+		t2 = BeginOfDay(t2)
+	}
+	diffSeconds := t1.Unix() - t2.Unix()
+
+	// 计算绝对值天数差
+	days := int(math.Abs(float64(diffSeconds)) / 86400)
+	return days
+}
+
+// BetweenWeek 计算两个时间之间的周数差
+func BetweenWeek(t1, t2 time.Time, isReset bool) int {
+	if isReset {
+		t1 = BeginOfWeek(t1)
+		t2 = BeginOfWeek(t2)
+	}
+	diffSeconds := t1.Unix() - t2.Unix()
+	// 计算绝对值周数差
+	weeks := int(math.Abs(float64(diffSeconds)) / (86400 * 7))
+	return weeks
+}
+
+// BetweenMonth 计算两个时间之间的月数差
+func BetweenMonth(t1, t2 time.Time, isReset bool) int {
+	if isReset {
+		t1 = BeginOfMonth(t1)
+		t2 = BeginOfMonth(t2)
+	}
+
+	// 计算月数差
+	years := t1.Year() - t2.Year()
+	months := int(t1.Month()) - int(t2.Month())
+	totalMonths := years*12 + months
+	return int(math.Abs(float64(totalMonths)))
+}
+
+func BetweenYear(t1, t2 time.Time, isReset bool) int {
+	if isReset {
+		t1 = BeginOfYear(t1)
+		t2 = BeginOfYear(t2)
+	}
+	years := t1.Year() - t2.Year()
+	return int(math.Abs(float64(years)))
 }
 
 // IsSameDay 判断两个时间是否在同一天
