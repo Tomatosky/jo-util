@@ -26,6 +26,23 @@ type cache[K comparable, V any] struct {
 	janitor    *janitor[K, V]
 }
 
+// New 函数用于创建一个新的缓存实例。
+// 该函数接受一个过期时间作为参数，若过期时间大于 0，会自动启动一个定时任务来清理过期的缓存项。
+// 参数 expiration 为缓存项的默认过期时间，类型为 time.Duration。
+// 返回值为指向 Cache[K, V] 类型的指针，代表新创建的缓存实例。
+func New[K comparable, V any](expiration time.Duration) *Cache[K, V] {
+	c := &cache[K, V]{
+		expiration: expiration,
+		items:      make(map[K]Item[V]),
+	}
+	C := &Cache[K, V]{c}
+	if expiration > 0 {
+		runJanitor(c) // 自动启用janitor
+		runtime.SetFinalizer(C, stopJanitor[K, V])
+	}
+	return C
+}
+
 // Set 方法用于向缓存中设置一个键值对，并可选择性地指定该键值对的过期时间。
 // 如果未提供过期时间，则使用缓存实例的默认过期时间。
 // 参数 k 为缓存的键，类型为 K。
@@ -229,21 +246,4 @@ func runJanitor[K comparable, V any](c *cache[K, V]) {
 	}
 	c.janitor = j
 	go j.run(c)
-}
-
-// New 函数用于创建一个新的缓存实例。
-// 该函数接受一个过期时间作为参数，若过期时间大于 0，会自动启动一个定时任务来清理过期的缓存项。
-// 参数 expiration 为缓存项的默认过期时间，类型为 time.Duration。
-// 返回值为指向 Cache[K, V] 类型的指针，代表新创建的缓存实例。
-func New[K comparable, V any](expiration time.Duration) *Cache[K, V] {
-	c := &cache[K, V]{
-		expiration: expiration,
-		items:      make(map[K]Item[V]),
-	}
-	C := &Cache[K, V]{c}
-	if expiration > 0 {
-		runJanitor(c) // 自动启用janitor
-		runtime.SetFinalizer(C, stopJanitor[K, V])
-	}
-	return C
 }
