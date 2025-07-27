@@ -1,8 +1,22 @@
 package strUtil
 
 import (
+	"regexp"
 	"unicode"
 )
+
+var intReg = regexp.MustCompile(`^\d+$`)
+var floatReg = regexp.MustCompile(`^[-+]?\d*\.?\d+$`)
+var numReg = regexp.MustCompile(`^[-+]?\d*\.?\d+$`)
+
+// IsInt check the string is an integer number
+func IsInt(s string) bool { return intReg.MatchString(s) }
+
+// IsFloat check the string is a float number
+func IsFloat(s string) bool { return floatReg.MatchString(s) }
+
+// IsNumeric returns true if the given string is a numeric, otherwise false.
+func IsNumeric(s string) bool { return numReg.MatchString(s) }
 
 // IsBlankChar 判断是否为空白字符
 // 空白符包括空格、制表符、全角空格和不间断空格等
