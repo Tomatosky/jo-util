@@ -1,9 +1,22 @@
 package convertor
 
 import (
+	"bytes"
+	"encoding/binary"
 	"encoding/json"
+	"math"
+	"reflect"
 	"strconv"
 )
+
+func ToBool(value any) bool {
+	s := ToString(value)
+	parseBool, err := strconv.ParseBool(s)
+	if err != nil {
+		panic(err)
+	}
+	return parseBool
+}
 
 // ToInt 转换为 int
 func ToInt(value any) int {
@@ -95,5 +108,45 @@ func ToString(value any) string {
 			return ""
 		}
 		return string(b)
+	}
+}
+
+func ToBytes(value any) ([]byte, error) {
+	v := reflect.ValueOf(value)
+
+	switch value.(type) {
+	case int, int8, int16, int32, int64:
+		number := v.Int()
+		buf := bytes.NewBuffer([]byte{})
+		buf.Reset()
+		err := binary.Write(buf, binary.BigEndian, number)
+		return buf.Bytes(), err
+	case uint, uint8, uint16, uint32, uint64:
+		number := v.Uint()
+		buf := bytes.NewBuffer([]byte{})
+		buf.Reset()
+		err := binary.Write(buf, binary.BigEndian, number)
+		return buf.Bytes(), err
+	case float32:
+		number := float32(v.Float())
+		bits := math.Float32bits(number)
+		bytes2 := make([]byte, 4)
+		binary.BigEndian.PutUint32(bytes2, bits)
+		return bytes2, nil
+	case float64:
+		number := v.Float()
+		bits := math.Float64bits(number)
+		bytes2 := make([]byte, 8)
+		binary.BigEndian.PutUint64(bytes2, bits)
+		return bytes2, nil
+	case bool:
+		return strconv.AppendBool([]byte{}, v.Bool()), nil
+	case string:
+		return []byte(v.String()), nil
+	case []byte:
+		return v.Bytes(), nil
+	default:
+		newValue, err := json.Marshal(value)
+		return newValue, err
 	}
 }

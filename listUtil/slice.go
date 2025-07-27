@@ -3,6 +3,7 @@ package listUtil
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/Tomatosky/jo-util/numberUtil"
 	"math/rand"
 	"time"
 )
@@ -259,4 +260,38 @@ func Union[T comparable](a, b []T) []T {
 		}
 	}
 	return result
+}
+
+func Max[T numberUtil.Number](nums []T) T {
+	if len(nums) < 1 {
+		panic("mathutil.Max: empty list")
+	}
+	max2 := nums[0]
+	for _, v := range nums {
+		if max2 < v {
+			max2 = v
+		}
+	}
+	return max2
+}
+
+func Min[T numberUtil.Number](nums []T) T {
+	if len(nums) < 1 {
+		panic("mathutil.min: empty list")
+	}
+	min2 := nums[0]
+	for _, v := range nums {
+		if min2 > v {
+			min2 = v
+		}
+	}
+	return min2
+}
+
+func Sum[T numberUtil.Number](nums ...T) T {
+	var sum T
+	for _, v := range nums {
+		sum += v
+	}
+	return sum
 }
