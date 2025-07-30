@@ -5,7 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"github.com/Tomatosky/jo-util/strUtil"
+	"github.com/Tomatosky/jo-util/convertor"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -218,7 +218,7 @@ func (rc *RequestClient) Post(postUrl string, data map[string]interface{}, postO
 func UrlEncode(params map[string]interface{}) string {
 	var p = url.Values{}
 	for k, v := range params {
-		p.Add(k, strUtil.ToString(v))
+		p.Add(k, convertor.ToString(v))
 	}
 	return p.Encode()
 }
