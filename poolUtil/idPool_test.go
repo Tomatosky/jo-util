@@ -14,7 +14,7 @@ func TestIdPool(t *testing.T) {
 	// 测试用例1: 基本功能测试
 	t.Run("BasicFunctionality", func(t *testing.T) {
 		logger := zaptest.NewLogger(t)
-		pool := NewIdPool(&IdPoolOpt{
+		pool := NewIdPool[int32](&IdPoolOpt{
 			PoolSize:  4,
 			QueueSize: 10,
 			Logger:    logger,
@@ -46,7 +46,7 @@ func TestIdPool(t *testing.T) {
 
 	// 测试用例2: 并发任务提交
 	t.Run("ConcurrentSubmission", func(t *testing.T) {
-		pool := NewIdPool(&IdPoolOpt{
+		pool := NewIdPool[int32](&IdPoolOpt{
 			PoolSize:  4,
 			QueueSize: 2048,
 		})
@@ -85,7 +85,7 @@ func TestIdPool(t *testing.T) {
 
 	// 测试用例3: 大并发压力测试
 	t.Run("HighConcurrencyStressTest", func(t *testing.T) {
-		pool := NewIdPool(&IdPoolOpt{
+		pool := NewIdPool[int32](&IdPoolOpt{
 			PoolSize:  16,
 			QueueSize: 1000,
 		})
@@ -121,7 +121,7 @@ func TestIdPool(t *testing.T) {
 	// 测试用例4: 队列满的情况
 	t.Run("QueueFull", func(t *testing.T) {
 		logger := zaptest.NewLogger(t)
-		pool := NewIdPool(&IdPoolOpt{
+		pool := NewIdPool[int32](&IdPoolOpt{
 			PoolSize:  2,
 			QueueSize: 2,
 			Logger:    logger,
@@ -144,7 +144,7 @@ func TestIdPool(t *testing.T) {
 
 	// 测试用例5: 关闭时处理剩余任务
 	t.Run("ShutdownWithPendingTasks", func(t *testing.T) {
-		pool := NewIdPool(&IdPoolOpt{
+		pool := NewIdPool[int32](&IdPoolOpt{
 			PoolSize:  2,
 			QueueSize: 4096,
 		})
@@ -171,7 +171,7 @@ func TestIdPool(t *testing.T) {
 	// 测试用例6: 关闭超时
 	t.Run("ShutdownTimeout", func(t *testing.T) {
 		logger := zaptest.NewLogger(t)
-		pool := NewIdPool(&IdPoolOpt{
+		pool := NewIdPool[int32](&IdPoolOpt{
 			PoolSize:  2,
 			QueueSize: 10,
 			Logger:    logger,
@@ -191,7 +191,7 @@ func TestIdPool(t *testing.T) {
 
 	// 测试用例7: 任务ID映射清理
 	t.Run("TaskIdMapCleanup", func(t *testing.T) {
-		pool := NewIdPool(&IdPoolOpt{
+		pool := NewIdPool[int32](&IdPoolOpt{
 			PoolSize:  8,
 			QueueSize: 1024,
 		})
@@ -213,7 +213,7 @@ func TestIdPool(t *testing.T) {
 
 	// 测试用例8: 任务计数准确性
 	t.Run("TaskCountAccuracy", func(t *testing.T) {
-		pool := NewIdPool(&IdPoolOpt{
+		pool := NewIdPool[int32](&IdPoolOpt{
 			PoolSize:  4,
 			QueueSize: 100,
 		})

@@ -6,6 +6,7 @@ import (
 	"github.com/Tomatosky/jo-util/idUtil"
 	"github.com/Tomatosky/jo-util/logger"
 	"github.com/Tomatosky/jo-util/mapUtil"
+	"github.com/Tomatosky/jo-util/numberUtil"
 	"github.com/Tomatosky/jo-util/randomUtil"
 	"go.uber.org/zap"
 	"runtime/debug"
@@ -14,21 +15,21 @@ import (
 	"time"
 )
 
-var _ IPool = (*IdPool)(nil)
+var _ IPool = (*IdPool[int32])(nil)
 
-type IdPool struct {
-	workers      []*worker
-	taskIdMap    *mapUtil.ConcurrentHashMap[string, int32]        // key: taskID(string), value: id
-	idTaskCounts *mapUtil.ConcurrentHashMap[int32, *atomic.Int32] // key: id, value: *atomic.Int32
-	cores        int32
+type IdPool[T numberUtil.Number] struct {
+	workers      []*worker[T]
+	taskIdMap    *mapUtil.ConcurrentHashMap[string, T]        // key: taskID(string), value: id
+	idTaskCounts *mapUtil.ConcurrentHashMap[T, *atomic.Int32] // key: id, value: *atomic.Int32
+	cores        T
 	running      atomic.Bool    // 控制服务运行状态
 	wg           sync.WaitGroup // 用于等待所有worker退出
 	logger       *zap.Logger
 	poolName     string
 }
 
-type worker struct {
-	idPool *IdPool          // 反向引用 IdPool
+type worker[T numberUtil.Number] struct {
+	idPool *IdPool[T]       // 反向引用 IdPool
 	queue  chan *customTask // 任务通道
 	done   chan struct{}    // 关闭信号
 }
@@ -45,16 +46,16 @@ type IdPoolOpt struct {
 	PoolName  string
 }
 
-func NewIdPool(opt *IdPoolOpt) *IdPool {
+func NewIdPool[T numberUtil.Number](opt *IdPoolOpt) *IdPool[T] {
 	if opt.PoolSize <= 0 || opt.QueueSize <= 0 {
 		panic("pool size and queue size must be greater than 0")
 	}
 
-	idPool := &IdPool{
-		cores:        opt.PoolSize,
-		workers:      make([]*worker, opt.PoolSize),
-		taskIdMap:    mapUtil.NewConcurrentHashMap[string, int32](),
-		idTaskCounts: mapUtil.NewConcurrentHashMap[int32, *atomic.Int32](),
+	idPool := &IdPool[T]{
+		cores:        T(opt.PoolSize),
+		workers:      make([]*worker[T], opt.PoolSize),
+		taskIdMap:    mapUtil.NewConcurrentHashMap[string, T](),
+		idTaskCounts: mapUtil.NewConcurrentHashMap[T, *atomic.Int32](),
 	}
 	if opt.Logger != nil {
 		idPool.logger = opt.Logger
@@ -62,9 +63,9 @@ func NewIdPool(opt *IdPoolOpt) *IdPool {
 	idPool.running.Store(true)
 	// 初始化 workers
 	for i := int32(0); i < opt.PoolSize; i++ {
-		idPool.workers[i] = newWorker(idPool, opt.QueueSize)
+		idPool.workers[i] = newWorker[T](idPool, opt.QueueSize)
 		idPool.wg.Add(1) // 为每个worker增加计数
-		go func(w *worker) {
+		go func(w *worker[T]) {
 			defer idPool.wg.Done() // worker退出时减少计数
 			w.run()
 		}(idPool.workers[i])
@@ -72,12 +73,12 @@ func NewIdPool(opt *IdPoolOpt) *IdPool {
 	return idPool
 }
 
-func (i *IdPool) Submit(task func()) {
-	i.SubmitWithId(int32(randomUtil.RandomInt(0, 100000)), task)
+func (i *IdPool[T]) Submit(task func()) {
+	i.SubmitWithId(T(randomUtil.RandomInt(0, 100000)), task)
 }
 
 // SubmitWithId 添加任务
-func (i *IdPool) SubmitWithId(id int32, task func()) {
+func (i *IdPool[T]) SubmitWithId(id T, task func()) {
 	if !i.running.Load() {
 		return
 	}
@@ -103,13 +104,13 @@ func (i *IdPool) SubmitWithId(id int32, task func()) {
 }
 
 // GetTaskCount 获取任务计数
-func (i *IdPool) GetTaskCount(id int32) int32 {
+func (i *IdPool[T]) GetTaskCount(id T) int32 {
 	v := i.idTaskCounts.GetOrDefault(id, &atomic.Int32{})
 	return v.Load()
 }
 
 // MaxQueue 最大worker队列长度
-func (i *IdPool) MaxQueue() int {
+func (i *IdPool[T]) MaxQueue() int {
 	num := 0
 	for _, v := range i.workers {
 		if len(v.queue) > num {
@@ -120,7 +121,7 @@ func (i *IdPool) MaxQueue() int {
 }
 
 // Shutdown 关闭服务
-func (i *IdPool) Shutdown(timeout time.Duration) (isTimeout bool) {
+func (i *IdPool[T]) Shutdown(timeout time.Duration) (isTimeout bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -148,8 +149,8 @@ func (i *IdPool) Shutdown(timeout time.Duration) (isTimeout bool) {
 	}
 }
 
-func newWorker(i *IdPool, queueSize int) *worker {
-	return &worker{
+func newWorker[T numberUtil.Number](i *IdPool[T], queueSize int) *worker[T] {
+	return &worker[T]{
 		idPool: i,
 		queue:  make(chan *customTask, queueSize), // 带缓冲的任务队列
 		done:   make(chan struct{}),
@@ -157,7 +158,7 @@ func newWorker(i *IdPool, queueSize int) *worker {
 }
 
 // worker 运行循环
-func (w *worker) run() {
+func (w *worker[T]) run() {
 	for {
 		select {
 		case task := <-w.queue:
@@ -171,7 +172,7 @@ func (w *worker) run() {
 }
 
 // 排空剩余任务
-func (w *worker) drainQueue() {
+func (w *worker[T]) drainQueue() {
 	for {
 		select {
 		case task, ok := <-w.queue:
@@ -185,7 +186,7 @@ func (w *worker) drainQueue() {
 	}
 }
 
-func (w *worker) processTask(task *customTask) {
+func (w *worker[T]) processTask(task *customTask) {
 	defer func() {
 		err := recover()
 		if err != nil {

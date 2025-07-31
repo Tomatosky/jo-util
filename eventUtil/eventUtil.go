@@ -16,7 +16,7 @@ type EventHandler func(data interface{})
 // EventManager 事件管理器结构
 type EventManager struct {
 	handlers   map[string][]EventHandler
-	pool       *poolUtil.IdPool
+	pool       *poolUtil.IdPool[int32]
 	lock       sync.RWMutex
 	destroying bool
 	logger     *zap.Logger
@@ -37,7 +37,7 @@ func NewEventManager(opt *EventOpt) *EventManager {
 	manager := &EventManager{
 		handlers: make(map[string][]EventHandler),
 		logger:   opt.Logger,
-		pool: poolUtil.NewIdPool(&poolUtil.IdPoolOpt{
+		pool: poolUtil.NewIdPool[int32](&poolUtil.IdPoolOpt{
 			PoolSize:  opt.PoolSize,
 			QueueSize: opt.QueueSize,
 			Logger:    opt.Logger,
@@ -68,7 +68,7 @@ func (em *EventManager) Register(eventName string, handler EventHandler) error {
 }
 
 func (em *EventManager) Trigger(eventName string, data interface{}) error {
-	return em.TriggerWithId(int32(randomUtil.RandomInt(1, 100000)), eventName, data)
+	return em.TriggerWithId(randomUtil.RandomInt[int32](1, 100000), eventName, data)
 }
 
 // TriggerWithId 触发事件
