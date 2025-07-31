@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-var _ IPool = (*IdPool[int32])(nil)
+var _ IPool[int32] = (*IdPool[int32])(nil)
 
 type IdPool[T numberUtil.Number] struct {
 	workers      []*worker[T]
