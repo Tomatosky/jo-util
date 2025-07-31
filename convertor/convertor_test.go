@@ -17,6 +17,7 @@ func TestConversionFunctions(t *testing.T) {
 		{"ToInt32 with string", "ToInt32", "123", int32(123)},
 		{"ToInt32 with int", "ToInt32", 456, int32(456)},
 		{"ToInt32 with float", "ToInt32", 789.0, int32(789)},
+		{"ToInt64 with int32", "ToInt64", int32(123), int64(123)},
 		{"ToInt64 with string", "ToInt64", "123", int64(123)},
 		{"ToInt64 with int", "ToInt64", 456, int64(456)},
 		{"ToInt64 with float", "ToInt64", 789.0, int64(789)},
