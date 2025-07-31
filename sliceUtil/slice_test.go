@@ -1,4 +1,4 @@
-package listUtil
+package sliceUtil
 
 import (
 	"reflect"

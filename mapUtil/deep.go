@@ -2,7 +2,7 @@ package mapUtil
 
 import (
 	"fmt"
-	"github.com/Tomatosky/jo-util/listUtil"
+	"github.com/Tomatosky/jo-util/sliceUtil"
 	"github.com/Tomatosky/jo-util/strUtil"
 	"reflect"
 	"strconv"
@@ -486,7 +486,7 @@ func MakeByKeys(keys []string, val any) (mp map[string]any) {
 	}
 
 	// multi nodes
-	listUtil.Reverse(keys)
+	sliceUtil.Reverse(keys)
 	for _, p := range keys {
 		if mp == nil {
 			mp = map[string]any{p: val}

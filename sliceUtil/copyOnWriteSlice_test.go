@@ -1,4 +1,4 @@
-package listUtil
+package sliceUtil
 
 import (
 	"encoding/json"
@@ -6,15 +6,15 @@ import (
 	"testing"
 )
 
-func TestNewCopyOnWriteArrayList(t *testing.T) {
-	list := NewCopyOnWriteArrayList[int]()
+func TestNewCopyOnWriteSlice(t *testing.T) {
+	list := NewCopyOnWriteSlice[int]()
 	if list.Size() != 0 {
 		t.Errorf("Expected empty list, got size %d", list.Size())
 	}
 }
 
 func TestAddAndGet3(t *testing.T) {
-	list := NewCopyOnWriteArrayList[string]()
+	list := NewCopyOnWriteSlice[string]()
 	list.Add("first")
 	list.Add("second")
 
@@ -32,7 +32,7 @@ func TestAddAndGet3(t *testing.T) {
 }
 
 func TestInsert3(t *testing.T) {
-	list := NewCopyOnWriteArrayList[int]()
+	list := NewCopyOnWriteSlice[int]()
 	list.Add(1)
 	list.Add(3)
 	list.Insert(1, 2)
@@ -53,12 +53,12 @@ func TestInsertPanic3(t *testing.T) {
 		}
 	}()
 
-	list := NewCopyOnWriteArrayList[int]()
+	list := NewCopyOnWriteSlice[int]()
 	list.Insert(1, 1) // Should panic
 }
 
 func TestRemove3(t *testing.T) {
-	list := NewCopyOnWriteArrayList[string]()
+	list := NewCopyOnWriteSlice[string]()
 	list.Add("a")
 	list.Add("b")
 	list.Add("c")
@@ -84,12 +84,12 @@ func TestRemovePanic3(t *testing.T) {
 		}
 	}()
 
-	list := NewCopyOnWriteArrayList[int]()
+	list := NewCopyOnWriteSlice[int]()
 	list.Remove(0) // Should panic
 }
 
 func TestContains3(t *testing.T) {
-	list := NewCopyOnWriteArrayList[int]()
+	list := NewCopyOnWriteSlice[int]()
 	list.Add(1)
 	list.Add(2)
 	list.Add(3)
@@ -104,7 +104,7 @@ func TestContains3(t *testing.T) {
 }
 
 func TestRemoveObject3(t *testing.T) {
-	list := NewCopyOnWriteArrayList[int]()
+	list := NewCopyOnWriteSlice[int]()
 	list.Add(1)
 	list.Add(2)
 	list.Add(2)
@@ -126,7 +126,7 @@ func TestRemoveObject3(t *testing.T) {
 }
 
 func TestRange3(t *testing.T) {
-	list := NewCopyOnWriteArrayList[int]()
+	list := NewCopyOnWriteSlice[int]()
 	list.Add(1)
 	list.Add(2)
 	list.Add(3)
@@ -154,7 +154,7 @@ func TestRange3(t *testing.T) {
 }
 
 func TestToSlice3(t *testing.T) {
-	list := NewCopyOnWriteArrayList[string]()
+	list := NewCopyOnWriteSlice[string]()
 	list.Add("a")
 	list.Add("b")
 	list.Add("c")
@@ -172,7 +172,7 @@ func TestToSlice3(t *testing.T) {
 }
 
 func TestToString3(t *testing.T) {
-	list := NewCopyOnWriteArrayList[int]()
+	list := NewCopyOnWriteSlice[int]()
 	list.Add(1)
 	list.Add(2)
 	list.Add(3)
@@ -196,7 +196,7 @@ func TestToString3(t *testing.T) {
 }
 
 func TestConcurrentAccess(t *testing.T) {
-	list := NewCopyOnWriteArrayList[int]()
+	list := NewCopyOnWriteSlice[int]()
 	var wg sync.WaitGroup
 
 	// Concurrent writers
@@ -226,7 +226,7 @@ func TestConcurrentAccess(t *testing.T) {
 }
 
 func TestNegativeIndex3(t *testing.T) {
-	list := NewCopyOnWriteArrayList[string]()
+	list := NewCopyOnWriteSlice[string]()
 	list.Add("a")
 	list.Add("b")
 	list.Add("c")
@@ -247,15 +247,15 @@ func TestNegativeIndexPanic(t *testing.T) {
 		}
 	}()
 
-	list := NewCopyOnWriteArrayList[int]()
+	list := NewCopyOnWriteSlice[int]()
 	list.Add(1)
 	list.Get(-2) // Should panic
 }
 
-func TestCopyOnWriteArrayList_JSON(t *testing.T) {
+func TestCopyOnWriteSlice_JSON(t *testing.T) {
 	// 测试用例1：空列表
 	t.Run("Empty List", func(t *testing.T) {
-		list := NewCopyOnWriteArrayList[int]()
+		list := NewCopyOnWriteSlice[int]()
 		data, err := list.MarshalJSON()
 		if err != nil {
 			t.Error("MarshalJSON failed for empty list:", err)
@@ -266,7 +266,7 @@ func TestCopyOnWriteArrayList_JSON(t *testing.T) {
 			t.Errorf("Expected '[]', got '%s'", string(data))
 		}
 
-		newList := NewCopyOnWriteArrayList[int]()
+		newList := NewCopyOnWriteSlice[int]()
 		err = newList.UnmarshalJSON(data)
 		if err != nil {
 			t.Error("UnmarshalJSON failed for empty list:", err)
@@ -279,7 +279,7 @@ func TestCopyOnWriteArrayList_JSON(t *testing.T) {
 
 	// 测试用例2：整数列表
 	t.Run("Integer List", func(t *testing.T) {
-		original := NewCopyOnWriteArrayList[int]()
+		original := NewCopyOnWriteSlice[int]()
 		original.AddAll(1, 2, 3, 4, 5)
 
 		data, err := original.MarshalJSON()
@@ -287,7 +287,7 @@ func TestCopyOnWriteArrayList_JSON(t *testing.T) {
 			t.Error("MarshalJSON failed for integer list:", err)
 		}
 
-		unmarshaled := NewCopyOnWriteArrayList[int]()
+		unmarshaled := NewCopyOnWriteSlice[int]()
 		err = unmarshaled.UnmarshalJSON(data)
 		if err != nil {
 			t.Error("UnmarshalJSON failed for integer list:", err)
@@ -307,7 +307,7 @@ func TestCopyOnWriteArrayList_JSON(t *testing.T) {
 
 	// 测试用例3：字符串列表
 	t.Run("String List", func(t *testing.T) {
-		original := NewCopyOnWriteArrayList[string]()
+		original := NewCopyOnWriteSlice[string]()
 		original.AddAll("a", "b", "c", "d", "e")
 
 		data, err := original.MarshalJSON()
@@ -315,7 +315,7 @@ func TestCopyOnWriteArrayList_JSON(t *testing.T) {
 			t.Error("MarshalJSON failed for string list:", err)
 		}
 
-		unmarshaled := NewCopyOnWriteArrayList[string]()
+		unmarshaled := NewCopyOnWriteSlice[string]()
 		err = unmarshaled.UnmarshalJSON(data)
 		if err != nil {
 			t.Error("UnmarshalJSON failed for string list:", err)
@@ -340,7 +340,7 @@ func TestCopyOnWriteArrayList_JSON(t *testing.T) {
 			Age  int    `json:"age"`
 		}
 
-		original := NewCopyOnWriteArrayList[person]()
+		original := NewCopyOnWriteSlice[person]()
 		original.AddAll(
 			person{Name: "Alice", Age: 30},
 			person{Name: "Bob", Age: 25},
@@ -351,7 +351,7 @@ func TestCopyOnWriteArrayList_JSON(t *testing.T) {
 			t.Error("MarshalJSON failed for struct list:", err)
 		}
 
-		unmarshaled := NewCopyOnWriteArrayList[person]()
+		unmarshaled := NewCopyOnWriteSlice[person]()
 		err = unmarshaled.UnmarshalJSON(data)
 		if err != nil {
 			t.Error("UnmarshalJSON failed for struct list:", err)
@@ -373,7 +373,7 @@ func TestCopyOnWriteArrayList_JSON(t *testing.T) {
 
 	// 测试用例5：无效JSON数据
 	t.Run("Invalid JSON Data", func(t *testing.T) {
-		list := NewCopyOnWriteArrayList[int]()
+		list := NewCopyOnWriteSlice[int]()
 		err := list.UnmarshalJSON([]byte("invalid json data"))
 		if err == nil {
 			t.Error("Expected error for invalid JSON data, but got nil")
@@ -382,7 +382,7 @@ func TestCopyOnWriteArrayList_JSON(t *testing.T) {
 
 	// 测试用例6：部分JSON数据
 	t.Run("Partial JSON Data", func(t *testing.T) {
-		list := NewCopyOnWriteArrayList[int]()
+		list := NewCopyOnWriteSlice[int]()
 		err := list.UnmarshalJSON([]byte("[1, 2, 3"))
 		if err == nil {
 			t.Error("Expected error for partial JSON data, but got nil")
@@ -391,7 +391,7 @@ func TestCopyOnWriteArrayList_JSON(t *testing.T) {
 
 	// 测试用例7：并发序列化
 	t.Run("Concurrent Marshal", func(t *testing.T) {
-		list := NewCopyOnWriteArrayList[int]()
+		list := NewCopyOnWriteSlice[int]()
 		list.AddAll(1, 2, 3, 4, 5)
 
 		// 启动多个goroutine同时进行序列化

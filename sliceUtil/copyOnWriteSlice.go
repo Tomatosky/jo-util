@@ -1,4 +1,4 @@
-package listUtil
+package sliceUtil
 
 import (
 	"encoding/json"
@@ -7,21 +7,21 @@ import (
 	"sync"
 )
 
-// CopyOnWriteArrayList 线程安全的动态数组，写时复制
-type CopyOnWriteArrayList[T comparable] struct {
+// CopyOnWriteSlice 线程安全的动态数组，写时复制
+type CopyOnWriteSlice[T comparable] struct {
 	mu   sync.RWMutex // 读写锁
 	data []T          // 实际存储数据的数组
 }
 
-// NewCopyOnWriteArrayList 创建新的线程安全动态数组
-func NewCopyOnWriteArrayList[T comparable]() *CopyOnWriteArrayList[T] {
-	return &CopyOnWriteArrayList[T]{
+// NewCopyOnWriteSlice 创建新的线程安全动态数组
+func NewCopyOnWriteSlice[T comparable]() *CopyOnWriteSlice[T] {
+	return &CopyOnWriteSlice[T]{
 		data: make([]T, 0),
 	}
 }
 
 // Add 添加元素到末尾（写操作需要复制整个数组）
-func (c *CopyOnWriteArrayList[T]) Add(element T) {
+func (c *CopyOnWriteSlice[T]) Add(element T) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -31,7 +31,7 @@ func (c *CopyOnWriteArrayList[T]) Add(element T) {
 	c.data = newData
 }
 
-func (c *CopyOnWriteArrayList[T]) AddAll(elements ...T) {
+func (c *CopyOnWriteSlice[T]) AddAll(elements ...T) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -42,7 +42,7 @@ func (c *CopyOnWriteArrayList[T]) AddAll(elements ...T) {
 }
 
 // Insert 在指定索引插入元素
-func (c *CopyOnWriteArrayList[T]) Insert(index int, element T) {
+func (c *CopyOnWriteSlice[T]) Insert(index int, element T) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -62,7 +62,7 @@ func (c *CopyOnWriteArrayList[T]) Insert(index int, element T) {
 }
 
 // Get 获取元素（读操作使用读锁）
-func (c *CopyOnWriteArrayList[T]) Get(index int) T {
+func (c *CopyOnWriteSlice[T]) Get(index int) T {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -76,7 +76,7 @@ func (c *CopyOnWriteArrayList[T]) Get(index int) T {
 }
 
 // Remove 移除指定索引元素
-func (c *CopyOnWriteArrayList[T]) Remove(index int) T {
+func (c *CopyOnWriteSlice[T]) Remove(index int) T {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -94,14 +94,14 @@ func (c *CopyOnWriteArrayList[T]) Remove(index int) T {
 }
 
 // Size 当前元素数量（读操作）
-func (c *CopyOnWriteArrayList[T]) Size() int {
+func (c *CopyOnWriteSlice[T]) Size() int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return len(c.data)
 }
 
 // Range 安全遍历（遍历过程中数组不会被修改）
-func (c *CopyOnWriteArrayList[T]) Range(f func(int, T) bool) {
+func (c *CopyOnWriteSlice[T]) Range(f func(int, T) bool) {
 	c.mu.RLock()
 	snapshot := append([]T(nil), c.data...) // 创建快照
 	c.mu.RUnlock()
@@ -114,7 +114,7 @@ func (c *CopyOnWriteArrayList[T]) Range(f func(int, T) bool) {
 }
 
 // Contains 检查元素是否存在（读操作）
-func (c *CopyOnWriteArrayList[T]) Contains(element T) bool {
+func (c *CopyOnWriteSlice[T]) Contains(element T) bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -127,7 +127,7 @@ func (c *CopyOnWriteArrayList[T]) Contains(element T) bool {
 }
 
 // RemoveObject 删除所有匹配元素
-func (c *CopyOnWriteArrayList[T]) RemoveObject(element T) int {
+func (c *CopyOnWriteSlice[T]) RemoveObject(element T) int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -146,14 +146,14 @@ func (c *CopyOnWriteArrayList[T]) RemoveObject(element T) int {
 }
 
 // ToSlice 返回数组副本（读操作）
-func (c *CopyOnWriteArrayList[T]) ToSlice() []T {
+func (c *CopyOnWriteSlice[T]) ToSlice() []T {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return append([]T(nil), c.data...)
 }
 
 // ToString 返回JSON格式字符串（读操作）
-func (c *CopyOnWriteArrayList[T]) ToString() string {
+func (c *CopyOnWriteSlice[T]) ToString() string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -165,14 +165,14 @@ func (c *CopyOnWriteArrayList[T]) ToString() string {
 }
 
 // MarshalJSON 实现 json.Marshaler 接口
-func (c *CopyOnWriteArrayList[T]) MarshalJSON() ([]byte, error) {
+func (c *CopyOnWriteSlice[T]) MarshalJSON() ([]byte, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return json.Marshal(c.data[:])
 }
 
 // UnmarshalJSON 实现 json.Unmarshaler 接口
-func (c *CopyOnWriteArrayList[T]) UnmarshalJSON(data []byte) error {
+func (c *CopyOnWriteSlice[T]) UnmarshalJSON(data []byte) error {
 	var tmp []T
 	err := json.Unmarshal(data, &tmp)
 	if err != nil {
@@ -183,12 +183,12 @@ func (c *CopyOnWriteArrayList[T]) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (c *CopyOnWriteArrayList[T]) MarshalBSONValue() (bsontype.Type, []byte, error) {
+func (c *CopyOnWriteSlice[T]) MarshalBSONValue() (bsontype.Type, []byte, error) {
 	elements := c.ToSlice()
 	return bson.MarshalValue(elements)
 }
 
-func (c *CopyOnWriteArrayList[T]) UnmarshalBSONValue(t bsontype.Type, data []byte) error {
+func (c *CopyOnWriteSlice[T]) UnmarshalBSONValue(t bsontype.Type, data []byte) error {
 	var elements []T
 	if err := bson.UnmarshalValue(t, data, &elements); err != nil {
 		return err
