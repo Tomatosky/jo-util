@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-var _ IPool[int32] = (*AntsPool)(nil)
+var _ IPool = (*AntsPool)(nil)
 
 type AntsPool struct {
 	pool *ants.Pool

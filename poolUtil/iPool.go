@@ -1,12 +1,9 @@
 package poolUtil
 
-import (
-	"github.com/Tomatosky/jo-util/numberUtil"
-	"time"
-)
+import "time"
 
-type IPool[T numberUtil.Number] interface {
+type IPool interface {
 	Submit(task func())
-	SubmitWithId(id T, task func())
+	SubmitWithId(id int32, task func())
 	Shutdown(timeout time.Duration) (isTimeout bool)
 }
