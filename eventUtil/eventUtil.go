@@ -23,7 +23,7 @@ type EventManager struct {
 }
 
 type EventOpt struct {
-	PoolSize  int32
+	PoolSize  int64
 	QueueSize int
 	Logger    *zap.Logger
 }

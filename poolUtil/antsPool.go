@@ -19,7 +19,7 @@ func NewAntsPool(size int) *AntsPool {
 	return &AntsPool{pool: pool}
 }
 
-func (p *AntsPool) SubmitWithId(id int32, task func()) {
+func (p *AntsPool) SubmitWithId(id any, task func()) {
 	p.Submit(task)
 }
 

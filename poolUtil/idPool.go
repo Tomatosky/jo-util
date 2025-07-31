@@ -3,6 +3,7 @@ package poolUtil
 import (
 	"context"
 	"fmt"
+	"github.com/Tomatosky/jo-util/convertor"
 	"github.com/Tomatosky/jo-util/idUtil"
 	"github.com/Tomatosky/jo-util/logger"
 	"github.com/Tomatosky/jo-util/mapUtil"
@@ -18,9 +19,9 @@ var _ IPool = (*IdPool)(nil)
 
 type IdPool struct {
 	workers      []*worker
-	taskIdMap    *mapUtil.ConcurrentHashMap[string, int32]        // key: taskID(string), value: id
-	idTaskCounts *mapUtil.ConcurrentHashMap[int32, *atomic.Int32] // key: id, value: *atomic.Int32
-	cores        int32
+	taskIdMap    *mapUtil.ConcurrentHashMap[string, int64]        // key: taskID(string), value: id
+	idTaskCounts *mapUtil.ConcurrentHashMap[int64, *atomic.Int32] // key: id, value: *atomic.Int32
+	cores        int64
 	running      atomic.Bool    // 控制服务运行状态
 	wg           sync.WaitGroup // 用于等待所有worker退出
 	logger       *zap.Logger
@@ -39,7 +40,7 @@ type customTask struct {
 }
 
 type IdPoolOpt struct {
-	PoolSize  int32
+	PoolSize  int64
 	QueueSize int
 	Logger    *zap.Logger
 	PoolName  string
@@ -53,15 +54,15 @@ func NewIdPool(opt *IdPoolOpt) *IdPool {
 	idPool := &IdPool{
 		cores:        opt.PoolSize,
 		workers:      make([]*worker, opt.PoolSize),
-		taskIdMap:    mapUtil.NewConcurrentHashMap[string, int32](),
-		idTaskCounts: mapUtil.NewConcurrentHashMap[int32, *atomic.Int32](),
+		taskIdMap:    mapUtil.NewConcurrentHashMap[string, int64](),
+		idTaskCounts: mapUtil.NewConcurrentHashMap[int64, *atomic.Int32](),
 	}
 	if opt.Logger != nil {
 		idPool.logger = opt.Logger
 	}
 	idPool.running.Store(true)
 	// 初始化 workers
-	for i := int32(0); i < opt.PoolSize; i++ {
+	for i := int64(0); i < opt.PoolSize; i++ {
 		idPool.workers[i] = newWorker(idPool, opt.QueueSize)
 		idPool.wg.Add(1) // 为每个worker增加计数
 		go func(w *worker) {
@@ -77,19 +78,20 @@ func (i *IdPool) Submit(task func()) {
 }
 
 // SubmitWithId 添加任务
-func (i *IdPool) SubmitWithId(id int32, task func()) {
+func (i *IdPool) SubmitWithId(id any, task func()) {
 	if !i.running.Load() {
 		return
 	}
+	idInt64 := convertor.ToInt64(id)
 	// 生成唯一任务ID
 	taskID := idUtil.RandomUUID()
 	// 更新任务计数
-	v, _ := i.idTaskCounts.PutIfAbsent(id, &atomic.Int32{})
+	v, _ := i.idTaskCounts.PutIfAbsent(idInt64, &atomic.Int32{})
 	v.Add(1)
 	// 记录任务映射
-	i.taskIdMap.Put(taskID, id)
+	i.taskIdMap.Put(taskID, idInt64)
 	// 选择 worker（哈希取模）
-	w := i.workers[id%i.cores]
+	w := i.workers[idInt64%i.cores]
 	// 发送任务
 	select {
 	case w.queue <- &customTask{taskID: taskID, task: task}:
@@ -103,8 +105,9 @@ func (i *IdPool) SubmitWithId(id int32, task func()) {
 }
 
 // GetTaskCount 获取任务计数
-func (i *IdPool) GetTaskCount(id int32) int32 {
-	v := i.idTaskCounts.GetOrDefault(id, &atomic.Int32{})
+func (i *IdPool) GetTaskCount(id any) int32 {
+	idInt64 := convertor.ToInt64(id)
+	v := i.idTaskCounts.GetOrDefault(idInt64, &atomic.Int32{})
 	return v.Load()
 }
 
