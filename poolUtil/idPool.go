@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/Tomatosky/jo-util/convertor"
 	"github.com/Tomatosky/jo-util/idUtil"
-	"github.com/Tomatosky/jo-util/logger"
 	"github.com/Tomatosky/jo-util/mapUtil"
 	"github.com/Tomatosky/jo-util/randomUtil"
 	"go.uber.org/zap"
@@ -193,7 +192,7 @@ func (w *worker) processTask(task *customTask) {
 		err := recover()
 		if err != nil {
 			if w.idPool.logger != nil {
-				logger.Log.Error(fmt.Sprintf("err=%v", err))
+				w.idPool.logger.Error(fmt.Sprintf("err=%v", err))
 			} else {
 				fmt.Println(fmt.Sprintf("err=%v", err))
 				debug.PrintStack()
