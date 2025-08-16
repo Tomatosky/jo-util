@@ -7,6 +7,8 @@ import (
 	"os"
 )
 
+var Log *zap.Logger
+
 func InitLog(w io.Writer) *zap.Logger {
 	var coreArr []zapcore.Core
 
