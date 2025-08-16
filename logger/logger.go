@@ -7,9 +7,7 @@ import (
 	"os"
 )
 
-var Log *zap.Logger
-
-func InitLog(w io.Writer) {
+func InitLog(w io.Writer) *zap.Logger {
 	var coreArr []zapcore.Core
 
 	//日志级别
@@ -38,5 +36,5 @@ func InitLog(w io.Writer) {
 		coreArr = append(coreArr, fileCore)
 	}
 
-	Log = zap.New(zapcore.NewTee(coreArr...), zap.AddCaller(), zap.AddStacktrace(zap.ErrorLevel))
+	return zap.New(zapcore.NewTee(coreArr...), zap.AddCaller(), zap.AddStacktrace(zap.ErrorLevel))
 }
