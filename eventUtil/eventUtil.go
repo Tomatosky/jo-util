@@ -89,7 +89,7 @@ func (em *EventManager) TriggerWithId(id int32, eventName string, data interface
 		return errors.New("event not found")
 	}
 
-	em.pool.Submit(func() {
+	em.pool.SubmitWithId(id, func() {
 		em.TriggerSync(eventName, data)
 	})
 	return nil
