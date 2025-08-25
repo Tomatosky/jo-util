@@ -211,14 +211,14 @@ func ParseToTime(str, format string, timezone ...string) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("format %s not support", format)
 	}
 
+	location := loc
 	if timezone != nil && timezone[0] != "" {
-		loc, err := time.LoadLocation(timezone[0])
+		var err error
+		location, err = time.LoadLocation(timezone[0])
 		if err != nil {
 			return time.Time{}, err
 		}
-
-		return time.ParseInLocation(tf, str, loc)
 	}
 
-	return time.Parse(tf, str)
+	return time.ParseInLocation(tf, str, location)
 }
