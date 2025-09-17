@@ -1,6 +1,6 @@
 module github.com/Tomatosky/jo-util
 
-go 1.24
+go 1.25
 
 require (
 	github.com/bwmarrin/snowflake v0.3.0
@@ -8,7 +8,7 @@ require (
 	github.com/panjf2000/ants/v2 v2.11.3
 	go.mongodb.org/mongo-driver v1.17.4
 	go.uber.org/zap v1.27.0
-	golang.org/x/exp v0.0.0-20250819193227-8b4c13bb791b
+	golang.org/x/exp v0.0.0-20250911091902-df9299821621
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 
@@ -22,6 +22,6 @@ require (
 	github.com/youmark/pkcs8 v0.0.0-20240726163527-a2c0da244d78 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/crypto v0.26.0 // indirect
-	golang.org/x/sync v0.16.0 // indirect
+	golang.org/x/sync v0.17.0 // indirect
 	golang.org/x/text v0.17.0 // indirect
 )
