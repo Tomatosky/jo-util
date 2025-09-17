@@ -34,6 +34,19 @@ func NewRequestClient() *RequestClient {
 	}
 }
 
+func (rc *RequestClient) SetProxy(proxy string) {
+	proxyUrl, err := url.Parse(proxy)
+	if err != nil {
+		panic(err)
+	}
+	rc.Client.Transport = &http.Transport{
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: true,
+		},
+		Proxy: http.ProxyURL(proxyUrl),
+	}
+}
+
 type Resp struct {
 	Err        error
 	Body       []byte
