@@ -64,6 +64,11 @@ func (r *Resp) Json() (map[string]any, error) {
 	return jsonData, err
 }
 
+func (r *Resp) JsonObj(v any) error {
+	err := json.Unmarshal(r.Body, v)
+	return err
+}
+
 type GetOptions struct {
 	Headers map[string]string
 	Timeout int
