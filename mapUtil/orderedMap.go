@@ -226,6 +226,7 @@ func (m *OrderedMap[K, V]) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
+	m.kv = make(map[K]*Element[K, V])
 	for k, v := range toMap {
 		m.Put(k, v)
 	}
@@ -242,6 +243,7 @@ func (m *OrderedMap[K, V]) UnmarshalBSON(bytes []byte) error {
 	if err != nil {
 		return err
 	}
+	m.kv = make(map[K]*Element[K, V])
 	for k, v := range toMap {
 		m.Put(k, v)
 	}

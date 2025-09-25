@@ -95,6 +95,7 @@ func (s *HashSet[T]) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &elements); err != nil {
 		return err
 	}
+	s.m = make(map[T]struct{})
 	s.AddAll(elements...)
 	return nil
 }
@@ -109,7 +110,7 @@ func (s *HashSet[T]) UnmarshalBSONValue(t bsontype.Type, data []byte) error {
 	if err := bson.UnmarshalValue(t, data, &elements); err != nil {
 		return err
 	}
-	s.Clear()
+	s.m = make(map[T]struct{})
 	s.AddAll(elements...)
 	return nil
 }

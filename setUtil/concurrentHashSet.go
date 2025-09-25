@@ -90,6 +90,7 @@ func (s *ConcurrentHashSet[T]) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
+	s.m = mapUtil.NewConcurrentHashMap[T, struct{}]()
 	s.AddAll(tmp...)
 	return nil
 }
@@ -104,7 +105,7 @@ func (s *ConcurrentHashSet[T]) UnmarshalBSONValue(t bsontype.Type, data []byte) 
 	if err := bson.UnmarshalValue(t, data, &elements); err != nil {
 		return err
 	}
-	s.Clear()
+	s.m = mapUtil.NewConcurrentHashMap[T, struct{}]()
 	s.AddAll(elements...)
 	return nil
 }
