@@ -26,7 +26,7 @@ func (c *CopyOnWriteSlice[T]) Add(element T) {
 	defer c.mu.Unlock()
 
 	// 创建新数组并追加元素
-	newData := append([]T(nil), c.data...)
+	newData := append(make([]T, 0, len(c.data)+1), c.data...)
 	newData = append(newData, element)
 	c.data = newData
 }
@@ -36,7 +36,7 @@ func (c *CopyOnWriteSlice[T]) AddAll(elements ...T) {
 	defer c.mu.Unlock()
 
 	// 创建新数组并追加所有元素
-	newData := append([]T(nil), c.data...)
+	newData := append(make([]T, 0, len(c.data)+len(elements)), c.data...)
 	newData = append(newData, elements...)
 	c.data = newData
 }
@@ -103,7 +103,7 @@ func (c *CopyOnWriteSlice[T]) Size() int {
 // Range 安全遍历（遍历过程中数组不会被修改）
 func (c *CopyOnWriteSlice[T]) Range(f func(int, T) bool) {
 	c.mu.RLock()
-	snapshot := append([]T(nil), c.data...) // 创建快照
+	snapshot := append(make([]T, 0, len(c.data)), c.data...) // 创建快照
 	c.mu.RUnlock()
 
 	for i, v := range snapshot {
@@ -149,7 +149,7 @@ func (c *CopyOnWriteSlice[T]) RemoveObject(element T) int {
 func (c *CopyOnWriteSlice[T]) ToSlice() []T {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return append([]T(nil), c.data...)
+	return append(make([]T, 0, len(c.data)), c.data...)
 }
 
 // ToString 返回JSON格式字符串（读操作）
