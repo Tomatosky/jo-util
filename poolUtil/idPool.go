@@ -47,6 +47,7 @@ type IdPoolOpt struct {
 
 func NewIdPool(opt *IdPoolOpt) *IdPool {
 	if opt.PoolSize <= 0 || opt.QueueSize <= 0 {
+		debug.PrintStack()
 		panic("pool size and queue size must be greater than 0")
 	}
 

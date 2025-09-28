@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/bwmarrin/snowflake"
 	"github.com/google/uuid"
+	"runtime/debug"
 	"strings"
 )
 
@@ -25,6 +26,7 @@ func getSnowflake() snowflake.ID {
 		var err error
 		snowflakeNode, err = snowflake.NewNode(1)
 		if err != nil {
+			debug.PrintStack()
 			panic(fmt.Sprintf("Snowflake node initialization failed: %v", err))
 		}
 	}

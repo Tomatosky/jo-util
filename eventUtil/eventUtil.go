@@ -6,6 +6,7 @@ import (
 	"github.com/Tomatosky/jo-util/poolUtil"
 	"github.com/Tomatosky/jo-util/randomUtil"
 	"go.uber.org/zap"
+	"runtime/debug"
 	"sync"
 	"time"
 )
@@ -31,6 +32,7 @@ type EventOpt struct {
 // NewEventManager 创建一个新的事件管理器
 func NewEventManager(opt *EventOpt) *EventManager {
 	if opt.PoolSize <= 0 || opt.QueueSize <= 0 {
+		debug.PrintStack()
 		panic("pool size and queue size must be greater than 0")
 	}
 
@@ -115,7 +117,8 @@ func (em *EventManager) triggerHandle(f EventHandler, data interface{}) {
 			if em.logger != nil {
 				em.logger.Error(fmt.Sprintf("error: %v", err))
 			} else {
-				fmt.Printf("panic: %v", err)
+				debug.PrintStack()
+				fmt.Printf("panic: %v\n", err)
 			}
 		}
 	}()

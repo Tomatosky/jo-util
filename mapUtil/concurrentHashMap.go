@@ -3,6 +3,7 @@ package mapUtil
 import (
 	"encoding/json"
 	"go.mongodb.org/mongo-driver/bson"
+	"runtime/debug"
 	"sync"
 )
 
@@ -132,6 +133,7 @@ func (cm *ConcurrentHashMap[K, V]) ToString() string {
 	defer cm.mu.RUnlock()
 	bytes, err := json.Marshal(cm.m)
 	if err != nil {
+		debug.PrintStack()
 		panic(err)
 	}
 	return string(bytes)

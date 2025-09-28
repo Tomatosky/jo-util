@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/bsontype"
+	"runtime/debug"
 )
 
 // HashSet 非并发安全的哈希集合实现
@@ -79,6 +80,7 @@ func (s *HashSet[T]) IsEmpty() bool {
 func (s *HashSet[T]) ToString() string {
 	bytes, err := json.Marshal(s.ToSlice())
 	if err != nil {
+		debug.PrintStack()
 		panic(err)
 	}
 	return string(bytes)

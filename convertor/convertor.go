@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"math"
 	"reflect"
+	"runtime/debug"
 	"strconv"
 )
 
@@ -13,6 +14,7 @@ func ToBool(value any) bool {
 	s := ToString(value)
 	parseBool, err := strconv.ParseBool(s)
 	if err != nil {
+		debug.PrintStack()
 		panic(err)
 	}
 	return parseBool
@@ -23,6 +25,7 @@ func ToInt(value any) int {
 	s := ToString(value)
 	atoi, err := strconv.Atoi(s)
 	if err != nil {
+		debug.PrintStack()
 		panic(err)
 	}
 	return atoi
@@ -33,6 +36,7 @@ func ToInt32(value any) int32 {
 	s := ToString(value)
 	i32, err := strconv.ParseInt(s, 10, 32)
 	if err != nil {
+		debug.PrintStack()
 		panic(err)
 	}
 	return int32(i32)
@@ -43,6 +47,7 @@ func ToInt64(value any) int64 {
 	s := ToString(value)
 	i64, err := strconv.ParseInt(s, 10, 64)
 	if err != nil {
+		debug.PrintStack()
 		panic(err)
 	}
 	return i64
@@ -53,6 +58,7 @@ func ToFloat32(value any) float32 {
 	s := ToString(value)
 	f32, err := strconv.ParseFloat(s, 32)
 	if err != nil {
+		debug.PrintStack()
 		panic(err)
 	}
 	return float32(f32)
@@ -63,6 +69,7 @@ func ToFloat64(value any) float64 {
 	s := ToString(value)
 	f64, err := strconv.ParseFloat(s, 64)
 	if err != nil {
+		debug.PrintStack()
 		panic(err)
 	}
 	return f64

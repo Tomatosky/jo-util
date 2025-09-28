@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"time"
 )
@@ -37,6 +38,7 @@ func NewRequestClient() *RequestClient {
 func (rc *RequestClient) SetProxy(proxy string) {
 	proxyUrl, err := url.Parse(proxy)
 	if err != nil {
+		debug.PrintStack()
 		panic(err)
 	}
 	rc.Client.Transport = &http.Transport{

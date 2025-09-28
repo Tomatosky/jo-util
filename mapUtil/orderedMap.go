@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"go.mongodb.org/mongo-driver/bson"
 	"iter"
+	"runtime/debug"
 )
 
 var _ IMap[string, int] = (*OrderedMap[string, int])(nil)
@@ -211,6 +212,7 @@ func (m *OrderedMap[K, V]) ToString() string {
 	toMap := m.ToMap()
 	bytes, err := json.Marshal(toMap)
 	if err != nil {
+		debug.PrintStack()
 		panic(err)
 	}
 	return string(bytes)

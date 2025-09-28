@@ -1,6 +1,7 @@
 package dateUtil
 
 import (
+	"runtime/debug"
 	"time"
 )
 
@@ -69,6 +70,7 @@ func Format(formatType FormatType, opt ...FormatOpt) string {
 	}
 	loc, err := time.LoadLocation(timeZone)
 	if err != nil {
+		debug.PrintStack()
 		panic(err)
 	}
 	t = t.In(loc)
@@ -77,6 +79,7 @@ func Format(formatType FormatType, opt ...FormatOpt) string {
 	switch formatType {
 	case Format_Custom:
 		if option.CustomType == "" {
+			debug.PrintStack()
 			panic("custom type cannot be empty")
 		}
 		return t.Format(option.CustomType)
@@ -129,6 +132,7 @@ func Format(formatType FormatType, opt ...FormatOpt) string {
 	case Format_YYYY:
 		return t.Format("2006")
 	default:
+		debug.PrintStack()
 		panic("invalid format type")
 	}
 }

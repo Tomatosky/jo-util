@@ -5,6 +5,7 @@ import (
 	"github.com/Tomatosky/jo-util/mapUtil"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/bsontype"
+	"runtime/debug"
 )
 
 // ConcurrentHashSet 基于 ConcurrentHashMap 实现的并发安全集合
@@ -73,6 +74,7 @@ func (s *ConcurrentHashSet[T]) IsEmpty() bool {
 func (s *ConcurrentHashSet[T]) ToString() string {
 	bytes, err := json.Marshal(s.ToSlice())
 	if err != nil {
+		debug.PrintStack()
 		panic(err)
 	}
 	return string(bytes)

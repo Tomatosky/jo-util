@@ -1,6 +1,9 @@
 package cryptor
 
-import "bytes"
+import (
+	"bytes"
+	"runtime/debug"
+)
 
 func generateAesKey(key []byte, size int) []byte {
 	genKey := make([]byte, size)
@@ -32,10 +35,12 @@ func addPadding(data []byte, blockSize int, paddingType PaddingType) []byte {
 		return zeroPadding(data, blockSize)
 	case NoPadding:
 		if len(data)%blockSize != 0 {
+			debug.PrintStack()
 			panic("data length is not aligned to block size")
 		}
 		return data
 	default:
+		debug.PrintStack()
 		panic("unknown padding type")
 	}
 }
@@ -49,6 +54,7 @@ func removePadding(data []byte, paddingType PaddingType) []byte {
 	case NoPadding:
 		return data
 	default:
+		debug.PrintStack()
 		panic("unknown padding type")
 	}
 }

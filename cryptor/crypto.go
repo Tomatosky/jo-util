@@ -18,6 +18,7 @@ import (
 	"encoding/pem"
 	"io"
 	"os"
+	"runtime/debug"
 )
 
 type PaddingType int
@@ -33,6 +34,7 @@ const (
 func AesEcbEncrypt(data, key []byte, paddingType PaddingType) []byte {
 	size := len(key)
 	if size != 16 && size != 24 && size != 32 {
+		debug.PrintStack()
 		panic("invalid key size")
 	}
 	block, _ := aes.NewCipher(key)
@@ -49,6 +51,7 @@ func AesEcbEncrypt(data, key []byte, paddingType PaddingType) []byte {
 func AesEcbDecrypt(encrypted, key []byte, paddingType PaddingType) []byte {
 	size := len(key)
 	if size != 16 && size != 24 && size != 32 {
+		debug.PrintStack()
 		panic("invalid key size")
 	}
 	block, _ := aes.NewCipher(key)
@@ -64,6 +67,7 @@ func AesEcbDecrypt(encrypted, key []byte, paddingType PaddingType) []byte {
 func AesCbcEncrypt(data, key []byte, paddingType PaddingType) []byte {
 	size := len(key)
 	if size != 16 && size != 24 && size != 32 {
+		debug.PrintStack()
 		panic("invalid key size")
 	}
 	block, _ := aes.NewCipher(key)
@@ -71,6 +75,7 @@ func AesCbcEncrypt(data, key []byte, paddingType PaddingType) []byte {
 	encrypted := make([]byte, aes.BlockSize+len(data))
 	iv := encrypted[:aes.BlockSize]
 	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
+		debug.PrintStack()
 		panic(err)
 	}
 	mode := cipher.NewCBCEncrypter(block, iv)
@@ -83,6 +88,7 @@ func AesCbcEncrypt(data, key []byte, paddingType PaddingType) []byte {
 func AesCbcDecrypt(encrypted, key []byte, paddingType PaddingType) []byte {
 	size := len(key)
 	if size != 16 && size != 24 && size != 32 {
+		debug.PrintStack()
 		panic("invalid key size")
 	}
 	block, _ := aes.NewCipher(key)
@@ -98,6 +104,7 @@ func AesCbcDecrypt(encrypted, key []byte, paddingType PaddingType) []byte {
 func AesCtrCrypt(data, key []byte, paddingType PaddingType) []byte {
 	size := len(key)
 	if size != 16 && size != 24 && size != 32 {
+		debug.PrintStack()
 		panic("invalid key size")
 	}
 	block, _ := aes.NewCipher(key)
@@ -114,6 +121,7 @@ func AesCtrCrypt(data, key []byte, paddingType PaddingType) []byte {
 func AesCfbEncrypt(data, key []byte, paddingType PaddingType) []byte {
 	size := len(key)
 	if size != 16 && size != 24 && size != 32 {
+		debug.PrintStack()
 		panic("invalid key size")
 	}
 	block, _ := aes.NewCipher(key)
@@ -122,6 +130,7 @@ func AesCfbEncrypt(data, key []byte, paddingType PaddingType) []byte {
 	encrypted := make([]byte, aes.BlockSize+len(data))
 	iv := encrypted[:aes.BlockSize]
 	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
+		debug.PrintStack()
 		panic(err)
 	}
 	stream := cipher.NewCFBEncrypter(block, iv)
@@ -135,9 +144,11 @@ func AesCfbEncrypt(data, key []byte, paddingType PaddingType) []byte {
 func AesCfbDecrypt(encrypted, key []byte, paddingType PaddingType) []byte {
 	size := len(key)
 	if size != 16 && size != 24 && size != 32 {
+		debug.PrintStack()
 		panic("invalid key size")
 	}
 	if len(encrypted) < aes.BlockSize {
+		debug.PrintStack()
 		panic("invalid ciphertext size")
 	}
 	block, _ := aes.NewCipher(key)
@@ -154,6 +165,7 @@ func AesCfbDecrypt(encrypted, key []byte, paddingType PaddingType) []byte {
 func AesOfbEncrypt(data, key []byte, paddingType PaddingType) []byte {
 	size := len(key)
 	if size != 16 && size != 24 && size != 32 {
+		debug.PrintStack()
 		panic("invalid key size")
 	}
 	block, _ := aes.NewCipher(key)
@@ -161,6 +173,7 @@ func AesOfbEncrypt(data, key []byte, paddingType PaddingType) []byte {
 	encrypted := make([]byte, aes.BlockSize+len(data))
 	iv := encrypted[:aes.BlockSize]
 	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
+		debug.PrintStack()
 		panic(err)
 	}
 	stream := cipher.NewOFB(block, iv)
@@ -173,6 +186,7 @@ func AesOfbEncrypt(data, key []byte, paddingType PaddingType) []byte {
 func AesOfbDecrypt(encrypted, key []byte, paddingType PaddingType) []byte {
 	size := len(key)
 	if size != 16 && size != 24 && size != 32 {
+		debug.PrintStack()
 		panic("invalid key size")
 	}
 	block, _ := aes.NewCipher(key)
@@ -232,6 +246,7 @@ func DesEcbDecrypt(encrypted, key []byte) []byte {
 func DesCbcEncrypt(data, key []byte) []byte {
 	size := len(key)
 	if size != 8 {
+		debug.PrintStack()
 		panic("key length shoud be 8")
 	}
 
@@ -242,6 +257,7 @@ func DesCbcEncrypt(data, key []byte) []byte {
 	iv := encrypted[:des.BlockSize]
 
 	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
+		debug.PrintStack()
 		panic(err)
 	}
 
@@ -257,6 +273,7 @@ func DesCbcEncrypt(data, key []byte) []byte {
 func DesCbcDecrypt(encrypted, key []byte) []byte {
 	size := len(key)
 	if size != 8 {
+		debug.PrintStack()
 		panic("key length shoud be 8")
 	}
 

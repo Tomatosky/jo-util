@@ -3,6 +3,7 @@ package poolUtil
 import (
 	"context"
 	"github.com/panjf2000/ants/v2"
+	"runtime/debug"
 	"sync"
 	"time"
 )
@@ -25,6 +26,7 @@ func (p *AntsPool) SubmitWithId(id any, task func()) {
 
 func (p *AntsPool) Submit(task func()) {
 	if task == nil {
+		debug.PrintStack()
 		panic("task cannot be nil")
 	}
 	p.wg.Add(1)

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/bsontype"
+	"runtime/debug"
 	"sync"
 )
 
@@ -47,6 +48,7 @@ func (c *CopyOnWriteSlice[T]) Insert(index int, element T) {
 	defer c.mu.Unlock()
 
 	if index < 0 || index > len(c.data) {
+		debug.PrintStack()
 		panic("index out of range")
 	}
 
@@ -70,6 +72,7 @@ func (c *CopyOnWriteSlice[T]) Get(index int) T {
 		index += len(c.data)
 	}
 	if index < 0 || index >= len(c.data) {
+		debug.PrintStack()
 		panic("index out of range")
 	}
 	return c.data[index]
@@ -81,6 +84,7 @@ func (c *CopyOnWriteSlice[T]) Remove(index int) T {
 	defer c.mu.Unlock()
 
 	if index < 0 || index >= len(c.data) {
+		debug.PrintStack()
 		panic("index out of range")
 	}
 
@@ -159,6 +163,7 @@ func (c *CopyOnWriteSlice[T]) ToString() string {
 
 	bytes, err := json.Marshal(c.data)
 	if err != nil {
+		debug.PrintStack()
 		panic(err)
 	}
 	return string(bytes)
