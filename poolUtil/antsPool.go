@@ -32,7 +32,6 @@ func (p *AntsPool) Submit(task func()) {
 		defer p.wg.Done()
 		task()
 	})
-	p.wg.Done()
 }
 
 // ScheduleAtFixedRate 类似于Java的scheduleAtFixedRate

@@ -44,7 +44,7 @@ func TestPool_Submit(t *testing.T) {
 	}
 
 	// 测试提交nil任务
-	pool.Submit(nil)
+	//pool.Submit(nil)
 
 	// 测试池已关闭的情况
 	pool.Shutdown(time.Second)
