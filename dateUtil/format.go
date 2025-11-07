@@ -43,11 +43,7 @@ const (
 type FormatOpt struct {
 	CustomTime int64  // 自定义时间(毫秒时间戳)，0表示使用当前时间
 	CustomType string // 自定义格式化的样式(使用Go时间格式)
-	TimeZone   string // 时区，默认"Asia/Shanghai"
 }
-
-// 默认时区
-const defaultTimeZone = "Asia/Shanghai"
 
 // Format 时间格式化方法
 func Format(formatType FormatType, opt ...FormatOpt) string {
@@ -63,17 +59,7 @@ func Format(formatType FormatType, opt ...FormatOpt) string {
 	} else {
 		t = time.Now()
 	}
-	// 设置时区
-	timeZone := option.TimeZone
-	if timeZone == "" {
-		timeZone = defaultTimeZone
-	}
-	loc, err := time.LoadLocation(timeZone)
-	if err != nil {
-		debug.PrintStack()
-		panic(err)
-	}
-	t = t.In(loc)
+	t = t.In(Loc)
 
 	// 根据格式类型返回格式化后的字符串
 	switch formatType {

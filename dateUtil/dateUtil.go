@@ -7,11 +7,11 @@ import (
 	"time"
 )
 
-var loc *time.Location
+var Loc *time.Location
 var timeFormat map[string]string
 
 func init() {
-	loc, _ = time.LoadLocation("Asia/Shanghai")
+	Loc, _ = time.LoadLocation("Asia/Shanghai")
 	timeFormat = map[string]string{
 		"yyyy-mm-dd hh:mm:ss": "2006-01-02 15:04:05",
 		"yyyy-mm-dd hh:mm":    "2006-01-02 15:04",
@@ -39,7 +39,7 @@ func init() {
 }
 
 func GetTime(timestamp int64) time.Time {
-	return time.Unix(timestamp, 0).In(loc)
+	return time.Unix(timestamp, 0).In(Loc)
 }
 
 func DayOfWeek(t time.Time) int {
@@ -57,7 +57,7 @@ func OffsetDay(t time.Time, offset int) time.Time {
 // BeginOfDay 获取某天的起始时间
 func BeginOfDay(t time.Time) time.Time {
 	year, month, day := t.Date()
-	begin := time.Date(year, month, day, 0, 0, 0, 0, loc)
+	begin := time.Date(year, month, day, 0, 0, 0, 0, Loc)
 	return begin
 }
 
@@ -73,13 +73,13 @@ func BeginOfWeek(t time.Time) time.Time {
 	// 获取周一日期并构造零点时间
 	monday := t.AddDate(0, 0, -offsetDays)
 	year, month, day := monday.Date()
-	return time.Date(year, month, day, 0, 0, 0, 0, loc)
+	return time.Date(year, month, day, 0, 0, 0, 0, Loc)
 }
 
 // BeginOfMonth 获取当月第一天零点时间
 func BeginOfMonth(t time.Time) time.Time {
 	year, month, _ := t.Date()
-	return time.Date(year, month, 1, 0, 0, 0, 0, loc)
+	return time.Date(year, month, 1, 0, 0, 0, 0, Loc)
 }
 
 func BeginOfYear(t time.Time) time.Time {
@@ -211,7 +211,7 @@ func ParseToTime(str, format string, timezone ...string) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("format %s not support", format)
 	}
 
-	location := loc
+	location := Loc
 	if timezone != nil && timezone[0] != "" {
 		var err error
 		location, err = time.LoadLocation(timezone[0])
