@@ -8,14 +8,13 @@ import (
 	"github.com/Tomatosky/jo-util/numberUtil"
 )
 
-var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
-
 // RandomInt 生成指定范围 [start, end) 的随机整数
 func RandomInt[T numberUtil.Number](start, end T) T {
 	if start >= end {
 		debug.PrintStack()
 		panic("invalid range: start >= end")
 	}
+	var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
 	return T(rng.Int63n(int64(end-start))) + start
 }
 
@@ -25,6 +24,7 @@ func RandomEle[T any](slice []T) T {
 		debug.PrintStack()
 		panic("slice is empty")
 	}
+	var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
 	return slice[rng.Intn(len(slice))]
 }
 
@@ -41,6 +41,7 @@ func RandomEleSet[T any](slice []T, n int) []T {
 	if n > length {
 		n = length
 	}
+	var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
 	indices := rng.Perm(length)
 	result := make([]T, n)
 	for i := 0; i < n; i++ {
@@ -64,6 +65,7 @@ func RandomWeightedKey[K comparable, V numberUtil.Number](weights map[K]V) K {
 	}
 
 	// 生成随机数
+	var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
 	r := rng.Intn(sum)
 
 	// 查找对应的键
@@ -84,6 +86,7 @@ func RandomWeightedKey[K comparable, V numberUtil.Number](weights map[K]V) K {
 func RandomString(length int) string {
 	const charset = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	b := make([]byte, length)
+	var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
 	for i := range b {
 		b[i] = charset[rng.Intn(len(charset))]
 	}
@@ -94,6 +97,7 @@ func RandomString(length int) string {
 func RandomNumbers(length int) string {
 	const charset = "0123456789"
 	b := make([]byte, length)
+	var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
 	for i := range b {
 		b[i] = charset[rng.Intn(len(charset))]
 	}
