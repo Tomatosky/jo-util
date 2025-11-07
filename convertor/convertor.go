@@ -23,34 +23,34 @@ func ToBool(value any) bool {
 // ToInt 转换为 int
 func ToInt(value any) int {
 	s := ToString(value)
-	atoi, err := strconv.Atoi(s)
+	f, err := strconv.ParseFloat(s, 64)
 	if err != nil {
 		debug.PrintStack()
 		panic(err)
 	}
-	return atoi
+	return int(f)
 }
 
 // ToInt32 转换为 int32
 func ToInt32(value any) int32 {
 	s := ToString(value)
-	i32, err := strconv.ParseInt(s, 10, 32)
+	f, err := strconv.ParseFloat(s, 64)
 	if err != nil {
 		debug.PrintStack()
 		panic(err)
 	}
-	return int32(i32)
+	return int32(f)
 }
 
 // ToInt64 转换为 int64
 func ToInt64(value any) int64 {
 	s := ToString(value)
-	i64, err := strconv.ParseInt(s, 10, 64)
+	f, err := strconv.ParseFloat(s, 64)
 	if err != nil {
 		debug.PrintStack()
 		panic(err)
 	}
-	return i64
+	return int64(f)
 }
 
 // ToFloat32 转换为 float32
