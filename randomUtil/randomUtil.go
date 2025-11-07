@@ -1,10 +1,11 @@
 package randomUtil
 
 import (
-	"github.com/Tomatosky/jo-util/numberUtil"
 	"math/rand"
 	"runtime/debug"
 	"time"
+
+	"github.com/Tomatosky/jo-util/numberUtil"
 )
 
 var rng = rand.New(rand.NewSource(time.Now().UnixNano()))

@@ -2,11 +2,12 @@ package mapUtil
 
 import (
 	"fmt"
-	"github.com/Tomatosky/jo-util/sliceUtil"
-	"github.com/Tomatosky/jo-util/strUtil"
 	"reflect"
 	"strconv"
 	"strings"
+
+	"github.com/Tomatosky/jo-util/sliceUtil"
+	"github.com/Tomatosky/jo-util/strUtil"
 )
 
 const (

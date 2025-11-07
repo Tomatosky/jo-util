@@ -2,9 +2,10 @@ package mapUtil
 
 import (
 	"encoding/json"
-	"go.mongodb.org/mongo-driver/bson"
 	"iter"
 	"runtime/debug"
+
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 var _ IMap[string, int] = (*OrderedMap[string, int])(nil)

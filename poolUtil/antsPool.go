@@ -2,10 +2,11 @@ package poolUtil
 
 import (
 	"context"
-	"github.com/panjf2000/ants/v2"
 	"runtime/debug"
 	"sync"
 	"time"
+
+	"github.com/panjf2000/ants/v2"
 )
 
 var _ IPool = (*AntsPool)(nil)

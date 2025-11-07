@@ -3,10 +3,11 @@ package sliceUtil
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/Tomatosky/jo-util/numberUtil"
 	"math/rand"
 	"runtime/debug"
 	"time"
+
+	"github.com/Tomatosky/jo-util/numberUtil"
 )
 
 // Contain 切片是否包含某个元素

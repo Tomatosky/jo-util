@@ -3,12 +3,13 @@ package eventUtil
 import (
 	"errors"
 	"fmt"
-	"github.com/Tomatosky/jo-util/poolUtil"
-	"github.com/Tomatosky/jo-util/randomUtil"
-	"go.uber.org/zap"
 	"runtime/debug"
 	"sync"
 	"time"
+
+	"github.com/Tomatosky/jo-util/poolUtil"
+	"github.com/Tomatosky/jo-util/randomUtil"
+	"go.uber.org/zap"
 )
 
 // EventHandler 定义事件处理函数的类型

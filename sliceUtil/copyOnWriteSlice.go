@@ -2,10 +2,11 @@ package sliceUtil
 
 import (
 	"encoding/json"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/bsontype"
 	"runtime/debug"
 	"sync"
+
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/bsontype"
 )
 
 // CopyOnWriteSlice 线程安全的动态数组，写时复制

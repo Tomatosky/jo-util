@@ -1,11 +1,12 @@
 package poolUtil
 
 import (
-	"github.com/Tomatosky/jo-util/randomUtil"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/Tomatosky/jo-util/randomUtil"
 
 	"go.uber.org/zap/zaptest"
 )

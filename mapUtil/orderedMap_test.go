@@ -2,8 +2,9 @@ package mapUtil
 
 import (
 	"encoding/json"
-	"go.mongodb.org/mongo-driver/bson"
 	"testing"
+
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 func TestOrderedMap(t *testing.T) {

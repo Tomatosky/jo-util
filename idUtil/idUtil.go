@@ -2,10 +2,11 @@ package idUtil
 
 import (
 	"fmt"
-	"github.com/bwmarrin/snowflake"
-	"github.com/google/uuid"
 	"runtime/debug"
 	"strings"
+
+	"github.com/bwmarrin/snowflake"
+	"github.com/google/uuid"
 )
 
 // 全局snowflake节点（默认节点ID为1）

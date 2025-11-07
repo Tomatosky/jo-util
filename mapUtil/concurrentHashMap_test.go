@@ -2,10 +2,11 @@ package mapUtil
 
 import (
 	"encoding/json"
-	"github.com/Tomatosky/jo-util/dateUtil"
-	"go.mongodb.org/mongo-driver/bson"
 	"sync"
 	"testing"
+
+	"github.com/Tomatosky/jo-util/dateUtil"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 func TestNewConcurrentHashMap(t *testing.T) {

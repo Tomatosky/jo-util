@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"github.com/Tomatosky/jo-util/convertor"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -15,6 +14,8 @@ import (
 	"runtime/debug"
 	"strings"
 	"time"
+
+	"github.com/Tomatosky/jo-util/convertor"
 )
 
 // RequestClient 是一个HTTP客户端工具类
