@@ -11,103 +11,134 @@ import (
 var _ IMap[string, int] = (*ConcurrentHashMap[string, int])(nil)
 
 type ConcurrentHashMap[K comparable, V any] struct {
-	m sync.Map
+	mu sync.RWMutex
+	m  map[K]V
 }
 
 func NewConcurrentHashMap[K comparable, V any](initMap ...map[K]V) *ConcurrentHashMap[K, V] {
-	cm := &ConcurrentHashMap[K, V]{}
+	cm := &ConcurrentHashMap[K, V]{
+		m: make(map[K]V),
+	}
 
+	// 如果有传入初始化map
 	if len(initMap) > 0 && initMap[0] != nil {
+		// 使用写锁确保线程安全
+		cm.mu.Lock()
+		defer cm.mu.Unlock()
+
+		// 深拷贝原始map内容
 		for k, v := range initMap[0] {
-			cm.m.Store(k, v)
+			cm.m[k] = v
 		}
 	}
 	return cm
 }
 
 func (cm *ConcurrentHashMap[K, V]) Get(key K) V {
-	value, ok := cm.m.Load(key)
-	if !ok {
-		var zero V
-		return zero
-	}
-	return value.(V)
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	return cm.m[key]
 }
 
 func (cm *ConcurrentHashMap[K, V]) Put(key K, value V) {
-	cm.m.Store(key, value)
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	cm.m[key] = value
 }
 
 func (cm *ConcurrentHashMap[K, V]) Remove(key K) {
-	cm.m.Delete(key)
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	delete(cm.m, key)
 }
 
 func (cm *ConcurrentHashMap[K, V]) Size() int {
-	size := 0
-	cm.m.Range(func(_, _ interface{}) bool {
-		size++
-		return true
-	})
-	return size
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	return len(cm.m)
 }
 
 func (cm *ConcurrentHashMap[K, V]) ContainsKey(key K) bool {
-	_, ok := cm.m.Load(key)
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	_, ok := cm.m[key]
 	return ok
 }
 
 func (cm *ConcurrentHashMap[K, V]) Clear() {
-	cm.m = sync.Map{}
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	cm.m = make(map[K]V)
 }
 
 func (cm *ConcurrentHashMap[K, V]) Keys() []K {
-	keys := make([]K, 0)
-	cm.m.Range(func(key, _ interface{}) bool {
-		keys = append(keys, key.(K))
-		return true
-	})
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	keys := make([]K, 0, len(cm.m))
+	for k := range cm.m {
+		keys = append(keys, k)
+	}
 	return keys
 }
 
 func (cm *ConcurrentHashMap[K, V]) Values() []V {
-	values := make([]V, 0)
-	cm.m.Range(func(_, value interface{}) bool {
-		values = append(values, value.(V))
-		return true
-	})
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	values := make([]V, 0, len(cm.m))
+	for _, v := range cm.m {
+		values = append(values, v)
+	}
 	return values
 }
 
 func (cm *ConcurrentHashMap[K, V]) PutIfAbsent(key K, value V) (existing V, loaded bool) {
-	actual, loaded := cm.m.LoadOrStore(key, value)
-	return actual.(V), loaded
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
+	if existing, loaded = cm.m[key]; !loaded {
+		cm.m[key] = value
+		existing = value
+	}
+	return
 }
 
 func (cm *ConcurrentHashMap[K, V]) GetOrDefault(key K, defaultValue V) V {
-	if value, ok := cm.m.Load(key); ok {
-		return value.(V)
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	if value, ok := cm.m[key]; ok {
+		return value
 	}
 	return defaultValue
 }
 
 func (cm *ConcurrentHashMap[K, V]) ToMap() map[K]V {
-	result := make(map[K]V)
-	cm.m.Range(func(key, value interface{}) bool {
-		result[key.(K)] = value.(V)
-		return true
-	})
-	return result
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	return cm.m
 }
 
+// Range 遍历元素（返回false可提前终止）
 func (cm *ConcurrentHashMap[K, V]) Range(f func(key K, value V) bool) {
-	cm.m.Range(func(key, value interface{}) bool {
-		return f(key.(K), value.(V))
-	})
+	// 先复制数据再遍历
+	cm.mu.RLock()
+	tmp := make(map[K]V, len(cm.m))
+	for k, v := range cm.m {
+		tmp[k] = v
+	}
+	cm.mu.RUnlock()
+
+	// 遍历复制后的数据，不需要锁
+	for k, v := range tmp {
+		if !f(k, v) {
+			break
+		}
+	}
 }
 
 func (cm *ConcurrentHashMap[K, V]) ToString() string {
-	m := cm.ToMap()
-	bytes, err := json.Marshal(m)
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	bytes, err := json.Marshal(cm.m)
 	if err != nil {
 		debug.PrintStack()
 		panic(err)
@@ -115,34 +146,32 @@ func (cm *ConcurrentHashMap[K, V]) ToString() string {
 	return string(bytes)
 }
 
+// MarshalJSON 实现 json.Marshaler 接口
 func (cm *ConcurrentHashMap[K, V]) MarshalJSON() ([]byte, error) {
-	return json.Marshal(cm.ToMap())
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	return json.Marshal(cm.m) // 只序列化内部的 map
 }
 
+// UnmarshalJSON 实现 json.Unmarshaler 接口
 func (cm *ConcurrentHashMap[K, V]) UnmarshalJSON(data []byte) error {
-	var m map[K]V
-	if err := json.Unmarshal(data, &m); err != nil {
-		return err
-	}
-	cm.m = sync.Map{}
-	for k, v := range m {
-		cm.m.Store(k, v)
-	}
-	return nil
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	cm.m = make(map[K]V)
+	return json.Unmarshal(data, &cm.m)
 }
 
+// MarshalBSON 实现 bson.Marshaler 接口
 func (cm *ConcurrentHashMap[K, V]) MarshalBSON() ([]byte, error) {
-	return bson.Marshal(cm.ToMap())
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	return bson.Marshal(cm.m)
 }
 
+// UnmarshalBSON 实现 bson.Unmarshaler 接口
 func (cm *ConcurrentHashMap[K, V]) UnmarshalBSON(data []byte) error {
-	var m map[K]V
-	if err := bson.Unmarshal(data, &m); err != nil {
-		return err
-	}
-	cm.m = sync.Map{}
-	for k, v := range m {
-		cm.m.Store(k, v)
-	}
-	return nil
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	cm.m = make(map[K]V)
+	return bson.Unmarshal(data, &cm.m)
 }
