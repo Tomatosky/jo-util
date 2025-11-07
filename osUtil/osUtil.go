@@ -6,7 +6,7 @@ import (
 )
 
 func MemUse() uint64 {
-	m := []metrics.Sample{{Name: "/memory/classes/total:bytes"}}
+	m := []metrics.Sample{{Name: "/memory/classes/heap/objects:bytes"}}
 	metrics.Read(m)
 	return m[0].Value.Uint64()
 }
