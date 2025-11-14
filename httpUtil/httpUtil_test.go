@@ -79,7 +79,7 @@ func TestGet(t *testing.T) {
 			// 设置请求头
 			if tt.setHeaders != nil {
 				for key, value := range tt.setHeaders {
-					client.SetHeader(key, value)
+					client.Headers[key] = value
 				}
 			}
 
@@ -269,13 +269,13 @@ func TestPost(t *testing.T) {
 			// 设置请求头
 			if tt.setHeaders != nil {
 				for key, value := range tt.setHeaders {
-					rc.SetHeader(key, value)
+					rc.Headers[key] = value
 				}
 			}
 
 			// 设置请求格式
-			rc.isJson = tt.setJson
-			rc.isMultipart = tt.setMultipart
+			rc.IsJson = tt.setJson
+			rc.IsMultipart = tt.setMultipart
 
 			resp := rc.Post(tt.url, tt.data)
 
@@ -343,7 +343,7 @@ func TestPost_FileHandling(t *testing.T) {
 	defer file.Close()
 
 	rc := NewRequestClient()
-	rc.isMultipart = true
+	rc.IsMultipart = true
 	resp := rc.Post(ts.URL, map[string]interface{}{
 		"file":  file,
 		"field": "value",

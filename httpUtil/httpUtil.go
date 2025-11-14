@@ -20,23 +20,23 @@ import (
 
 // RequestClient 是一个HTTP客户端工具类
 type RequestClient struct {
-	client      *http.Client
-	headers     map[string]string
-	isJson      bool
-	isMultipart bool
+	Client      *http.Client
+	Headers     map[string]string
+	IsJson      bool
+	IsMultipart bool
 }
 
 // NewRequestClient 创建一个新的RequestClient实例
 func NewRequestClient() *RequestClient {
 	return &RequestClient{
-		client: &http.Client{
+		Client: &http.Client{
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{
 					InsecureSkipVerify: true,
 				},
 			},
 		},
-		headers: make(map[string]string),
+		Headers: make(map[string]string),
 	}
 }
 
@@ -46,7 +46,7 @@ func (rc *RequestClient) SetProxy(proxy string) {
 		debug.PrintStack()
 		panic(err)
 	}
-	rc.client.Transport = &http.Transport{
+	rc.Client.Transport = &http.Transport{
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: true,
 		},
@@ -55,19 +55,7 @@ func (rc *RequestClient) SetProxy(proxy string) {
 }
 
 func (rc *RequestClient) SetTimeout(timeout time.Duration) {
-	rc.client.Timeout = timeout
-}
-
-func (rc *RequestClient) SetHeader(key, value string) {
-	rc.headers[key] = value
-}
-
-func (rc *RequestClient) SetJson(isJson bool) {
-	rc.isJson = isJson
-}
-
-func (rc *RequestClient) SetMultipart(isMultipart bool) {
-	rc.isMultipart = isMultipart
+	rc.Client.Timeout = timeout
 }
 
 type Resp struct {
@@ -100,14 +88,14 @@ func (rc *RequestClient) Get(url string) *Resp {
 	}
 
 	// 设置请求头
-	if len(rc.headers) > 0 {
-		for key, value := range rc.headers {
+	if len(rc.Headers) > 0 {
+		for key, value := range rc.Headers {
 			req.Header.Set(key, value)
 		}
 	}
 
 	// 发送请求
-	resp, err := rc.client.Do(req)
+	resp, err := rc.Client.Do(req)
 	if err != nil {
 		return &Resp{Err: err}
 	}
@@ -143,7 +131,7 @@ func (rc *RequestClient) Post(postUrl string, data map[string]interface{}) *Resp
 	)
 	// 判断请求体格式
 	switch {
-	case rc.isMultipart:
+	case rc.IsMultipart:
 		// multipart/form-data 格式
 		body := &bytes.Buffer{}
 		writer := multipart.NewWriter(body)
@@ -178,7 +166,7 @@ func (rc *RequestClient) Post(postUrl string, data map[string]interface{}) *Resp
 		reqBody = body
 		contentType = writer.FormDataContentType()
 
-	case rc.isJson:
+	case rc.IsJson:
 		// JSON 格式
 		jsonData, err := json.Marshal(data)
 		if err != nil {
@@ -204,13 +192,13 @@ func (rc *RequestClient) Post(postUrl string, data map[string]interface{}) *Resp
 	}
 	// 设置请求头
 	req.Header.Set("Content-Type", contentType)
-	if len(rc.headers) > 0 {
-		for key, value := range rc.headers {
+	if len(rc.Headers) > 0 {
+		for key, value := range rc.Headers {
 			req.Header.Set(key, value)
 		}
 	}
 	// 发送请求
-	resp, err := rc.client.Do(req)
+	resp, err := rc.Client.Do(req)
 	if err != nil {
 		return &Resp{Err: err}
 	}
