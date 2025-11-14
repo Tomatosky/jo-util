@@ -62,6 +62,14 @@ func (rc *RequestClient) SetHeader(key, value string) {
 	rc.headers[key] = value
 }
 
+func (rc *RequestClient) SetJson(isJson bool) {
+	rc.isJson = isJson
+}
+
+func (rc *RequestClient) SetMultipart(isMultipart bool) {
+	rc.isMultipart = isMultipart
+}
+
 type Resp struct {
 	Err        error
 	Body       []byte
