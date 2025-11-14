@@ -20,19 +20,23 @@ import (
 
 // RequestClient 是一个HTTP客户端工具类
 type RequestClient struct {
-	Client *http.Client
+	client      *http.Client
+	headers     map[string]string
+	isJson      bool
+	isMultipart bool
 }
 
 // NewRequestClient 创建一个新的RequestClient实例
 func NewRequestClient() *RequestClient {
 	return &RequestClient{
-		Client: &http.Client{
+		client: &http.Client{
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{
 					InsecureSkipVerify: true,
 				},
 			},
 		},
+		headers: make(map[string]string),
 	}
 }
 
@@ -42,12 +46,20 @@ func (rc *RequestClient) SetProxy(proxy string) {
 		debug.PrintStack()
 		panic(err)
 	}
-	rc.Client.Transport = &http.Transport{
+	rc.client.Transport = &http.Transport{
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: true,
 		},
 		Proxy: http.ProxyURL(proxyUrl),
 	}
+}
+
+func (rc *RequestClient) SetTimeout(timeout time.Duration) {
+	rc.client.Timeout = timeout
+}
+
+func (rc *RequestClient) SetHeader(key, value string) {
+	rc.headers[key] = value
 }
 
 type Resp struct {
@@ -72,30 +84,22 @@ func (r *Resp) JsonObj(v any) error {
 	return err
 }
 
-type GetOptions struct {
-	Headers map[string]string
-	Timeout int
-}
-
 // Get 发送GET请求
-func (rc *RequestClient) Get(url string, getOptions *GetOptions) *Resp {
+func (rc *RequestClient) Get(url string) *Resp {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return &Resp{Err: err}
 	}
 
 	// 设置请求头
-	if getOptions != nil && getOptions.Headers != nil {
-		for key, value := range getOptions.Headers {
+	if len(rc.headers) > 0 {
+		for key, value := range rc.headers {
 			req.Header.Set(key, value)
 		}
 	}
 
 	// 发送请求
-	if getOptions != nil && getOptions.Timeout > 0 {
-		rc.Client.Timeout = time.Duration(getOptions.Timeout) * time.Second
-	}
-	resp, err := rc.Client.Do(req)
+	resp, err := rc.client.Do(req)
 	if err != nil {
 		return &Resp{Err: err}
 	}
@@ -123,22 +127,15 @@ func (rc *RequestClient) Get(url string, getOptions *GetOptions) *Resp {
 	}
 }
 
-type PostOptions struct {
-	Headers     map[string]string
-	Timeout     int
-	IsJson      bool
-	IsMultipart bool
-}
-
 // Post 发送POST请求
-func (rc *RequestClient) Post(postUrl string, data map[string]interface{}, postOptions *PostOptions) *Resp {
+func (rc *RequestClient) Post(postUrl string, data map[string]interface{}) *Resp {
 	var (
 		reqBody     io.Reader
 		contentType string
 	)
 	// 判断请求体格式
 	switch {
-	case postOptions.IsMultipart:
+	case rc.isMultipart:
 		// multipart/form-data 格式
 		body := &bytes.Buffer{}
 		writer := multipart.NewWriter(body)
@@ -173,7 +170,7 @@ func (rc *RequestClient) Post(postUrl string, data map[string]interface{}, postO
 		reqBody = body
 		contentType = writer.FormDataContentType()
 
-	case postOptions.IsJson:
+	case rc.isJson:
 		// JSON 格式
 		jsonData, err := json.Marshal(data)
 		if err != nil {
@@ -199,17 +196,13 @@ func (rc *RequestClient) Post(postUrl string, data map[string]interface{}, postO
 	}
 	// 设置请求头
 	req.Header.Set("Content-Type", contentType)
-	if postOptions.Headers != nil {
-		for key, value := range postOptions.Headers {
+	if len(rc.headers) > 0 {
+		for key, value := range rc.headers {
 			req.Header.Set(key, value)
 		}
 	}
-	// 设置超时（如果配置）
-	if postOptions.Timeout > 0 {
-		rc.Client.Timeout = time.Duration(postOptions.Timeout) * time.Second
-	}
 	// 发送请求
-	resp, err := rc.Client.Do(req)
+	resp, err := rc.client.Do(req)
 	if err != nil {
 		return &Resp{Err: err}
 	}
