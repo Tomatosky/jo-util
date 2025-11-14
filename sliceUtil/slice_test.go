@@ -604,20 +604,20 @@ func TestJoinSlice(t *testing.T) {
 			// 根据切片类型调用对应的JoinSlice函数
 			switch s := tt.slice.(type) {
 			case []int:
-				result = JoinSlice(s, tt.sep)
+				result = Join(s, tt.sep)
 			case []string:
-				result = JoinSlice(s, tt.sep)
+				result = Join(s, tt.sep)
 			case []float64:
-				result = JoinSlice(s, tt.sep)
+				result = Join(s, tt.sep)
 			case []bool:
-				result = JoinSlice(s, tt.sep)
+				result = Join(s, tt.sep)
 			default:
 				t.Errorf("不支持的切片类型: %T", s)
 				return
 			}
 
 			if result != tt.expected {
-				t.Errorf("JoinSlice(%v, %q) = %q, 期望 %q", tt.slice, tt.sep, result, tt.expected)
+				t.Errorf("Join(%v, %q) = %q, 期望 %q", tt.slice, tt.sep, result, tt.expected)
 			}
 		})
 	}
@@ -627,9 +627,9 @@ func TestJoinSlice(t *testing.T) {
 func TestJoinSliceEdgeCases(t *testing.T) {
 	// 测试nil切片
 	var nilSlice []int
-	result := JoinSlice(nilSlice, ",")
+	result := Join(nilSlice, ",")
 	if result != "" {
-		t.Errorf("JoinSlice(nil, ',') = %q, 期望 \"\"", result)
+		t.Errorf("Join(nil, ',') = %q, 期望 \"\"", result)
 	}
 
 	// 测试包含nil指针的切片（需要自定义类型）
@@ -638,7 +638,7 @@ func TestJoinSliceEdgeCases(t *testing.T) {
 	}
 
 	sliceWithNil := []*myStruct{nil, {value: "test"}, nil}
-	result2 := JoinSlice(sliceWithNil, "|")
+	result2 := Join(sliceWithNil, "|")
 	// 注意：convertor.ToString(nil) 通常会返回某种字符串表示，如"<nil>"
 	// 这里我们主要测试函数不会panic
 	if result2 == "" {

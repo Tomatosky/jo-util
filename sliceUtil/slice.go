@@ -303,9 +303,9 @@ func Sum[T numberUtil.Number](nums ...T) T {
 	return sum
 }
 
-// JoinSlice 将切片中的元素连接成一个字符串
-// 例: JoinSlice([]int{1, 2, 3}, ",") // "1,2,3"
-func JoinSlice[T any](slice []T, sep string) string {
+// Join 将切片中的元素连接成一个字符串
+// 例: Join([]int{1, 2, 3}, ",") // "1,2,3"
+func Join[T any](slice []T, sep string) string {
 	strs := make([]string, len(slice))
 	for i, v := range slice {
 		strs[i] = convertor.ToString(v)
