@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"math/rand"
 	"runtime/debug"
+	"strings"
 	"time"
 
+	"github.com/Tomatosky/jo-util/convertor"
 	"github.com/Tomatosky/jo-util/numberUtil"
 )
 
@@ -299,4 +301,14 @@ func Sum[T numberUtil.Number](nums ...T) T {
 		sum += v
 	}
 	return sum
+}
+
+// JoinSlice 将切片中的元素连接成一个字符串
+// 例: JoinSlice([]int{1, 2, 3}, ",") // "1,2,3"
+func JoinSlice[T any](slice []T, sep string) string {
+	strs := make([]string, len(slice))
+	for i, v := range slice {
+		strs[i] = convertor.ToString(v)
+	}
+	return strings.Join(strs, sep)
 }

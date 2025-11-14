@@ -561,3 +561,87 @@ func TestToMap(t *testing.T) {
 		}
 	})
 }
+
+// 测试JoinSlice函数
+func TestJoinSlice(t *testing.T) {
+	tests := []struct {
+		name     string
+		slice    interface{}
+		sep      string
+		expected string
+	}{
+		// 测试整数切片
+		{"整数切片-空分隔符", []int{1, 2, 3}, "", "123"},
+		{"整数切片-逗号分隔", []int{1, 2, 3}, ",", "1,2,3"},
+		{"整数切片-空格分隔", []int{1, 2, 3}, " ", "1 2 3"},
+		{"整数切片-单个元素", []int{42}, ",", "42"},
+		{"整数切片-空切片", []int{}, ",", ""},
+
+		// 测试字符串切片
+		{"字符串切片-空分隔符", []string{"a", "b", "c"}, "", "abc"},
+		{"字符串切片-逗号分隔", []string{"a", "b", "c"}, ",", "a,b,c"},
+		{"字符串切片-复杂分隔符", []string{"hello", "world"}, " - ", "hello - world"},
+		{"字符串切片-空字符串元素", []string{"", "b", ""}, ",", ",b,"},
+		{"字符串切片-单个元素", []string{"test"}, ",", "test"},
+		{"字符串切片-空切片", []string{}, ",", ""},
+
+		// 测试浮点数切片
+		{"浮点数切片-逗号分隔", []float64{1.1, 2.2, 3.3}, ",", "1.1,2.2,3.3"},
+		{"浮点数切片-负数和零", []float64{-1.5, 0, 3.14}, "|", "-1.5|0|3.14"},
+
+		// 测试布尔值切片
+		{"布尔值切片", []bool{true, false, true}, ",", "true,false,true"},
+
+		// 测试特殊分隔符
+		{"特殊分隔符-换行符", []int{1, 2, 3}, "\n", "1\n2\n3"},
+		{"特殊分隔符-制表符", []string{"a", "b"}, "\t", "a\tb"},
+		{"特殊分隔符-多字符", []int{1, 2}, "---", "1---2"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var result string
+
+			// 根据切片类型调用对应的JoinSlice函数
+			switch s := tt.slice.(type) {
+			case []int:
+				result = JoinSlice(s, tt.sep)
+			case []string:
+				result = JoinSlice(s, tt.sep)
+			case []float64:
+				result = JoinSlice(s, tt.sep)
+			case []bool:
+				result = JoinSlice(s, tt.sep)
+			default:
+				t.Errorf("不支持的切片类型: %T", s)
+				return
+			}
+
+			if result != tt.expected {
+				t.Errorf("JoinSlice(%v, %q) = %q, 期望 %q", tt.slice, tt.sep, result, tt.expected)
+			}
+		})
+	}
+}
+
+// 测试边界情况和异常情况
+func TestJoinSliceEdgeCases(t *testing.T) {
+	// 测试nil切片
+	var nilSlice []int
+	result := JoinSlice(nilSlice, ",")
+	if result != "" {
+		t.Errorf("JoinSlice(nil, ',') = %q, 期望 \"\"", result)
+	}
+
+	// 测试包含nil指针的切片（需要自定义类型）
+	type myStruct struct {
+		value string
+	}
+
+	sliceWithNil := []*myStruct{nil, {value: "test"}, nil}
+	result2 := JoinSlice(sliceWithNil, "|")
+	// 注意：convertor.ToString(nil) 通常会返回某种字符串表示，如"<nil>"
+	// 这里我们主要测试函数不会panic
+	if result2 == "" {
+		t.Error("JoinSlice包含nil指针的切片返回了空字符串")
+	}
+}
