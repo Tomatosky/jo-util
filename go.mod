@@ -7,7 +7,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/panjf2000/ants/v2 v2.11.3
 	go.mongodb.org/mongo-driver v1.17.6
-	go.uber.org/zap v1.27.0
+	go.uber.org/zap v1.27.1
 	golang.org/x/exp v0.0.0-20251113190631-e25ba8c21ef6
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
