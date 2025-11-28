@@ -16,6 +16,7 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"io"
 	"os"
 	"runtime/debug"
@@ -29,32 +30,42 @@ const (
 	Pkcs7Padding
 )
 
-// AesEcbEncrypt encrypt data with key use AES ECB algorithm.
+// AesEcbEncryptWithErr encrypt data with key use AES ECB algorithm.
 // len(key) must be 16, 24 or 32.
-func AesEcbEncrypt(data, key []byte, paddingType PaddingType) []byte {
-	size := len(key)
-	if size != 16 && size != 24 && size != 32 {
-		debug.PrintStack()
-		panic("invalid key size")
+func AesEcbEncryptWithErr(data, key []byte, paddingType PaddingType) ([]byte, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
 	}
-	block, _ := aes.NewCipher(key)
-	data = addPadding(data, block.BlockSize(), paddingType)
+	data, err = addPadding(data, block.BlockSize(), paddingType)
+	if err != nil {
+		return nil, err
+	}
 	encrypted := make([]byte, len(data))
 	for bs, be := 0, block.BlockSize(); bs < len(data); bs, be = bs+block.BlockSize(), be+block.BlockSize() {
 		block.Encrypt(encrypted[bs:be], data[bs:be])
 	}
+	return encrypted, nil
+}
+
+// AesEcbEncrypt encrypt data with key use AES ECB algorithm.
+// len(key) must be 16, 24 or 32.
+func AesEcbEncrypt(data, key []byte, paddingType PaddingType) []byte {
+	encrypted, err := AesEcbEncryptWithErr(data, key, paddingType)
+	if err != nil {
+		debug.PrintStack()
+		panic(err)
+	}
 	return encrypted
 }
 
-// AesEcbDecrypt decrypt data with key use AES ECB algorithm.
+// AesEcbDecryptWithErr decrypt data with key use AES ECB algorithm.
 // len(key) must be 16, 24 or 32.
-func AesEcbDecrypt(encrypted, key []byte, paddingType PaddingType) []byte {
-	size := len(key)
-	if size != 16 && size != 24 && size != 32 {
-		debug.PrintStack()
-		panic("invalid key size")
+func AesEcbDecryptWithErr(encrypted, key []byte, paddingType PaddingType) ([]byte, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
 	}
-	block, _ := aes.NewCipher(key)
 	decrypted := make([]byte, len(encrypted))
 	for bs, be := 0, block.BlockSize(); bs < len(encrypted); bs, be = bs+block.BlockSize(), be+block.BlockSize() {
 		block.Decrypt(decrypted[bs:be], encrypted[bs:be])
@@ -62,36 +73,56 @@ func AesEcbDecrypt(encrypted, key []byte, paddingType PaddingType) []byte {
 	return removePadding(decrypted, paddingType)
 }
 
-// AesCbcEncrypt encrypt data with key use AES CBC algorithm.
+// AesEcbDecrypt decrypt data with key use AES ECB algorithm.
 // len(key) must be 16, 24 or 32.
-func AesCbcEncrypt(data, key []byte, paddingType PaddingType) []byte {
-	size := len(key)
-	if size != 16 && size != 24 && size != 32 {
-		debug.PrintStack()
-		panic("invalid key size")
-	}
-	block, _ := aes.NewCipher(key)
-	data = addPadding(data, block.BlockSize(), paddingType)
-	encrypted := make([]byte, aes.BlockSize+len(data))
-	iv := encrypted[:aes.BlockSize]
-	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
+func AesEcbDecrypt(encrypted, key []byte, paddingType PaddingType) []byte {
+	decrypted, err := AesEcbDecryptWithErr(encrypted, key, paddingType)
+	if err != nil {
 		debug.PrintStack()
 		panic(err)
 	}
+	return decrypted
+}
+
+// AesCbcEncryptWithErr encrypt data with key use AES CBC algorithm.
+// len(key) must be 16, 24 or 32.
+func AesCbcEncryptWithErr(data, key []byte, paddingType PaddingType) ([]byte, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	data, err = addPadding(data, block.BlockSize(), paddingType)
+	if err != nil {
+		return nil, err
+	}
+	encrypted := make([]byte, aes.BlockSize+len(data))
+	iv := encrypted[:aes.BlockSize]
+	if _, err = io.ReadFull(rand.Reader, iv); err != nil {
+		return nil, err
+	}
 	mode := cipher.NewCBCEncrypter(block, iv)
 	mode.CryptBlocks(encrypted[aes.BlockSize:], data)
+	return encrypted, nil
+}
+
+// AesCbcEncrypt encrypt data with key use AES CBC algorithm.
+// len(key) must be 16, 24 or 32.
+func AesCbcEncrypt(data, key []byte, paddingType PaddingType) []byte {
+	encrypted, err := AesCbcEncryptWithErr(data, key, paddingType)
+	if err != nil {
+		debug.PrintStack()
+		panic(err)
+	}
 	return encrypted
 }
 
-// AesCbcDecrypt decrypt data with key use AES CBC algorithm.
+// AesCbcDecryptWithErr decrypt data with key use AES CBC algorithm.
 // len(key) must be 16, 24 or 32.
-func AesCbcDecrypt(encrypted, key []byte, paddingType PaddingType) []byte {
-	size := len(key)
-	if size != 16 && size != 24 && size != 32 {
-		debug.PrintStack()
-		panic("invalid key size")
+func AesCbcDecryptWithErr(encrypted, key []byte, paddingType PaddingType) ([]byte, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
 	}
-	block, _ := aes.NewCipher(key)
 	iv := encrypted[:aes.BlockSize]
 	encrypted = encrypted[aes.BlockSize:]
 	mode := cipher.NewCBCDecrypter(block, iv)
@@ -99,16 +130,28 @@ func AesCbcDecrypt(encrypted, key []byte, paddingType PaddingType) []byte {
 	return removePadding(encrypted, paddingType)
 }
 
+// AesCbcDecrypt decrypt data with key use AES CBC algorithm.
+// len(key) must be 16, 24 or 32.
+func AesCbcDecrypt(encrypted, key []byte, paddingType PaddingType) []byte {
+	decrypted, err := AesCbcDecryptWithErr(encrypted, key, paddingType)
+	if err != nil {
+		debug.PrintStack()
+		panic(err)
+	}
+	return decrypted
+}
+
 // AesCtrCrypt encrypt/decrypt data with key use AES CTR algorithm.
 // len(key) must be 16, 24 or 32.
-func AesCtrCrypt(data, key []byte, paddingType PaddingType) []byte {
-	size := len(key)
-	if size != 16 && size != 24 && size != 32 {
-		debug.PrintStack()
-		panic("invalid key size")
+func AesCtrCrypt(data, key []byte, paddingType PaddingType) ([]byte, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
 	}
-	block, _ := aes.NewCipher(key)
-	data = addPadding(data, block.BlockSize(), paddingType)
+	data, err = addPadding(data, block.BlockSize(), paddingType)
+	if err != nil {
+		return nil, err
+	}
 	iv := bytes.Repeat([]byte{1}, block.BlockSize())
 	stream := cipher.NewCTR(block, iv)
 	dst := make([]byte, len(data))
@@ -118,14 +161,15 @@ func AesCtrCrypt(data, key []byte, paddingType PaddingType) []byte {
 
 // AesCfbEncrypt encrypt data with key use AES CFB algorithm.
 // len(key) must be 16, 24 or 32.
-func AesCfbEncrypt(data, key []byte, paddingType PaddingType) []byte {
-	size := len(key)
-	if size != 16 && size != 24 && size != 32 {
-		debug.PrintStack()
-		panic("invalid key size")
+func AesCfbEncrypt(data, key []byte, paddingType PaddingType) ([]byte, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
 	}
-	block, _ := aes.NewCipher(key)
-	data = addPadding(data, block.BlockSize(), paddingType)
+	data, err = addPadding(data, block.BlockSize(), paddingType)
+	if err != nil {
+		return nil, err
+	}
 
 	encrypted := make([]byte, aes.BlockSize+len(data))
 	iv := encrypted[:aes.BlockSize]
@@ -135,23 +179,20 @@ func AesCfbEncrypt(data, key []byte, paddingType PaddingType) []byte {
 	}
 	stream := cipher.NewCFBEncrypter(block, iv)
 	stream.XORKeyStream(encrypted[aes.BlockSize:], data)
-	return encrypted
+	return encrypted, nil
 }
 
 // AesCfbDecrypt decrypt data with key use AES CFB algorithm.
 // len(encrypted) must be greater than aes blocksize.
 // len(key) must be 16, 24 or 32.
-func AesCfbDecrypt(encrypted, key []byte, paddingType PaddingType) []byte {
-	size := len(key)
-	if size != 16 && size != 24 && size != 32 {
-		debug.PrintStack()
-		panic("invalid key size")
+func AesCfbDecrypt(encrypted, key []byte, paddingType PaddingType) ([]byte, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
 	}
 	if len(encrypted) < aes.BlockSize {
-		debug.PrintStack()
-		panic("invalid ciphertext size")
+		return nil, errors.New("invalid ciphertext size")
 	}
-	block, _ := aes.NewCipher(key)
 	iv := encrypted[:aes.BlockSize]
 	encrypted = encrypted[aes.BlockSize:]
 	stream := cipher.NewCFBDecrypter(block, iv)
@@ -162,34 +203,35 @@ func AesCfbDecrypt(encrypted, key []byte, paddingType PaddingType) []byte {
 
 // AesOfbEncrypt encrypt data with key use AES OFB algorithm.
 // len(key) must be 16, 24 or 32.
-func AesOfbEncrypt(data, key []byte, paddingType PaddingType) []byte {
-	size := len(key)
-	if size != 16 && size != 24 && size != 32 {
-		debug.PrintStack()
-		panic("invalid key size")
+func AesOfbEncrypt(data, key []byte, paddingType PaddingType) ([]byte, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
 	}
-	block, _ := aes.NewCipher(key)
-	data = addPadding(data, block.BlockSize(), paddingType)
+	data, err = addPadding(data, block.BlockSize(), paddingType)
+	if err != nil {
+		return nil, err
+	}
 	encrypted := make([]byte, aes.BlockSize+len(data))
 	iv := encrypted[:aes.BlockSize]
-	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
-		debug.PrintStack()
-		panic(err)
+	if _, err = io.ReadFull(rand.Reader, iv); err != nil {
+		return nil, err
 	}
 	stream := cipher.NewOFB(block, iv)
 	stream.XORKeyStream(encrypted[aes.BlockSize:], data)
-	return encrypted
+	return encrypted, nil
 }
 
 // AesOfbDecrypt decrypt data with key use AES OFB algorithm.
 // len(key) must be 16, 24 or 32.
-func AesOfbDecrypt(encrypted, key []byte, paddingType PaddingType) []byte {
-	size := len(key)
-	if size != 16 && size != 24 && size != 32 {
-		debug.PrintStack()
-		panic("invalid key size")
+func AesOfbDecrypt(encrypted, key []byte, paddingType PaddingType) ([]byte, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
 	}
-	block, _ := aes.NewCipher(key)
+	if len(encrypted) < aes.BlockSize {
+		return nil, errors.New("invalid ciphertext size")
+	}
 	iv := encrypted[:aes.BlockSize]
 	encrypted = encrypted[aes.BlockSize:]
 	stream := cipher.NewOFB(block, iv)

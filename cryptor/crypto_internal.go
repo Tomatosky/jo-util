@@ -2,7 +2,7 @@ package cryptor
 
 import (
 	"bytes"
-	"runtime/debug"
+	"errors"
 )
 
 func generateAesKey(key []byte, size int) []byte {
@@ -27,35 +27,32 @@ func generateDesKey(key []byte) []byte {
 	return genKey
 }
 
-func addPadding(data []byte, blockSize int, paddingType PaddingType) []byte {
+func addPadding(data []byte, blockSize int, paddingType PaddingType) ([]byte, error) {
 	switch paddingType {
 	case Pkcs7Padding:
-		return pkcs7Padding(data, blockSize)
+		return pkcs7Padding(data, blockSize), nil
 	case ZeroPadding:
-		return zeroPadding(data, blockSize)
+		return zeroPadding(data, blockSize), nil
 	case NoPadding:
 		if len(data)%blockSize != 0 {
-			debug.PrintStack()
-			panic("data length is not aligned to block size")
+			return nil, errors.New("data length is not aligned to block size")
 		}
-		return data
+		return data, nil
 	default:
-		debug.PrintStack()
-		panic("unknown padding type")
+		return nil, errors.New("unknown padding type")
 	}
 }
 
-func removePadding(data []byte, paddingType PaddingType) []byte {
+func removePadding(data []byte, paddingType PaddingType) ([]byte, error) {
 	switch paddingType {
 	case Pkcs7Padding:
-		return pkcs7UnPadding(data)
+		return pkcs7UnPadding(data), nil
 	case ZeroPadding:
-		return zeroUnPadding(data)
+		return zeroUnPadding(data), nil
 	case NoPadding:
-		return data
+		return data, nil
 	default:
-		debug.PrintStack()
-		panic("unknown padding type")
+		return nil, errors.New("unknown padding type")
 	}
 }
 
