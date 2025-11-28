@@ -143,20 +143,18 @@ func AesCbcDecrypt(encrypted, key []byte, paddingType PaddingType) []byte {
 
 // AesCtrCrypt encrypt/decrypt data with key use AES CTR algorithm.
 // len(key) must be 16, 24 or 32.
+// Note: CTR mode is a stream cipher mode, no padding is needed.
 func AesCtrCrypt(data, key []byte, paddingType PaddingType) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
 	}
-	data, err = addPadding(data, block.BlockSize(), paddingType)
-	if err != nil {
-		return nil, err
-	}
+	// CTR mode doesn't need padding
 	iv := bytes.Repeat([]byte{1}, block.BlockSize())
 	stream := cipher.NewCTR(block, iv)
 	dst := make([]byte, len(data))
 	stream.XORKeyStream(dst, data)
-	return removePadding(dst, paddingType)
+	return dst, nil
 }
 
 // AesCfbEncrypt encrypt data with key use AES CFB algorithm.
