@@ -257,7 +257,7 @@ func TestGetWithExpiration(t *testing.T) {
 	// 测试1: 获取存在的键及其过期时间
 	t.Run("Existing Key with Expiration", func(t *testing.T) {
 		cache1.Set("key1", 100)
-		val, exp, found := cache1.GetWithExpiration("key1")
+		val, found, exp := cache1.GetWithExpiration("key1")
 		if !found {
 			t.Error("GetWithExpiration failed: should find existing key")
 		}
@@ -271,7 +271,7 @@ func TestGetWithExpiration(t *testing.T) {
 
 	// 测试2: 获取不存在的键
 	t.Run("Non-existent Key", func(t *testing.T) {
-		_, _, found := cache1.GetWithExpiration("nonexistent")
+		_, found, _ := cache1.GetWithExpiration("nonexistent")
 		if found {
 			t.Error("GetWithExpiration failed: should not find non-existent key")
 		}
@@ -281,7 +281,7 @@ func TestGetWithExpiration(t *testing.T) {
 	t.Run("Expired Key", func(t *testing.T) {
 		cache1.Set("key2", 200)
 		time.Sleep(1100 * time.Millisecond) // 等待1.1秒让key2过期
-		_, _, found := cache1.GetWithExpiration("key2")
+		_, found, _ := cache1.GetWithExpiration("key2")
 		if found {
 			t.Error("GetWithExpiration failed: should not find expired key")
 		}
@@ -291,7 +291,7 @@ func TestGetWithExpiration(t *testing.T) {
 	t.Run("No Expiration Cache", func(t *testing.T) {
 		noExpirecache1 := New[string, int](0)
 		noExpirecache1.Set("key3", 300)
-		val, exp, found := noExpirecache1.GetWithExpiration("key3")
+		val, found, exp := noExpirecache1.GetWithExpiration("key3")
 		if !found {
 			t.Error("GetWithExpiration failed: should find key in no-expiration cache")
 		}
@@ -306,7 +306,7 @@ func TestGetWithExpiration(t *testing.T) {
 	// 测试5: 自定义过期时间的键
 	t.Run("Custom Expiration", func(t *testing.T) {
 		cache1.Set("key4", 400, 2*time.Second)
-		_, exp, found := cache1.GetWithExpiration("key4")
+		_, found, exp := cache1.GetWithExpiration("key4")
 		if !found {
 			t.Error("GetWithExpiration failed: should find key with custom expiration")
 		}
@@ -321,7 +321,7 @@ func TestGetWithExpiration(t *testing.T) {
 	// 测试6: 零值测试
 	t.Run("Zero Value", func(t *testing.T) {
 		cache1.Set("key5", 0)
-		val, _, found := cache1.GetWithExpiration("key5")
+		val, found, _ := cache1.GetWithExpiration("key5")
 		if !found {
 			t.Error("GetWithExpiration failed: should find zero value")
 		}
@@ -340,7 +340,7 @@ func TestGetWithExpiration(t *testing.T) {
 		for i := 0; i < numReaders; i++ {
 			go func() {
 				defer wg.Done()
-				val, _, found := cache1.GetWithExpiration("key6")
+				val, found, _ := cache1.GetWithExpiration("key6")
 				if !found || val != 600 {
 					t.Error("Concurrent GetWithExpiration failed")
 				}
