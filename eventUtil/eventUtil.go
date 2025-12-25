@@ -12,6 +12,8 @@ import (
 	"go.uber.org/zap"
 )
 
+var Inst *EventManager
+
 // EventHandler 定义事件处理函数的类型
 type EventHandler func(data interface{})
 
