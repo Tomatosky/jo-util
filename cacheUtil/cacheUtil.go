@@ -21,7 +21,7 @@ type Cache[K comparable, V any] struct {
 
 type cache[K comparable, V any] struct {
 	expiration   time.Duration
-	items        map[K]Item[V]
+	items        map[K]*Item[V]
 	mu           sync.RWMutex
 	janitor      *janitor[K, V]
 	accessExpire bool // 是否启用访问过期模式（expireAfterAccess）
@@ -34,7 +34,7 @@ type cache[K comparable, V any] struct {
 func New[K comparable, V any](expiration time.Duration) *Cache[K, V] {
 	c := &cache[K, V]{
 		expiration:   expiration,
-		items:        make(map[K]Item[V]),
+		items:        make(map[K]*Item[V]),
 		accessExpire: false,
 	}
 	C := &Cache[K, V]{c}
@@ -53,7 +53,7 @@ func New[K comparable, V any](expiration time.Duration) *Cache[K, V] {
 func NewAccessExpire[K comparable, V any](expiration time.Duration) *Cache[K, V] {
 	c := &cache[K, V]{
 		expiration:   expiration,
-		items:        make(map[K]Item[V]),
+		items:        make(map[K]*Item[V]),
 		accessExpire: true,
 	}
 	C := &Cache[K, V]{c}
@@ -75,7 +75,7 @@ func (c *cache[K, V]) Set(k K, x V, expiration ...time.Duration) {
 	if len(expiration) > 0 {
 		exp = time.Now().Add(expiration[0]).UnixNano()
 	}
-	c.items[k] = Item[V]{
+	c.items[k] = &Item[V]{
 		Object:     x,
 		Expiration: exp,
 	}
@@ -87,7 +87,7 @@ func (c *cache[K, V]) Set(k K, x V, expiration ...time.Duration) {
 // 参数 k 为缓存的键，类型为 K。
 // 参数 x 为缓存的值，类型为 V。
 func (c *cache[K, V]) set(k K, x V) {
-	c.items[k] = Item[V]{
+	c.items[k] = &Item[V]{
 		Object:     x,
 		Expiration: time.Now().Add(c.expiration).UnixNano(),
 	}
@@ -198,10 +198,10 @@ func (c *cache[K, V]) deleteExpired() {
 // Items 方法用于获取缓存中所有未过期的键值对。
 // 该方法会加读锁，确保在遍历缓存时不会被其他 goroutine 并发修改，同时允许多个读操作并发执行。
 // 返回一个包含所有未过期键值对的新 map。
-func (c *cache[K, V]) Items() map[K]Item[V] {
+func (c *cache[K, V]) Items() map[K]V {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	m := make(map[K]Item[V], len(c.items))
+	m := make(map[K]V, len(c.items))
 	now := time.Now().UnixNano()
 	for k, v := range c.items {
 		if c.expiration > 0 && v.Expiration > 0 {
@@ -209,7 +209,7 @@ func (c *cache[K, V]) Items() map[K]Item[V] {
 				continue
 			}
 		}
-		m[k] = v
+		m[k] = v.Object
 	}
 	return m
 }
@@ -219,7 +219,7 @@ func (c *cache[K, V]) Items() map[K]Item[V] {
 // 操作完成后再释放写锁。
 func (c *cache[K, V]) Flush() {
 	c.mu.Lock()
-	c.items = make(map[K]Item[V])
+	c.items = make(map[K]*Item[V])
 	c.mu.Unlock()
 }
 
