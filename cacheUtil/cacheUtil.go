@@ -78,7 +78,7 @@ func (c *cache[K, V]) set(k K, x V) {
 // 返回值为 bool 类型，若成功设置键值对返回 true，若键已存在返回 false。
 func (c *cache[K, V]) SetIfAbsent(k K, x V) bool {
 	c.mu.Lock()
-	_, found := c.get(k)
+	_, found, _ := c.get(k)
 	if found {
 		c.mu.Unlock()
 		return false
@@ -94,19 +94,10 @@ func (c *cache[K, V]) SetIfAbsent(k K, x V) bool {
 // 返回值依次为缓存项的值、缓存项是否存在且未过期的标志。
 func (c *cache[K, V]) Get(k K) (V, bool) {
 	c.mu.RLock()
-	item, found := c.items[k]
-	if !found {
-		c.mu.RUnlock()
-		var zero V
-		return zero, false
-	}
-	if c.expiration > 0 && time.Now().UnixNano() > item.Expiration {
-		c.mu.RUnlock()
-		var zero V
-		return zero, false
-	}
-	c.mu.RUnlock()
-	return item.Object, true
+	defer c.mu.RUnlock()
+
+	obj, found, _ := c.get(k)
+	return obj, found
 }
 
 // get 是一个辅助方法，用于根据键从缓存中获取对应的值。
@@ -114,44 +105,32 @@ func (c *cache[K, V]) Get(k K) (V, bool) {
 // 若缓存项存在且未过期，返回该值和 true；若缓存项不存在或已过期，返回对应类型的零值和 false。
 // 参数 k 为要查找的缓存键。
 // 返回值依次为缓存项的值、缓存项是否存在且未过期的标志。
-func (c *cache[K, V]) get(k K) (V, bool) {
+func (c *cache[K, V]) get(k K) (V, bool, time.Time) {
 	item, found := c.items[k]
 	if !found {
 		var zero V
-		return zero, false
+		return zero, false, time.Time{}
 	}
 	if c.expiration > 0 && time.Now().UnixNano() > item.Expiration {
 		var zero V
-		return zero, false
+		return zero, false, time.Time{}
 	}
-	return item.Object, true
+	expirationTime := time.Unix(0, item.Expiration)
+	if c.expiration == 0 {
+		expirationTime = time.Unix(0, 0)
+	}
+	return item.Object, true, expirationTime
 }
 
 // GetWithExpiration 根据键获取缓存项，并返回缓存项的值、过期时间以及是否存在的标志。
 // 若缓存项不存在或已过期，将返回对应类型的零值、零时间和 false。
 // 参数 k 为要查找的缓存键。
 // 返回值依次为缓存项的值、缓存项的过期时间、缓存项是否存在且未过期的标志。
-func (c *cache[K, V]) GetWithExpiration(k K) (V, time.Time, bool) {
+func (c *cache[K, V]) GetWithExpiration(k K) (V, bool, time.Time) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	item, found := c.items[k]
-	if !found {
-		var zero V
-		return zero, time.Time{}, false
-	}
-
-	if c.expiration > 0 && time.Now().UnixNano() > item.Expiration {
-		var zero V
-		return zero, time.Time{}, false
-	}
-
-	// 将纳秒时间戳转换为time.Time
-	expirationTime := time.Unix(0, item.Expiration)
-	if c.expiration == 0 {
-		expirationTime = time.Unix(0, 0)
-	}
-	return item.Object, expirationTime, true
+	return c.get(k)
 }
 
 // Delete 方法用于从缓存中删除指定键对应的缓存项。
