@@ -51,6 +51,7 @@ func BenchmarkSyncMap_Put_100w(b *testing.B) {
 }
 
 func benchmarkSyncMapPut(b *testing.B, size int, keyType, valueType string) {
+	fmt.Printf("  → 执行 Put 操作测试: sync.Map | 数据规模: %d\n", size)
 	var memStart, memEnd runtime.MemStats
 	runtime.GC()
 	runtime.ReadMemStats(&memStart)
@@ -101,6 +102,7 @@ func BenchmarkNativeMap_Put_100w(b *testing.B) {
 }
 
 func benchmarkNativeMapPut(b *testing.B, size int, keyType, valueType string) {
+	fmt.Printf("  → 执行 Put 操作测试: NativeMap | 数据规模: %d\n", size)
 	var memStart, memEnd runtime.MemStats
 	runtime.GC()
 	runtime.ReadMemStats(&memStart)
@@ -151,6 +153,7 @@ func BenchmarkConcurrentHashMap_Put_100w(b *testing.B) {
 }
 
 func benchmarkConcurrentHashMapPut(b *testing.B, size int, keyType, valueType string) {
+	fmt.Printf("  → 执行 Put 操作测试: ConcurrentHashMap | 数据规模: %d\n", size)
 	var memStart, memEnd runtime.MemStats
 	runtime.GC()
 	runtime.ReadMemStats(&memStart)
@@ -201,6 +204,7 @@ func BenchmarkConcurrentSkipListMap_Put_100w(b *testing.B) {
 }
 
 func benchmarkConcurrentSkipListMapPut(b *testing.B, size int, keyType, valueType string) {
+	fmt.Printf("  → 执行 Put 操作测试: ConcurrentSkipListMap | 数据规模: %d\n", size)
 	var memStart, memEnd runtime.MemStats
 	runtime.GC()
 	runtime.ReadMemStats(&memStart)
@@ -251,6 +255,7 @@ func BenchmarkOrderedMap_Put_100w(b *testing.B) {
 }
 
 func benchmarkOrderedMapPut(b *testing.B, size int, keyType, valueType string) {
+	fmt.Printf("  → 执行 Put 操作测试: OrderedMap | 数据规模: %d\n", size)
 	var memStart, memEnd runtime.MemStats
 	runtime.GC()
 	runtime.ReadMemStats(&memStart)
@@ -301,6 +306,7 @@ func BenchmarkTreeMap_Put_100w(b *testing.B) {
 }
 
 func benchmarkTreeMapPut(b *testing.B, size int, keyType, valueType string) {
+	fmt.Printf("  → 执行 Put 操作测试: TreeMap | 数据规模: %d\n", size)
 	var memStart, memEnd runtime.MemStats
 	runtime.GC()
 	runtime.ReadMemStats(&memStart)
@@ -340,6 +346,7 @@ func benchmarkTreeMapPut(b *testing.B, size int, keyType, valueType string) {
 // ==================== Get 性能测试 ====================
 
 func BenchmarkSyncMap_Get_10w(b *testing.B) {
+	fmt.Printf("  → 执行 Get 操作测试: sync.Map | 数据规模: 100000\n")
 	var sm sync.Map
 	for j := 0; j < 100000; j++ {
 		sm.Store(fmt.Sprintf("key_%d", j), j)
@@ -385,6 +392,7 @@ func BenchmarkNativeMap_Get_10w(b *testing.B) {
 }
 
 func benchmarkNativeMapGet(b *testing.B, size int) {
+	fmt.Printf("  → 执行 Get 操作测试: NativeMap | 数据规模: %d\n", size)
 	m := make(map[string]int)
 	for j := 0; j < size; j++ {
 		m[fmt.Sprintf("key_%d", j)] = j
@@ -426,6 +434,7 @@ func benchmarkNativeMapGet(b *testing.B, size int) {
 }
 
 func BenchmarkConcurrentHashMap_Get_10w(b *testing.B) {
+	fmt.Printf("  → 执行 Get 操作测试: ConcurrentHashMap | 数据规模: 100000\n")
 	cm := NewConcurrentHashMap[string, int]()
 	for j := 0; j < 100000; j++ {
 		cm.Put(fmt.Sprintf("key_%d", j), j)
@@ -467,6 +476,7 @@ func BenchmarkConcurrentHashMap_Get_10w(b *testing.B) {
 }
 
 func BenchmarkConcurrentSkipListMap_Get_10w(b *testing.B) {
+	fmt.Printf("  → 执行 Get 操作测试: ConcurrentSkipListMap | 数据规模: 100000\n")
 	csm := NewConcurrentSkipListMap[int, int]()
 	for j := 0; j < 100000; j++ {
 		csm.Put(j, j)
@@ -508,6 +518,7 @@ func BenchmarkConcurrentSkipListMap_Get_10w(b *testing.B) {
 }
 
 func BenchmarkOrderedMap_Get_10w(b *testing.B) {
+	fmt.Printf("  → 执行 Get 操作测试: OrderedMap | 数据规模: 100000\n")
 	om := NewOrderedMap[string, int]()
 	for j := 0; j < 100000; j++ {
 		om.Put(fmt.Sprintf("key_%d", j), j)
@@ -549,6 +560,7 @@ func BenchmarkOrderedMap_Get_10w(b *testing.B) {
 }
 
 func BenchmarkTreeMap_Get_10w(b *testing.B) {
+	fmt.Printf("  → 执行 Get 操作测试: TreeMap | 数据规模: 100000\n")
 	tm := NewTreeMap[int, int](func(a, b int) bool { return a < b })
 	for j := 0; j < 100000; j++ {
 		tm.Put(j, j)
@@ -600,6 +612,7 @@ func BenchmarkSyncMap_ConcurrentPut_100Goroutines(b *testing.B) {
 }
 
 func benchmarkSyncMapConcurrentPut(b *testing.B, size, goroutines int) {
+	fmt.Printf("  → 执行 ConcurrentPut 操作测试: sync.Map | 数据规模: %d | 并发度: %d\n", size, goroutines)
 	var memStart, memEnd runtime.MemStats
 	runtime.GC()
 	runtime.ReadMemStats(&memStart)
@@ -654,6 +667,7 @@ func BenchmarkConcurrentHashMap_ConcurrentPut_100Goroutines(b *testing.B) {
 }
 
 func benchmarkConcurrentHashMapConcurrentPut(b *testing.B, size, goroutines int) {
+	fmt.Printf("  → 执行 ConcurrentPut 操作测试: ConcurrentHashMap | 数据规模: %d | 并发度: %d\n", size, goroutines)
 	var memStart, memEnd runtime.MemStats
 	runtime.GC()
 	runtime.ReadMemStats(&memStart)
@@ -708,6 +722,7 @@ func BenchmarkConcurrentSkipListMap_ConcurrentPut_100Goroutines(b *testing.B) {
 }
 
 func benchmarkConcurrentSkipListMapConcurrentPut(b *testing.B, size, goroutines int) {
+	fmt.Printf("  → 执行 ConcurrentPut 操作测试: ConcurrentSkipListMap | 数据规模: %d | 并发度: %d\n", size, goroutines)
 	var memStart, memEnd runtime.MemStats
 	runtime.GC()
 	runtime.ReadMemStats(&memStart)
@@ -758,6 +773,7 @@ func BenchmarkTreeMap_ConcurrentPut_10Goroutines(b *testing.B) {
 }
 
 func benchmarkTreeMapConcurrentPut(b *testing.B, size, goroutines int) {
+	fmt.Printf("  → 执行 ConcurrentPut 操作测试: TreeMap | 数据规模: %d | 并发度: %d\n", size, goroutines)
 	var memStart, memEnd runtime.MemStats
 	runtime.GC()
 	runtime.ReadMemStats(&memStart)
@@ -806,6 +822,7 @@ func benchmarkTreeMapConcurrentPut(b *testing.B, size, goroutines int) {
 // ==================== 遍历性能测试 ====================
 
 func BenchmarkSyncMap_Range_10w(b *testing.B) {
+	fmt.Printf("  → 执行 Range 操作测试: sync.Map | 数据规模: 100000\n")
 	var sm sync.Map
 	for j := 0; j < 100000; j++ {
 		sm.Store(fmt.Sprintf("key_%d", j), j)
@@ -849,6 +866,7 @@ func BenchmarkSyncMap_Range_10w(b *testing.B) {
 }
 
 func BenchmarkNativeMap_Range_10w(b *testing.B) {
+	fmt.Printf("  → 执行 Range 操作测试: NativeMap | 数据规模: 100000\n")
 	m := make(map[string]int)
 	for j := 0; j < 100000; j++ {
 		m[fmt.Sprintf("key_%d", j)] = j
@@ -891,6 +909,7 @@ func BenchmarkNativeMap_Range_10w(b *testing.B) {
 }
 
 func BenchmarkConcurrentHashMap_Range_10w(b *testing.B) {
+	fmt.Printf("  → 执行 Range 操作测试: ConcurrentHashMap | 数据规模: 100000\n")
 	cm := NewConcurrentHashMap[string, int]()
 	for j := 0; j < 100000; j++ {
 		cm.Put(fmt.Sprintf("key_%d", j), j)
@@ -934,6 +953,7 @@ func BenchmarkConcurrentHashMap_Range_10w(b *testing.B) {
 }
 
 func BenchmarkOrderedMap_Range_10w(b *testing.B) {
+	fmt.Printf("  → 执行 Range 操作测试: OrderedMap | 数据规模: 100000\n")
 	om := NewOrderedMap[string, int]()
 	for j := 0; j < 100000; j++ {
 		om.Put(fmt.Sprintf("key_%d", j), j)
@@ -979,6 +999,7 @@ func BenchmarkOrderedMap_Range_10w(b *testing.B) {
 // ==================== 混合操作测试 ====================
 
 func BenchmarkSyncMap_Mixed_10w(b *testing.B) {
+	fmt.Printf("  → 执行 Mixed 操作测试: sync.Map | 数据规模: 100000\n")
 	var memStart, memEnd runtime.MemStats
 	runtime.GC()
 	runtime.ReadMemStats(&memStart)
@@ -1028,6 +1049,7 @@ func BenchmarkSyncMap_Mixed_10w(b *testing.B) {
 }
 
 func BenchmarkNativeMap_Mixed_10w(b *testing.B) {
+	fmt.Printf("  → 执行 Mixed 操作测试: NativeMap | 数据规模: 100000\n")
 	var memStart, memEnd runtime.MemStats
 	runtime.GC()
 	runtime.ReadMemStats(&memStart)
@@ -1077,6 +1099,7 @@ func BenchmarkNativeMap_Mixed_10w(b *testing.B) {
 }
 
 func BenchmarkConcurrentHashMap_Mixed_10w(b *testing.B) {
+	fmt.Printf("  → 执行 Mixed 操作测试: ConcurrentHashMap | 数据规模: 100000\n")
 	var memStart, memEnd runtime.MemStats
 	runtime.GC()
 	runtime.ReadMemStats(&memStart)
