@@ -20,10 +20,11 @@ type Cache[K comparable, V any] struct {
 }
 
 type cache[K comparable, V any] struct {
-	expiration time.Duration
-	items      map[K]Item[V]
-	mu         sync.RWMutex
-	janitor    *janitor[K, V]
+	expiration   time.Duration
+	items        map[K]Item[V]
+	mu           sync.RWMutex
+	janitor      *janitor[K, V]
+	accessExpire bool // 是否启用访问过期模式（expireAfterAccess）
 }
 
 // New 函数用于创建一个新的缓存实例。
@@ -32,8 +33,28 @@ type cache[K comparable, V any] struct {
 // 返回值为指向 Cache[K, V] 类型的指针，代表新创建的缓存实例。
 func New[K comparable, V any](expiration time.Duration) *Cache[K, V] {
 	c := &cache[K, V]{
-		expiration: expiration,
-		items:      make(map[K]Item[V]),
+		expiration:   expiration,
+		items:        make(map[K]Item[V]),
+		accessExpire: false,
+	}
+	C := &Cache[K, V]{c}
+	if expiration > 0 {
+		runJanitor(c) // 自动启用janitor
+		runtime.SetFinalizer(C, stopJanitor[K, V])
+	}
+	return C
+}
+
+// NewAccessExpire 函数用于创建一个具有访问过期特性的缓存实例。
+// 与 New 函数不同，该缓存实例中的每个缓存项在每次被访问时都会重置其过期时间。
+// 只有在指定的过期时间内未被访问的缓存项才会过期。
+// 参数 expiration 为缓存项的过期时间，类型为 time.Duration。
+// 返回值为指向 Cache[K, V] 类型的指针，代表新创建的缓存实例。
+func NewAccessExpire[K comparable, V any](expiration time.Duration) *Cache[K, V] {
+	c := &cache[K, V]{
+		expiration:   expiration,
+		items:        make(map[K]Item[V]),
+		accessExpire: true,
 	}
 	C := &Cache[K, V]{c}
 	if expiration > 0 {
@@ -101,10 +122,11 @@ func (c *cache[K, V]) Get(k K) (V, bool) {
 }
 
 // get 是一个辅助方法，用于根据键从缓存中获取对应的值。
-// 该方法不会加锁，调用时需要确保已经获取了读锁，避免并发修改问题。
+// 该方法不会加锁，调用时需要确保已经获取了读锁或写锁，避免并发修改问题。
 // 若缓存项存在且未过期，返回该值和 true；若缓存项不存在或已过期，返回对应类型的零值和 false。
+// 在访问过期模式下（accessExpire），该方法会自动重置缓存项的过期时间。
 // 参数 k 为要查找的缓存键。
-// 返回值依次为缓存项的值、缓存项是否存在且未过期的标志。
+// 返回值依次为缓存项的值、缓存项是否存在且未过期的标志、过期时间。
 func (c *cache[K, V]) get(k K) (V, bool, time.Time) {
 	item, found := c.items[k]
 	if !found {
@@ -115,6 +137,14 @@ func (c *cache[K, V]) get(k K) (V, bool, time.Time) {
 		var zero V
 		return zero, false, time.Time{}
 	}
+
+	// 在访问过期模式下，重置过期时间
+	if c.accessExpire {
+		newExpiration := time.Now().Add(c.expiration)
+		item.Expiration = newExpiration.UnixNano()
+		return item.Object, true, newExpiration
+	}
+
 	expirationTime := time.Unix(0, item.Expiration)
 	if c.expiration == 0 {
 		expirationTime = time.Unix(0, 0)
@@ -125,7 +155,7 @@ func (c *cache[K, V]) get(k K) (V, bool, time.Time) {
 // GetWithExpiration 根据键获取缓存项，并返回缓存项的值、过期时间以及是否存在的标志。
 // 若缓存项不存在或已过期，将返回对应类型的零值、零时间和 false。
 // 参数 k 为要查找的缓存键。
-// 返回值依次为缓存项的值、缓存项的过期时间、缓存项是否存在且未过期的标志。
+// 返回值依次为缓存项的值、缓存项是否存在且未过期的标志、缓存项的过期时间。
 func (c *cache[K, V]) GetWithExpiration(k K) (V, bool, time.Time) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
