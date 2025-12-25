@@ -8,7 +8,7 @@ require (
 	github.com/panjf2000/ants/v2 v2.11.3
 	go.mongodb.org/mongo-driver v1.17.6
 	go.uber.org/zap v1.27.1
-	golang.org/x/exp v0.0.0-20251113190631-e25ba8c21ef6
+	golang.org/x/exp v0.0.0-20251219203646-944ab1f22d93
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 
@@ -22,6 +22,6 @@ require (
 	github.com/youmark/pkcs8 v0.0.0-20240726163527-a2c0da244d78 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/crypto v0.26.0 // indirect
-	golang.org/x/sync v0.18.0 // indirect
+	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/text v0.17.0 // indirect
 )
