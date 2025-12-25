@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func TestRun(t *testing.T) {
+func BenchmarkRun(b *testing.B) {
 	fmt.Println("=================================================================")
 	fmt.Println("           Go Map 数据结构性能对比测试")
 	fmt.Println("=================================================================")
