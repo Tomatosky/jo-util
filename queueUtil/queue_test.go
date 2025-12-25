@@ -1,126 +1,367 @@
 package queueUtil
 
-import "testing"
+import (
+	"testing"
+)
 
-func TestQueue(t *testing.T) {
-	// 测试1: 创建新队列
+// TestNewQueue 测试队列创建
+func TestNewQueue(t *testing.T) {
 	q := NewQueue[int]()
 	if q == nil {
-		t.Fatal("创建队列失败")
+		t.Fatal("NewQueue should not return nil")
 	}
 	if q.Len() != 0 {
-		t.Fatal("新创建的队列长度应该为0")
+		t.Errorf("New queue should have length 0, got %d", q.Len())
+	}
+}
+
+// TestEnqueue 测试入队操作
+func TestEnqueue(t *testing.T) {
+	q := NewQueue[int]()
+
+	// 测试单个元素入队
+	q.Enqueue(1)
+	if q.Len() != 1 {
+		t.Errorf("After one enqueue, length should be 1, got %d", q.Len())
 	}
 
-	// 测试2: 入队操作
-	q.Enqueue(1)
+	// 测试多个元素入队
 	q.Enqueue(2)
 	q.Enqueue(3)
 	if q.Len() != 3 {
-		t.Errorf("入队后队列长度应该为3，实际为%d", q.Len())
+		t.Errorf("After three enqueues, length should be 3, got %d", q.Len())
+	}
+}
+
+// TestDequeue 测试出队操作
+func TestDequeue(t *testing.T) {
+	q := NewQueue[int]()
+
+	// 测试空队列出队
+	_, ok := q.Dequeue()
+	if ok {
+		t.Error("Dequeue from empty queue should return false")
 	}
 
-	// 测试3: 出队操作
-	item, ok := q.Dequeue()
+	// 测试正常出队
+	q.Enqueue(1)
+	q.Enqueue(2)
+	q.Enqueue(3)
+
+	val, ok := q.Dequeue()
 	if !ok {
-		t.Error("出队操作应该成功")
+		t.Error("Dequeue should succeed")
 	}
-	if item != 1 {
-		t.Errorf("出队元素应该为1，实际为%d", item)
+	if val != 1 {
+		t.Errorf("Expected 1, got %d", val)
 	}
 	if q.Len() != 2 {
-		t.Errorf("出队后队列长度应该为2，实际为%d", q.Len())
+		t.Errorf("After one dequeue, length should be 2, got %d", q.Len())
 	}
 
-	// 测试4: 连续出队
-	item, ok = q.Dequeue()
-	if !ok || item != 2 {
-		t.Error("第二次出队失败")
+	val, ok = q.Dequeue()
+	if !ok {
+		t.Error("Dequeue should succeed")
 	}
-	item, ok = q.Dequeue()
-	if !ok || item != 3 {
-		t.Error("第三次出队失败")
+	if val != 2 {
+		t.Errorf("Expected 2, got %d", val)
 	}
+}
+
+// TestFIFO 测试先进先出特性
+func TestFIFO(t *testing.T) {
+	q := NewQueue[int]()
+
+	// 入队 1-10
+	for i := 1; i <= 10; i++ {
+		q.Enqueue(i)
+	}
+
+	// 出队并验证顺序
+	for i := 1; i <= 10; i++ {
+		val, ok := q.Dequeue()
+		if !ok {
+			t.Fatalf("Dequeue failed at position %d", i)
+		}
+		if val != i {
+			t.Errorf("Expected %d, got %d", i, val)
+		}
+	}
+
+	// 验证队列为空
 	if q.Len() != 0 {
-		t.Errorf("全部出队后队列长度应该为0，实际为%d", q.Len())
+		t.Errorf("Queue should be empty, got length %d", q.Len())
+	}
+}
+
+// TestShrink 测试缩容机制
+func TestShrink(t *testing.T) {
+	q := NewQueue[int]()
+
+	// 入队 200 个元素
+	for i := 0; i < 200; i++ {
+		q.Enqueue(i)
 	}
 
-	// 测试5: 空队列出队
-	item, ok = q.Dequeue()
-	if ok {
-		t.Error("空队列出队应该失败")
-	}
-	var zero int
-	if item != zero {
-		t.Error("空队列出队应该返回零值")
-	}
-
-	// 测试6: 测试字符串类型
-	strQueue := NewQueue[string]()
-	strQueue.Enqueue("hello")
-	strQueue.Enqueue("world")
-	if strQueue.Len() != 2 {
-		t.Error("字符串队列长度错误")
-	}
-	str, ok := strQueue.Dequeue()
-	if !ok || str != "hello" {
-		t.Error("字符串队列出队失败")
+	// 出队 150 个元素,应该触发缩容
+	for i := 0; i < 150; i++ {
+		val, ok := q.Dequeue()
+		if !ok {
+			t.Fatalf("Dequeue failed at position %d", i)
+		}
+		if val != i {
+			t.Errorf("Expected %d, got %d", i, val)
+		}
 	}
 
-	// 测试7: 测试结构体类型
+	// 验证剩余元素数量
+	if q.Len() != 50 {
+		t.Errorf("Expected 50 remaining items, got %d", q.Len())
+	}
+
+	// 验证剩余元素的正确性
+	for i := 150; i < 200; i++ {
+		val, ok := q.Dequeue()
+		if !ok {
+			t.Fatalf("Dequeue failed at position %d", i)
+		}
+		if val != i {
+			t.Errorf("Expected %d, got %d", i, val)
+		}
+	}
+}
+
+// TestMixedOperations 测试混合操作
+func TestMixedOperations(t *testing.T) {
+	q := NewQueue[int]()
+
+	// 交替入队和出队
+	q.Enqueue(1)
+	q.Enqueue(2)
+
+	val, ok := q.Dequeue()
+	if !ok || val != 1 {
+		t.Errorf("Expected 1, got %d, ok=%v", val, ok)
+	}
+
+	q.Enqueue(3)
+	q.Enqueue(4)
+
+	val, ok = q.Dequeue()
+	if !ok || val != 2 {
+		t.Errorf("Expected 2, got %d, ok=%v", val, ok)
+	}
+
+	val, ok = q.Dequeue()
+	if !ok || val != 3 {
+		t.Errorf("Expected 3, got %d, ok=%v", val, ok)
+	}
+
+	val, ok = q.Dequeue()
+	if !ok || val != 4 {
+		t.Errorf("Expected 4, got %d, ok=%v", val, ok)
+	}
+
+	// 队列应该为空
+	if q.Len() != 0 {
+		t.Errorf("Queue should be empty, got length %d", q.Len())
+	}
+}
+
+// TestZeroValue 测试零值类型
+func TestZeroValue(t *testing.T) {
+	q := NewQueue[int]()
+
+	// 入队零值
+	q.Enqueue(0)
+
+	val, ok := q.Dequeue()
+	if !ok {
+		t.Error("Dequeue should succeed")
+	}
+	if val != 0 {
+		t.Errorf("Expected 0, got %d", val)
+	}
+}
+
+// TestStringQueue 测试字符串类型队列
+func TestStringQueue(t *testing.T) {
+	q := NewQueue[string]()
+
+	q.Enqueue("hello")
+	q.Enqueue("world")
+
+	val, ok := q.Dequeue()
+	if !ok || val != "hello" {
+		t.Errorf("Expected 'hello', got '%s', ok=%v", val, ok)
+	}
+
+	val, ok = q.Dequeue()
+	if !ok || val != "world" {
+		t.Errorf("Expected 'world', got '%s', ok=%v", val, ok)
+	}
+}
+
+// TestStructQueue 测试结构体类型队列
+func TestStructQueue(t *testing.T) {
 	type Person struct {
 		Name string
 		Age  int
 	}
-	personQueue := NewQueue[Person]()
-	personQueue.Enqueue(Person{"Alice", 25})
-	personQueue.Enqueue(Person{"Bob", 30})
-	if personQueue.Len() != 2 {
-		t.Error("结构体队列长度错误")
+
+	q := NewQueue[Person]()
+
+	p1 := Person{Name: "Alice", Age: 30}
+	p2 := Person{Name: "Bob", Age: 25}
+
+	q.Enqueue(p1)
+	q.Enqueue(p2)
+
+	val, ok := q.Dequeue()
+	if !ok {
+		t.Fatal("Dequeue should succeed")
 	}
-	person, ok := personQueue.Dequeue()
-	if !ok || person.Name != "Alice" || person.Age != 25 {
-		t.Error("结构体队列出队失败")
+	if val.Name != "Alice" || val.Age != 30 {
+		t.Errorf("Expected Alice, 30, got %s, %d", val.Name, val.Age)
 	}
 
-	// 测试8: 测试缩容机制
-	// 创建大量元素触发缩容
-	largeQueue := NewQueue[int]()
-	for i := 0; i < 200; i++ {
-		largeQueue.Enqueue(i)
+	val, ok = q.Dequeue()
+	if !ok {
+		t.Fatal("Dequeue should succeed")
 	}
-	// 出队101个元素，触发缩容条件
-	for i := 0; i < 101; i++ {
-		largeQueue.Dequeue()
+	if val.Name != "Bob" || val.Age != 25 {
+		t.Errorf("Expected Bob, 25, got %s, %d", val.Name, val.Age)
 	}
-	// 检查队列长度是否正确
-	if largeQueue.Len() != 99 {
-		t.Errorf("缩容后队列长度应该为99，实际为%d", largeQueue.Len())
-	}
-	// 检查下一个出队元素是否正确
-	item, ok = largeQueue.Dequeue()
-	if !ok || item != 101 {
-		t.Errorf("缩容后出队元素应该为101，实际为%d", item)
+}
+
+// TestLargeQueue 测试大量数据
+func TestLargeQueue(t *testing.T) {
+	q := NewQueue[int]()
+
+	const size = 10000
+
+	// 入队大量数据
+	for i := 0; i < size; i++ {
+		q.Enqueue(i)
 	}
 
-	// 测试9: 边界情况测试
-	emptyQueue := NewQueue[bool]()
-	if emptyQueue.Len() != 0 {
-		t.Error("空队列长度应该为0")
+	if q.Len() != size {
+		t.Errorf("Expected length %d, got %d", size, q.Len())
 	}
 
-	// 测试10: 混合操作测试
-	mixedQueue := NewQueue[int]()
-	for i := 0; i < 10; i++ {
-		mixedQueue.Enqueue(i)
+	// 出队并验证
+	for i := 0; i < size; i++ {
+		val, ok := q.Dequeue()
+		if !ok {
+			t.Fatalf("Dequeue failed at position %d", i)
+		}
+		if val != i {
+			t.Errorf("Expected %d, got %d", i, val)
+		}
 	}
-	for i := 0; i < 5; i++ {
-		mixedQueue.Dequeue()
+
+	if q.Len() != 0 {
+		t.Errorf("Queue should be empty, got length %d", q.Len())
 	}
-	for i := 10; i < 15; i++ {
-		mixedQueue.Enqueue(i)
+}
+
+// TestEmptyQueueLen 测试空队列的长度
+func TestEmptyQueueLen(t *testing.T) {
+	q := NewQueue[int]()
+
+	if q.Len() != 0 {
+		t.Errorf("Empty queue should have length 0, got %d", q.Len())
 	}
-	if mixedQueue.Len() != 10 {
-		t.Errorf("混合操作后队列长度应该为10，实际为%d", mixedQueue.Len())
+
+	// 入队后出队
+	q.Enqueue(1)
+	q.Dequeue()
+
+	if q.Len() != 0 {
+		t.Errorf("Queue should be empty after dequeue, got length %d", q.Len())
+	}
+}
+
+// TestDequeueAll 测试出队所有元素后继续出队
+func TestDequeueAll(t *testing.T) {
+	q := NewQueue[int]()
+
+	q.Enqueue(1)
+	q.Enqueue(2)
+
+	q.Dequeue()
+	q.Dequeue()
+
+	// 尝试从空队列出队
+	_, ok := q.Dequeue()
+	if ok {
+		t.Error("Dequeue from empty queue should return false")
+	}
+
+	// 再次入队应该正常工作
+	q.Enqueue(3)
+	val, ok := q.Dequeue()
+	if !ok || val != 3 {
+		t.Errorf("Expected 3, got %d, ok=%v", val, ok)
+	}
+}
+
+// TestPointerQueue 测试指针类型队列
+func TestPointerQueue(t *testing.T) {
+	q := NewQueue[*int]()
+
+	val1 := 42
+	val2 := 100
+
+	q.Enqueue(&val1)
+	q.Enqueue(&val2)
+
+	p1, ok := q.Dequeue()
+	if !ok {
+		t.Fatal("Dequeue should succeed")
+	}
+	if *p1 != 42 {
+		t.Errorf("Expected 42, got %d", *p1)
+	}
+
+	p2, ok := q.Dequeue()
+	if !ok {
+		t.Fatal("Dequeue should succeed")
+	}
+	if *p2 != 100 {
+		t.Errorf("Expected 100, got %d", *p2)
+	}
+}
+
+// BenchmarkEnqueue 性能测试:入队
+func BenchmarkEnqueue(b *testing.B) {
+	q := NewQueue[int]()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		q.Enqueue(i)
+	}
+}
+
+// BenchmarkDequeue 性能测试:出队
+func BenchmarkDequeue(b *testing.B) {
+	q := NewQueue[int]()
+	for i := 0; i < b.N; i++ {
+		q.Enqueue(i)
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		q.Dequeue()
+	}
+}
+
+// BenchmarkMixed 性能测试:混合操作
+func BenchmarkMixed(b *testing.B) {
+	q := NewQueue[int]()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		q.Enqueue(i)
+		if i%2 == 0 {
+			q.Dequeue()
+		}
 	}
 }
