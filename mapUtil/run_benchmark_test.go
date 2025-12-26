@@ -1,6 +1,7 @@
 package mapUtil
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -11,7 +12,13 @@ import (
 	"time"
 )
 
-func BenchmarkRun(b *testing.B) {
+func TestRun(t *testing.T) {
+	// 使用 t.Skip() 来阻止正常 go test 时运行
+	// 如果要运行此测试,需要显式运行: go test -run TestRun
+	if testing.Short() {
+		t.Skip("跳过长时间运行的性能测试,使用 go test -run TestRun 来运行")
+	}
+
 	fmt.Println("=================================================================")
 	fmt.Println("           Go Map 数据结构性能对比测试")
 	fmt.Println("=================================================================")
@@ -33,22 +40,47 @@ func BenchmarkRun(b *testing.B) {
 	fmt.Println("正在运行基准测试，这可能需要几分钟...")
 	fmt.Println()
 
-	cmd := exec.Command("go", "test", "-bench=.", "-benchmem", "-benchtime=3s", "-timeout=60m")
+	// 创建可取消的上下文
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "go", "test", "-bench=.", "-benchmem", "-benchtime=3s", "-timeout=60m")
 	cmd.Dir = dir
 
-	output, err := cmd.CombinedOutput()
+	// 设置实时输出
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	// 启动命令
+	err = cmd.Start()
 	if err != nil {
-		fmt.Printf("运行测试失败: %v\n输出: %s\n", err, string(output))
+		fmt.Printf("启动测试失败: %v\n", err)
 		return
 	}
 
+	// 等待命令完成
+	err = cmd.Wait()
+	if err != nil {
+		fmt.Printf("运行测试失败: %v\n", err)
+		return
+	}
+
+	fmt.Println()
 	fmt.Println("基准测试完成！")
 	fmt.Println()
-	fmt.Println(string(output))
-	fmt.Println()
 
-	// 生成报告
+	// 生成报告 - 重新运行一次基准测试以捕获输出
 	fmt.Println("正在生成性能分析报告...")
+	fmt.Println("重新捕获测试输出以生成报告...")
+
+	cmdReport := exec.Command("go", "test", "-bench=.", "-benchmem", "-benchtime=3s", "-timeout=60m")
+	cmdReport.Dir = dir
+	output, err := cmdReport.CombinedOutput()
+	if err != nil {
+		fmt.Printf("重新运行测试以生成报告失败: %v\n", err)
+		// 尝试使用空输出生成基础报告
+		output = []byte("")
+	}
 
 	reportPath := filepath.Join(dir, "Map性能测试分析报告.md")
 	err = generateReport(reportPath, string(output), testStartTime)

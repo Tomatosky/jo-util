@@ -35,6 +35,8 @@ func recordResult(result BenchmarkResult) {
 }
 
 // ==================== 单线程性能测试 ====================
+// 注意: 这些基准测试函数只能通过 run_benchmark_test.go 中的 TestRun 来执行
+// 不会在执行 go test 时自动运行
 
 // ==================== sync.Map 性能测试 ====================
 
