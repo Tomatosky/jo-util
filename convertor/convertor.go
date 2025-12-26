@@ -4,18 +4,19 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"math"
 	"reflect"
-	"runtime/debug"
 	"strconv"
+
+	"github.com/Tomatosky/jo-util/logger"
 )
 
 func ToBool(value any) bool {
 	s := ToString(value)
 	parseBool, err := strconv.ParseBool(s)
 	if err != nil {
-		debug.PrintStack()
-		panic(err)
+		logger.Log.Fatal(fmt.Sprintf("%v", err))
 	}
 	return parseBool
 }
@@ -25,8 +26,7 @@ func ToInt(value any) int {
 	s := ToString(value)
 	f, err := strconv.ParseFloat(s, 64)
 	if err != nil {
-		debug.PrintStack()
-		panic(err)
+		logger.Log.Fatal(fmt.Sprintf("%v", err))
 	}
 	return int(f)
 }
@@ -36,8 +36,7 @@ func ToInt32(value any) int32 {
 	s := ToString(value)
 	f, err := strconv.ParseFloat(s, 64)
 	if err != nil {
-		debug.PrintStack()
-		panic(err)
+		logger.Log.Fatal(fmt.Sprintf("%v", err))
 	}
 	return int32(f)
 }
@@ -47,8 +46,7 @@ func ToInt64(value any) int64 {
 	s := ToString(value)
 	f, err := strconv.ParseFloat(s, 64)
 	if err != nil {
-		debug.PrintStack()
-		panic(err)
+		logger.Log.Fatal(fmt.Sprintf("%v", err))
 	}
 	return int64(f)
 }
@@ -58,8 +56,7 @@ func ToFloat32(value any) float32 {
 	s := ToString(value)
 	f32, err := strconv.ParseFloat(s, 32)
 	if err != nil {
-		debug.PrintStack()
-		panic(err)
+		logger.Log.Fatal(fmt.Sprintf("%v", err))
 	}
 	return float32(f32)
 }
@@ -69,8 +66,7 @@ func ToFloat64(value any) float64 {
 	s := ToString(value)
 	f64, err := strconv.ParseFloat(s, 64)
 	if err != nil {
-		debug.PrintStack()
-		panic(err)
+		logger.Log.Fatal(fmt.Sprintf("%v", err))
 	}
 	return f64
 }

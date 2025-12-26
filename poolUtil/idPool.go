@@ -3,16 +3,15 @@ package poolUtil
 import (
 	"context"
 	"fmt"
-	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/Tomatosky/jo-util/convertor"
 	"github.com/Tomatosky/jo-util/idUtil"
+	"github.com/Tomatosky/jo-util/logger"
 	"github.com/Tomatosky/jo-util/mapUtil"
 	"github.com/Tomatosky/jo-util/randomUtil"
-	"go.uber.org/zap"
 )
 
 var _ IPool = (*IdPool)(nil)
@@ -24,7 +23,6 @@ type IdPool struct {
 	cores        int64
 	running      atomic.Bool    // 控制服务运行状态
 	wg           sync.WaitGroup // 用于等待所有worker退出
-	logger       *zap.Logger
 	poolName     string
 }
 
@@ -42,14 +40,12 @@ type customTask struct {
 type IdPoolOpt struct {
 	PoolSize  int64
 	QueueSize int
-	Logger    *zap.Logger
 	PoolName  string
 }
 
 func NewIdPool(opt *IdPoolOpt) *IdPool {
 	if opt.PoolSize <= 0 || opt.QueueSize <= 0 {
-		debug.PrintStack()
-		panic("pool size and queue size must be greater than 0")
+		logger.Log.Fatal(fmt.Sprintf("%v", "pool size and queue size must be greater than 0"))
 	}
 
 	idPool := &IdPool{
@@ -57,9 +53,6 @@ func NewIdPool(opt *IdPoolOpt) *IdPool {
 		workers:      make([]*worker, opt.PoolSize),
 		taskIdMap:    mapUtil.NewConcurrentHashMap[string, int64](),
 		idTaskCounts: mapUtil.NewConcurrentHashMap[int64, *atomic.Int32](),
-	}
-	if opt.Logger != nil {
-		idPool.logger = opt.Logger
 	}
 	idPool.running.Store(true)
 	// 初始化 workers
@@ -97,11 +90,7 @@ func (i *IdPool) SubmitWithId(id any, task func()) {
 	select {
 	case w.queue <- &customTask{taskID: taskID, task: task}:
 	default:
-		if i.logger != nil {
-			i.logger.Warn(fmt.Sprintf("%s queue is full", i.poolName))
-		} else {
-			fmt.Println(fmt.Sprintf("%s queue is full", i.poolName))
-		}
+		logger.Log.Warn(fmt.Sprintf("%s queue is full", i.poolName))
 	}
 }
 
@@ -193,12 +182,7 @@ func (w *worker) processTask(task *customTask) {
 	defer func() {
 		err := recover()
 		if err != nil {
-			if w.idPool.logger != nil {
-				w.idPool.logger.Error(fmt.Sprintf("err=%v", err))
-			} else {
-				fmt.Println(fmt.Sprintf("err=%v", err))
-				debug.PrintStack()
-			}
+			logger.Log.Error(fmt.Sprintf("err=%v", err))
 		}
 
 		// 清理任务映射并减少计数

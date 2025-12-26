@@ -2,9 +2,11 @@ package mapUtil
 
 import (
 	"encoding/json"
+	"fmt"
 	"runtime/debug"
 	"sync"
 
+	"github.com/Tomatosky/jo-util/logger"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
@@ -216,8 +218,7 @@ func (bm *BiMap[K, V]) ToString() string {
 	defer bm.mu.RUnlock()
 	bytes, err := json.Marshal(bm.forward)
 	if err != nil {
-		debug.PrintStack()
-		panic(err)
+		logger.Log.Fatal(fmt.Sprintf("%v", err))
 	}
 	return string(bytes)
 }

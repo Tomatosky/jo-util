@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/Tomatosky/jo-util/convertor"
+	"github.com/Tomatosky/jo-util/logger"
 )
 
 // RequestClient 是一个HTTP客户端工具类
@@ -43,8 +44,7 @@ func NewRequestClient() *RequestClient {
 func (rc *RequestClient) SetProxy(proxy string) {
 	proxyUrl, err := url.Parse(proxy)
 	if err != nil {
-		debug.PrintStack()
-		panic(err)
+		logger.Log.Fatal(fmt.Sprintf("%v", err))
 	}
 	rc.Client.Transport = &http.Transport{
 		TLSClientConfig: &tls.Config{

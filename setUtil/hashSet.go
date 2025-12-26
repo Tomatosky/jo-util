@@ -2,8 +2,9 @@ package setUtil
 
 import (
 	"encoding/json"
-	"runtime/debug"
+	"fmt"
 
+	"github.com/Tomatosky/jo-util/logger"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/bsontype"
 )
@@ -81,8 +82,7 @@ func (s *HashSet[T]) IsEmpty() bool {
 func (s *HashSet[T]) ToString() string {
 	bytes, err := json.Marshal(s.ToSlice())
 	if err != nil {
-		debug.PrintStack()
-		panic(err)
+		logger.Log.Fatal(fmt.Sprintf("%v", err))
 	}
 	return string(bytes)
 }

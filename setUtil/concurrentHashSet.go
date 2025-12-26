@@ -2,8 +2,9 @@ package setUtil
 
 import (
 	"encoding/json"
-	"runtime/debug"
+	"fmt"
 
+	"github.com/Tomatosky/jo-util/logger"
 	"github.com/Tomatosky/jo-util/mapUtil"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/bsontype"
@@ -75,8 +76,7 @@ func (s *ConcurrentHashSet[T]) IsEmpty() bool {
 func (s *ConcurrentHashSet[T]) ToString() string {
 	bytes, err := json.Marshal(s.ToSlice())
 	if err != nil {
-		debug.PrintStack()
-		panic(err)
+		logger.Log.Fatal(fmt.Sprintf("%v", err))
 	}
 	return string(bytes)
 }

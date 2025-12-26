@@ -2,9 +2,10 @@ package mapUtil
 
 import (
 	"encoding/json"
+	"fmt"
 	"iter"
-	"runtime/debug"
 
+	"github.com/Tomatosky/jo-util/logger"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
@@ -213,8 +214,7 @@ func (m *OrderedMap[K, V]) ToString() string {
 	toMap := m.ToMap()
 	bytes, err := json.Marshal(toMap)
 	if err != nil {
-		debug.PrintStack()
-		panic(err)
+		logger.Log.Fatal(fmt.Sprintf("%v", err))
 	}
 	return string(bytes)
 }

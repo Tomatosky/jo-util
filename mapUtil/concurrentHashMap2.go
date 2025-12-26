@@ -2,9 +2,10 @@ package mapUtil
 
 import (
 	"encoding/json"
-	"runtime/debug"
+	"fmt"
 	"sync"
 
+	"github.com/Tomatosky/jo-util/logger"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
@@ -109,8 +110,7 @@ func (cm *ConcurrentHashMap2[K, V]) ToString() string {
 	m := cm.ToMap()
 	bytes, err := json.Marshal(m)
 	if err != nil {
-		debug.PrintStack()
-		panic(err)
+		logger.Log.Fatal(fmt.Sprintf("%v", err))
 	}
 	return string(bytes)
 }

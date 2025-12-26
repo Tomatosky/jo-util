@@ -3,18 +3,20 @@ package mapUtil
 import (
 	"cmp"
 	"encoding/json"
+	"fmt"
 	"math/rand"
 	"runtime/debug"
 	"sync"
 
+	"github.com/Tomatosky/jo-util/logger"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
 var _ IMap[string, int] = (*ConcurrentSkipListMap[string, int])(nil)
 
 const (
-	maxLevel     = 32   // 跳表最大层级
-	probability  = 0.25 // 晋升概率
+	maxLevel    = 32   // 跳表最大层级
+	probability = 0.25 // 晋升概率
 )
 
 // skipListNode 跳表节点
@@ -346,8 +348,7 @@ func (csm *ConcurrentSkipListMap[K, V]) ToString() string {
 
 	bytes, err := json.Marshal(m)
 	if err != nil {
-		debug.PrintStack()
-		panic(err)
+		logger.Log.Fatal(fmt.Sprintf("%v", err))
 	}
 	return string(bytes)
 }

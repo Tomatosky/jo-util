@@ -2,9 +2,9 @@ package idUtil
 
 import (
 	"fmt"
-	"runtime/debug"
 	"strings"
 
+	"github.com/Tomatosky/jo-util/logger"
 	"github.com/bwmarrin/snowflake"
 	"github.com/google/uuid"
 )
@@ -27,8 +27,7 @@ func getSnowflake() snowflake.ID {
 		var err error
 		snowflakeNode, err = snowflake.NewNode(1)
 		if err != nil {
-			debug.PrintStack()
-			panic(fmt.Sprintf("Snowflake node initialization failed: %v", err))
+			logger.Log.Fatal(fmt.Sprintf("Snowflake node initialization failed: %v", err))
 		}
 	}
 	return snowflakeNode.Generate()

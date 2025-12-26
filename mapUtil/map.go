@@ -2,9 +2,11 @@ package mapUtil
 
 import (
 	"encoding/json"
+	"fmt"
 	"runtime/debug"
 	"sort"
 
+	"github.com/Tomatosky/jo-util/logger"
 	"golang.org/x/exp/constraints"
 )
 
@@ -56,8 +58,7 @@ func PutIfAbsent[K comparable, V any](m map[K]V, key K, defaultValue V) {
 func ToString[K comparable, V any](m map[K]V) string {
 	marshal, err := json.Marshal(m)
 	if err != nil {
-		debug.PrintStack()
-		panic(err)
+		logger.Log.Fatal(fmt.Sprintf("%v", err))
 	}
 	return string(marshal)
 }

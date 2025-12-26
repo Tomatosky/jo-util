@@ -11,6 +11,10 @@ import (
 
 var Log *zap.Logger
 
+func init() {
+	Log = InitLog(nil)
+}
+
 func InitLog(w io.Writer) *zap.Logger {
 	var coreArr []zapcore.Core
 

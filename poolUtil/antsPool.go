@@ -2,10 +2,11 @@ package poolUtil
 
 import (
 	"context"
-	"runtime/debug"
+	"fmt"
 	"sync"
 	"time"
 
+	"github.com/Tomatosky/jo-util/logger"
 	"github.com/panjf2000/ants/v2"
 )
 
@@ -27,8 +28,7 @@ func (p *AntsPool) SubmitWithId(id any, task func()) {
 
 func (p *AntsPool) Submit(task func()) {
 	if task == nil {
-		debug.PrintStack()
-		panic("task cannot be nil")
+		logger.Log.Fatal(fmt.Sprintf("%v", "task cannot be nil"))
 	}
 	p.wg.Add(1)
 	_ = p.pool.Submit(func() {

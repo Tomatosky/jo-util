@@ -2,9 +2,11 @@ package sliceUtil
 
 import (
 	"encoding/json"
+	"fmt"
 	"runtime/debug"
 	"sync"
 
+	"github.com/Tomatosky/jo-util/logger"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/bsontype"
 )
@@ -49,8 +51,7 @@ func (c *CopyOnWriteSlice[T]) Insert(index int, element T) {
 	defer c.mu.Unlock()
 
 	if index < 0 || index > len(c.data) {
-		debug.PrintStack()
-		panic("index out of range")
+		logger.Log.Fatal(fmt.Sprintf("%v", "index out of range"))
 	}
 
 	// 创建长度+1的新数组
@@ -73,8 +74,7 @@ func (c *CopyOnWriteSlice[T]) Get(index int) T {
 		index += len(c.data)
 	}
 	if index < 0 || index >= len(c.data) {
-		debug.PrintStack()
-		panic("index out of range")
+		logger.Log.Fatal(fmt.Sprintf("%v", "index out of range"))
 	}
 	return c.data[index]
 }
@@ -85,8 +85,7 @@ func (c *CopyOnWriteSlice[T]) Remove(index int) T {
 	defer c.mu.Unlock()
 
 	if index < 0 || index >= len(c.data) {
-		debug.PrintStack()
-		panic("index out of range")
+		logger.Log.Fatal(fmt.Sprintf("%v", "index out of range"))
 	}
 
 	removed := c.data[index]
@@ -164,8 +163,7 @@ func (c *CopyOnWriteSlice[T]) ToString() string {
 
 	bytes, err := json.Marshal(c.data)
 	if err != nil {
-		debug.PrintStack()
-		panic(err)
+		logger.Log.Fatal(fmt.Sprintf("%v", err))
 	}
 	return string(bytes)
 }

@@ -3,13 +3,12 @@ package eventUtil
 import (
 	"errors"
 	"fmt"
-	"runtime/debug"
 	"sync"
 	"time"
 
+	"github.com/Tomatosky/jo-util/logger"
 	"github.com/Tomatosky/jo-util/poolUtil"
 	"github.com/Tomatosky/jo-util/randomUtil"
-	"go.uber.org/zap"
 )
 
 var Inst *EventManager
@@ -23,29 +22,24 @@ type EventManager struct {
 	pool       *poolUtil.IdPool
 	lock       sync.RWMutex
 	destroying bool
-	logger     *zap.Logger
 }
 
 type EventOpt struct {
 	PoolSize  int64
 	QueueSize int
-	Logger    *zap.Logger
 }
 
 // NewEventManager 创建一个新的事件管理器
 func NewEventManager(opt *EventOpt) *EventManager {
 	if opt.PoolSize <= 0 || opt.QueueSize <= 0 {
-		debug.PrintStack()
-		panic("pool size and queue size must be greater than 0")
+		logger.Log.Fatal(fmt.Sprintf("pool size and queue size must be greater than 0"))
 	}
 
 	manager := &EventManager{
 		handlers: make(map[string][]EventHandler),
-		logger:   opt.Logger,
 		pool: poolUtil.NewIdPool(&poolUtil.IdPoolOpt{
 			PoolSize:  opt.PoolSize,
 			QueueSize: opt.QueueSize,
-			Logger:    opt.Logger,
 			PoolName:  "event",
 		}),
 	}
@@ -117,12 +111,7 @@ func (em *EventManager) triggerHandle(f EventHandler, data interface{}) {
 	defer func() {
 		err := recover()
 		if err != nil {
-			if em.logger != nil {
-				em.logger.Error(fmt.Sprintf("error: %v", err))
-			} else {
-				debug.PrintStack()
-				fmt.Printf("panic: %v\n", err)
-			}
+			logger.Log.Error(fmt.Sprintf("error: %v", err))
 		}
 	}()
 

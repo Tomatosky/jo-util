@@ -1,18 +1,18 @@
 package randomUtil
 
 import (
+	"fmt"
 	"math/rand"
-	"runtime/debug"
 	"time"
 
+	"github.com/Tomatosky/jo-util/logger"
 	"github.com/Tomatosky/jo-util/numberUtil"
 )
 
 // RandomInt 生成指定范围 [start, end) 的随机整数
 func RandomInt[T numberUtil.Number](start, end T) T {
 	if start >= end {
-		debug.PrintStack()
-		panic("invalid range: start >= end")
+		logger.Log.Fatal(fmt.Sprintf("%v", "invalid range: start >= end"))
 	}
 	var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
 	return T(rng.Int63n(int64(end-start))) + start
@@ -21,8 +21,7 @@ func RandomInt[T numberUtil.Number](start, end T) T {
 // RandomEle 从切片中随机选择一个元素
 func RandomEle[T any](slice []T) T {
 	if len(slice) == 0 {
-		debug.PrintStack()
-		panic("slice is empty")
+		logger.Log.Fatal(fmt.Sprintf("%v", "slice is empty"))
 	}
 	var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
 	return slice[rng.Intn(len(slice))]
@@ -35,8 +34,7 @@ func RandomEleSet[T any](slice []T, n int) []T {
 	}
 	length := len(slice)
 	if length == 0 {
-		debug.PrintStack()
-		panic("slice is empty")
+		logger.Log.Fatal(fmt.Sprintf("%v", "slice is empty"))
 	}
 	if n > length {
 		n = length
@@ -60,8 +58,7 @@ func RandomWeightedKey[K comparable, V numberUtil.Number](weights map[K]V) K {
 
 	// 处理无效权重的情况
 	if sum == 0 {
-		debug.PrintStack()
-		panic("所有权重值总和不能为0")
+		logger.Log.Fatal(fmt.Sprintf("%v", "所有权重值总和不能为0"))
 	}
 
 	// 生成随机数
@@ -78,8 +75,9 @@ func RandomWeightedKey[K comparable, V numberUtil.Number](weights map[K]V) K {
 	}
 
 	// 理论上不会执行到这里（因为sum > 0）
-	debug.PrintStack()
-	panic("未找到有效键")
+	logger.Log.Fatal(fmt.Sprintf("%v", "未找到有效键"))
+	var zero K
+	return zero
 }
 
 // RandomString 生成包含数字和字母的随机字符串

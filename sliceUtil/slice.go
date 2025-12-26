@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
-	"runtime/debug"
 	"strings"
 	"time"
 
 	"github.com/Tomatosky/jo-util/convertor"
+	"github.com/Tomatosky/jo-util/logger"
 	"github.com/Tomatosky/jo-util/numberUtil"
 )
 
@@ -78,8 +78,7 @@ func Unique[T comparable](slice []T) []T {
 func ToString[T comparable](slice []T) string {
 	marshal, err := json.Marshal(slice)
 	if err != nil {
-		debug.PrintStack()
-		panic(err)
+		logger.Log.Fatal(fmt.Sprintf("%v", err))
 	}
 	return string(marshal)
 }
@@ -269,8 +268,7 @@ func Union[T comparable](a, b []T) []T {
 
 func Max[T numberUtil.Number](nums []T) T {
 	if len(nums) < 1 {
-		debug.PrintStack()
-		panic("mathutil.Max: empty list")
+		logger.Log.Fatal(fmt.Sprintf("%v", "mathutil.Max: empty list"))
 	}
 	max2 := nums[0]
 	for _, v := range nums {
@@ -283,8 +281,7 @@ func Max[T numberUtil.Number](nums []T) T {
 
 func Min[T numberUtil.Number](nums []T) T {
 	if len(nums) < 1 {
-		debug.PrintStack()
-		panic("mathutil.min: empty list")
+		logger.Log.Fatal(fmt.Sprintf("%v", "mathutil.min: empty list"))
 	}
 	min2 := nums[0]
 	for _, v := range nums {
