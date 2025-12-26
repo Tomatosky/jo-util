@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
-	"runtime/debug"
 	"sync"
 
 	"github.com/Tomatosky/jo-util/logger"
