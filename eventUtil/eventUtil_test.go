@@ -4,21 +4,15 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"go.uber.org/zap"
 )
 
 func TestEventManager(t *testing.T) {
-	// 初始化测试用的logger
-	logger, _ := zap.NewDevelopment()
-
 	// 测试NewEventManager
 	t.Run("TestNewEventManager", func(t *testing.T) {
 		// 测试正常情况
 		opt := &EventOpt{
 			PoolSize:  2,
 			QueueSize: 10,
-			Logger:    logger,
 		}
 		manager := NewEventManager(opt)
 		if manager == nil {
@@ -40,7 +34,7 @@ func TestEventManager(t *testing.T) {
 
 	// 测试Register
 	t.Run("TestRegister", func(t *testing.T) {
-		manager := NewEventManager(&EventOpt{PoolSize: 2, QueueSize: 10, Logger: logger})
+		manager := NewEventManager(&EventOpt{PoolSize: 2, QueueSize: 10})
 
 		// 测试正常注册
 		err := manager.Register("testEvent", func(data interface{}) {})
@@ -76,7 +70,7 @@ func TestEventManager(t *testing.T) {
 
 	// 测试Trigger和TriggerSync
 	t.Run("TestTrigger", func(t *testing.T) {
-		manager := NewEventManager(&EventOpt{PoolSize: 2, QueueSize: 10, Logger: logger})
+		manager := NewEventManager(&EventOpt{PoolSize: 2, QueueSize: 10})
 		var wg sync.WaitGroup
 		var triggered bool
 
@@ -133,7 +127,7 @@ func TestEventManager(t *testing.T) {
 
 	// 测试HasEvent
 	t.Run("TestHasEvent", func(t *testing.T) {
-		manager := NewEventManager(&EventOpt{PoolSize: 2, QueueSize: 10, Logger: logger})
+		manager := NewEventManager(&EventOpt{PoolSize: 2, QueueSize: 10})
 
 		// 注册测试事件
 		_ = manager.Register("testEvent", func(data interface{}) {})
@@ -151,7 +145,7 @@ func TestEventManager(t *testing.T) {
 
 	// 测试Clear
 	t.Run("TestClear", func(t *testing.T) {
-		manager := NewEventManager(&EventOpt{PoolSize: 2, QueueSize: 10, Logger: logger})
+		manager := NewEventManager(&EventOpt{PoolSize: 2, QueueSize: 10})
 
 		// 注册测试事件
 		_ = manager.Register("testEvent", func(data interface{}) {})
@@ -168,7 +162,7 @@ func TestEventManager(t *testing.T) {
 
 	// 测试ShutDown
 	t.Run("TestShutDown", func(t *testing.T) {
-		manager := NewEventManager(&EventOpt{PoolSize: 2, QueueSize: 10, Logger: logger})
+		manager := NewEventManager(&EventOpt{PoolSize: 2, QueueSize: 10})
 
 		// 注册测试事件
 		_ = manager.Register("testEvent", func(data interface{}) {})
@@ -196,7 +190,7 @@ func TestEventManager(t *testing.T) {
 
 	// 测试panic恢复
 	t.Run("TestPanicRecovery", func(t *testing.T) {
-		manager := NewEventManager(&EventOpt{PoolSize: 2, QueueSize: 10, Logger: logger})
+		manager := NewEventManager(&EventOpt{PoolSize: 2, QueueSize: 10})
 
 		// 注册会panic的handler
 		_ = manager.Register("panicEvent", func(data interface{}) {

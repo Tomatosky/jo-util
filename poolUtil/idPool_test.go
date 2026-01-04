@@ -7,18 +7,14 @@ import (
 	"time"
 
 	"github.com/Tomatosky/jo-util/randomUtil"
-
-	"go.uber.org/zap/zaptest"
 )
 
 func TestIdPool(t *testing.T) {
 	// 测试用例1: 基本功能测试
 	t.Run("BasicFunctionality", func(t *testing.T) {
-		logger := zaptest.NewLogger(t)
 		pool := NewIdPool(&IdPoolOpt{
 			PoolSize:  4,
 			QueueSize: 10,
-			Logger:    logger,
 			PoolName:  "TestPool",
 		})
 
@@ -121,11 +117,9 @@ func TestIdPool(t *testing.T) {
 
 	// 测试用例4: 队列满的情况
 	t.Run("QueueFull", func(t *testing.T) {
-		logger := zaptest.NewLogger(t)
 		pool := NewIdPool(&IdPoolOpt{
 			PoolSize:  2,
 			QueueSize: 2,
-			Logger:    logger,
 			PoolName:  "SmallQueuePool",
 		})
 
@@ -171,11 +165,9 @@ func TestIdPool(t *testing.T) {
 
 	// 测试用例6: 关闭超时
 	t.Run("ShutdownTimeout", func(t *testing.T) {
-		logger := zaptest.NewLogger(t)
 		pool := NewIdPool(&IdPoolOpt{
 			PoolSize:  2,
 			QueueSize: 10,
-			Logger:    logger,
 			PoolName:  "TimeoutPool",
 		})
 
