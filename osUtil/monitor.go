@@ -26,10 +26,12 @@ const (
 
 // thresholdConfig 阈值配置
 type thresholdConfig struct {
-	enabled   bool
-	threshold float64 // 阈值百分比
-	duration  time.Duration
-	startTime time.Time
+	enabled        bool
+	threshold      float64 // 阈值百分比
+	duration       time.Duration
+	startTime      time.Time
+	alertInterval  time.Duration // 报警间隔
+	lastAlertTime  time.Time     // 上次报警时间
 }
 
 // Monitor 资源监控器
@@ -58,19 +60,22 @@ func (d *defaultAlert) Alert(resourceType string, value float64, threshold float
 func NewMonitor() *Monitor {
 	return &Monitor{
 		cpu: thresholdConfig{
-			enabled:   false,
-			threshold: 0,
-			duration:  0,
+			enabled:       false,
+			threshold:     0,
+			duration:      0,
+			alertInterval: 1 * time.Minute,
 		},
 		memory: thresholdConfig{
-			enabled:   false,
-			threshold: 0,
-			duration:  0,
+			enabled:       false,
+			threshold:     0,
+			duration:      0,
+			alertInterval: 1 * time.Minute,
 		},
 		disk: thresholdConfig{
-			enabled:   false,
-			threshold: 0,
-			duration:  0,
+			enabled:       false,
+			threshold:     0,
+			duration:      0,
+			alertInterval: 1 * time.Minute,
 		},
 		alert:    &defaultAlert{},
 		stopChan: make(chan struct{}),
@@ -96,6 +101,7 @@ func (m *Monitor) SetCPU(threshold float64, duration time.Duration) {
 	m.cpu.duration = duration
 	m.cpu.enabled = true
 	m.cpu.startTime = time.Time{}
+	m.cpu.lastAlertTime = time.Time{}
 }
 
 // SetMemory 设置内存监控阈值
@@ -109,6 +115,7 @@ func (m *Monitor) SetMemory(threshold float64, duration time.Duration) {
 	m.memory.duration = duration
 	m.memory.enabled = true
 	m.memory.startTime = time.Time{}
+	m.memory.lastAlertTime = time.Time{}
 }
 
 // SetDisk 设置硬盘监控阈值
@@ -122,6 +129,18 @@ func (m *Monitor) SetDisk(threshold float64, duration time.Duration) {
 	m.disk.duration = duration
 	m.disk.enabled = true
 	m.disk.startTime = time.Time{}
+	m.disk.lastAlertTime = time.Time{}
+}
+
+// SetAlertInterval 设置报警间隔
+// interval: 两次报警之间的最小间隔时间，默认1分钟
+func (m *Monitor) SetAlertInterval(interval time.Duration) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.cpu.alertInterval = interval
+	m.memory.alertInterval = interval
+	m.disk.alertInterval = interval
 }
 
 // Start 启动监控
@@ -205,15 +224,17 @@ func (m *Monitor) checkThreshold(config *thresholdConfig, resourceType ResourceT
 			// 第一次超过，记录开始时间
 			config.startTime = now
 		} else if now.Sub(config.startTime) >= config.duration {
-			// 持续超过阈值时间，触发报警
-			m.alert.Alert(string(resourceType), value, config.threshold, config.duration)
-
-			// 重置开始时间，避免重复报警
-			// 如果希望持续报警，可以注释掉下面这行
+			// 持续超过阈值时间，检查是否在报警间隔内
+			if config.lastAlertTime.IsZero() || now.Sub(config.lastAlertTime) >= config.alertInterval {
+				// 触发报警
+				m.alert.Alert(string(resourceType), value, config.threshold, config.duration)
+				config.lastAlertTime = now
+			}
+			// 重置开始时间，避免重复检查
 			config.startTime = now
 		}
 	} else {
-		// 未超过阈值，重置开始时间
+		// 未超过阈值，重置开始时间，但不重置上次报警时间
 		config.startTime = time.Time{}
 	}
 }
