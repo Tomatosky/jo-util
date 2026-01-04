@@ -5,7 +5,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Tomatosky/jo-util/logger"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/disk"
 	"github.com/shirou/gopsutil/v3/mem"
@@ -32,6 +31,8 @@ type thresholdConfig struct {
 
 // Monitor 资源监控器
 type Monitor struct {
+	name string
+
 	cpu    thresholdConfig
 	memory thresholdConfig
 	disk   thresholdConfig
@@ -45,8 +46,9 @@ type Monitor struct {
 }
 
 // NewMonitor 创建一个新的监控器，使用默认的 fmt.Printf 报警
-func NewMonitor() *Monitor {
+func NewMonitor(name string) *Monitor {
 	return &Monitor{
+		name: name,
 		cpu: thresholdConfig{
 			enabled:       false,
 			threshold:     0,
@@ -204,7 +206,6 @@ func (m *Monitor) checkResources() {
 
 // checkThreshold 检查是否超过阈值
 func (m *Monitor) checkThreshold(config *thresholdConfig, resourceType ResourceType, value float64) {
-	logger.Log.Info("===================")
 	now := time.Now()
 
 	if value >= config.threshold {
@@ -231,7 +232,7 @@ func (m *Monitor) checkThreshold(config *thresholdConfig, resourceType ResourceT
 				} else {
 					durationStr = fmt.Sprintf("%ds", seconds)
 				}
-				m.alert.Alert(string(resourceType), value, config.threshold, durationStr)
+				m.alert.Alert(m.name, string(resourceType), value, config.threshold, durationStr)
 				config.lastAlertTime = now
 			}
 		}
