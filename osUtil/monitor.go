@@ -10,11 +10,6 @@ import (
 	"github.com/shirou/gopsutil/v3/mem"
 )
 
-// Alert 报警接口，由用户自行实现
-type Alert interface {
-	Alert(resourceType string, value float64, threshold float64, duration time.Duration)
-}
-
 // ResourceType 资源类型
 type ResourceType string
 
@@ -26,12 +21,12 @@ const (
 
 // thresholdConfig 阈值配置
 type thresholdConfig struct {
-	enabled        bool
-	threshold      float64 // 阈值百分比
-	duration       time.Duration
-	startTime      time.Time
-	alertInterval  time.Duration // 报警间隔
-	lastAlertTime  time.Time     // 上次报警时间
+	enabled       bool
+	threshold     float64 // 阈值百分比
+	duration      time.Duration
+	startTime     time.Time
+	alertInterval time.Duration // 报警间隔
+	lastAlertTime time.Time     // 上次报警时间
 }
 
 // Monitor 资源监控器
@@ -46,14 +41,6 @@ type Monitor struct {
 	wg       sync.WaitGroup
 	mu       sync.Mutex
 	running  bool
-}
-
-// defaultAlert 默认报警实现
-type defaultAlert struct{}
-
-func (d *defaultAlert) Alert(resourceType string, value float64, threshold float64, duration time.Duration) {
-	fmt.Printf("[资源报警] %s 当前值: %.2f%% 阈值: %.2f%% 持续时间: %v\n",
-		resourceType, value, threshold, duration)
 }
 
 // NewMonitor 创建一个新的监控器，使用默认的 fmt.Printf 报警
@@ -226,12 +213,11 @@ func (m *Monitor) checkThreshold(config *thresholdConfig, resourceType ResourceT
 		} else if now.Sub(config.startTime) >= config.duration {
 			// 持续超过阈值时间，检查是否在报警间隔内
 			if config.lastAlertTime.IsZero() || now.Sub(config.lastAlertTime) >= config.alertInterval {
-				// 触发报警
-				m.alert.Alert(string(resourceType), value, config.threshold, config.duration)
+				// 触发报警，传递实际持续时长
+				actualDuration := now.Sub(config.startTime).Round(time.Second)
+				m.alert.Alert(string(resourceType), value, config.threshold, actualDuration)
 				config.lastAlertTime = now
 			}
-			// 重置开始时间，避免重复检查
-			config.startTime = now
 		}
 	} else {
 		// 未超过阈值，重置开始时间，但不重置上次报警时间
