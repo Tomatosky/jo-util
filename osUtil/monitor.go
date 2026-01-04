@@ -122,6 +122,12 @@ func (m *Monitor) SetDisk(threshold float64, duration time.Duration) {
 	m.disk.lastAlertTime = time.Time{}
 }
 
+func (m *Monitor) SetAll(threshold float64, duration time.Duration) {
+	m.SetCPU(threshold, duration)
+	m.SetMemory(threshold, duration)
+	m.SetDisk(threshold, duration)
+}
+
 // SetAlertInterval 设置报警间隔
 // interval: 两次报警之间的最小间隔时间，默认1分钟
 func (m *Monitor) SetAlertInterval(interval time.Duration) {
