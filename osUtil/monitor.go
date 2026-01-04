@@ -73,8 +73,8 @@ func NewMonitor(name string) *Monitor {
 	}
 }
 
-// SetAlert 设置自定义报警
-func (m *Monitor) SetAlert(alert Alert) {
+// AddAlert 设置自定义报警
+func (m *Monitor) AddAlert(alert Alert) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.alert = append(m.alert, alert)
