@@ -10,6 +10,7 @@
 ### 数据结构 (mapUtil)
 - **ConcurrentHashMap** - 线程安全的哈希映射
 - **ConcurrentSkipListMap** - 基于跳表的并发有序映射
+- **BiMap** - 双向映射，支持根据 Key 查找 Value 和根据 Value 查找 Key
 - **OrderedMap** - 保持插入顺序的映射
 - **TreeMap** - 基于红黑树的有序映射
 - **IMap** - 统一的 Map 接口,支持 JSON/BSON 序列化
@@ -76,6 +77,7 @@
 - 各种类型之间的转换工具
 
 ### 系统工具 (osUtil)
+- **Monitor** - 系统资源监控器（CPU、内存、磁盘）
 - 操作系统相关的工具函数
 
 ### 事件工具 (eventUtil)
@@ -254,6 +256,7 @@ jo-util/
 - [github.com/panjf2000/ants/v2](https://github.com/panjf2000/ants) - 协程池
 - [github.com/google/uuid](https://github.com/google/uuid) - UUID 生成
 - [github.com/bwmarrin/snowflake](https://github.com/bwmarrin/snowflake) - Snowflake ID 生成
+- [github.com/shirou/gopsutil/v3](https://github.com/shirou/gopsutil) - 系统资源监控
 - [go.mongodb.org/mongo-driver](https://github.com/mongodb/mongo-go-driver) - MongoDB 驱动
 
 ## 测试
