@@ -13,14 +13,14 @@ import (
 
 // Alert 报警接口，由用户自行实现
 type Alert interface {
-	Alert(resourceType string, value float64, threshold float64, duration time.Duration)
+	Alert(resourceType string, value float64, threshold float64, duration string)
 }
 
 // defaultAlert 默认报警实现
 type defaultAlert struct{}
 
-func (d *defaultAlert) Alert(resourceType string, value float64, threshold float64, duration time.Duration) {
-	logger.Log.Warn(fmt.Sprintf("[资源报警] %s 当前值: %.2f%% 阈值: %.2f%% 持续时间: %v",
+func (d *defaultAlert) Alert(resourceType string, value float64, threshold float64, duration string) {
+	logger.Log.Warn(fmt.Sprintf("[资源报警] %s 当前值: %.2f%% 阈值: %.2f%% 持续时间: %s",
 		resourceType, value, threshold, duration))
 }
 
@@ -37,7 +37,7 @@ func NewDingdingAlert(secret string, accessToken string) *DingdingAlert {
 	}
 }
 
-func (d *DingdingAlert) Alert(resourceType string, value float64, threshold float64, duration time.Duration) {
+func (d *DingdingAlert) Alert(resourceType string, value float64, threshold float64, duration string) {
 	timestamp := strconv.FormatInt(time.Now().UnixMilli(), 10)
 	hmacCode := cryptor.HmacSha256WithBase64(timestamp+"\n"+d.secret, d.secret)
 	sign := url.QueryEscape(hmacCode)
@@ -47,7 +47,7 @@ func (d *DingdingAlert) Alert(resourceType string, value float64, threshold floa
 		"msgtype": "markdown",
 		"markdown": map[string]string{
 			"title": "[资源报警]",
-			"text": fmt.Sprintf("### %s 当前值: %.2f%% 阈值: %.2f%% 持续时间: %v",
+			"text": fmt.Sprintf("### %s 当前值: %.2f%% 阈值: %.2f%% 持续时间: %s",
 				resourceType, value, threshold, duration),
 		},
 	}
@@ -90,10 +90,10 @@ func NewGotifyAlert(host string, token string) *GotifyAlert {
 	}
 }
 
-func (g *GotifyAlert) Alert(resourceType string, value float64, threshold float64, duration time.Duration) {
+func (g *GotifyAlert) Alert(resourceType string, value float64, threshold float64, duration string) {
 	postData := map[string]interface{}{
 		"title": "[资源报警]",
-		"text": fmt.Sprintf("### %s 当前值: %.2f%% 阈值: %.2f%% 持续时间: %v",
+		"text": fmt.Sprintf("### %s 当前值: %.2f%% 阈值: %.2f%% 持续时间: %s",
 			resourceType, value, threshold, duration),
 		"extra": map[string]any{
 			"client::display": map[string]string{

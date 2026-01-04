@@ -214,8 +214,22 @@ func (m *Monitor) checkThreshold(config *thresholdConfig, resourceType ResourceT
 			// 持续超过阈值时间，检查是否在报警间隔内
 			if config.lastAlertTime.IsZero() || now.Sub(config.lastAlertTime) >= config.alertInterval {
 				// 触发报警，传递实际持续时长
-				actualDuration := now.Sub(config.startTime).Round(time.Second)
-				m.alert.Alert(string(resourceType), value, config.threshold, actualDuration)
+				sub := now.Sub(config.startTime)
+				// 自定义格式化时间：XhYmZs 或 YmZs 或 Zs
+				totalSeconds := int(sub.Seconds())
+				seconds := totalSeconds % 60
+				minutes := (totalSeconds / 60) % 60
+				hours := totalSeconds / 3600
+
+				var durationStr string
+				if hours > 0 {
+					durationStr = fmt.Sprintf("%dh%dm%ds", hours, minutes, seconds)
+				} else if minutes > 0 {
+					durationStr = fmt.Sprintf("%dm%ds", minutes, seconds)
+				} else {
+					durationStr = fmt.Sprintf("%ds", seconds)
+				}
+				m.alert.Alert(string(resourceType), value, config.threshold, durationStr)
 				config.lastAlertTime = now
 			}
 		}
