@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Tomatosky/jo-util/logger"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/disk"
 	"github.com/shirou/gopsutil/v3/mem"
@@ -164,7 +165,7 @@ func (m *Monitor) Stop() {
 func (m *Monitor) monitorLoop() {
 	defer m.wg.Done()
 
-	ticker := time.NewTicker(3 * time.Second)
+	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
 	for {
@@ -203,6 +204,7 @@ func (m *Monitor) checkResources() {
 
 // checkThreshold 检查是否超过阈值
 func (m *Monitor) checkThreshold(config *thresholdConfig, resourceType ResourceType, value float64) {
+	logger.Log.Info("===================")
 	now := time.Now()
 
 	if value >= config.threshold {

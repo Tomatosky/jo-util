@@ -8,10 +8,12 @@ import (
 	"github.com/Tomatosky/jo-util/logger"
 )
 
-func TestMonitor_SetAlert(t *testing.T) {
+func TestMonitor_SetDefaultAlert(t *testing.T) {
 	monitor := NewMonitor()
-	monitor.SetMemory(20, 10*time.Second)
-	monitor.SetAlertInterval(5 * time.Second)
+	monitor.SetCPU(5, 10*time.Second)
+	//monitor.SetMemory(20, 10*time.Second)
+	//monitor.SetDisk(10, 10*time.Second)
+	monitor.SetAlertInterval(60 * time.Second)
 	monitor.SetAlert(&defaultAlert{})
 	_ = monitor.Start()
 	logger.Log.Info("monitor started")
