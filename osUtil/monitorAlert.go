@@ -41,7 +41,7 @@ func (d *DingdingAlert) Alert(name string, resourceType string, value float64, t
 			"msgtype": "markdown",
 			"markdown": map[string]string{
 				"title": "[资源报警]",
-				"text": fmt.Sprintf("[%s 资源报警]<br>%s<br>当前值: %.2f%%<br>阈值: %.2f%%<br>持续时间: %s",
+				"text": fmt.Sprintf("[%s 资源报警] \n\n%s \n\n当前值: %.2f%% \n\n阈值: %.2f%% \n\n持续时间: %s",
 					name, resourceType, value, threshold, duration),
 			},
 		}
@@ -82,7 +82,7 @@ func (g *GotifyAlert) Alert(name string, resourceType string, value float64, thr
 	go func() {
 		postData := map[string]interface{}{
 			"title": fmt.Sprintf("[%s 资源报警]", name),
-			"message": fmt.Sprintf("%s<br>当前值: %.2f%%<br>阈值: %.2f%%<br>持续时间: %s",
+			"message": fmt.Sprintf("%s \n\n当前值: %.2f%% \n\n阈值: %.2f%% \n\n持续时间: %s",
 				resourceType, value, threshold, duration),
 			"extras": map[string]any{
 				"client::display": map[string]string{
