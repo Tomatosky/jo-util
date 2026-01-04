@@ -37,7 +37,7 @@ type Monitor struct {
 	memory thresholdConfig
 	disk   thresholdConfig
 
-	alert Alert
+	alert []Alert
 
 	stopChan chan struct{}
 	wg       sync.WaitGroup
@@ -67,7 +67,7 @@ func NewMonitor(name string) *Monitor {
 			duration:      0,
 			alertInterval: 1 * time.Minute,
 		},
-		alert:    &defaultAlert{},
+		alert:    []Alert{&defaultAlert{}},
 		stopChan: make(chan struct{}),
 		running:  false,
 	}
@@ -77,7 +77,7 @@ func NewMonitor(name string) *Monitor {
 func (m *Monitor) SetAlert(alert Alert) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.alert = alert
+	m.alert = append(m.alert, alert)
 }
 
 // SetCPU 设置 CPU 监控阈值
@@ -232,7 +232,9 @@ func (m *Monitor) checkThreshold(config *thresholdConfig, resourceType ResourceT
 				} else {
 					durationStr = fmt.Sprintf("%ds", seconds)
 				}
-				m.alert.Alert(m.name, string(resourceType), value, config.threshold, durationStr)
+				for _, alert := range m.alert {
+					alert.Alert(m.name, string(resourceType), value, config.threshold, durationStr)
+				}
 				config.lastAlertTime = now
 			}
 		}
