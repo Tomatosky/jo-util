@@ -41,9 +41,9 @@ type Monitor struct {
 	alert Alert
 
 	stopChan chan struct{}
-	wg      sync.WaitGroup
-	mu      sync.Mutex
-	running bool
+	wg       sync.WaitGroup
+	mu       sync.Mutex
+	running  bool
 }
 
 // defaultAlert 默认报警实现
@@ -158,7 +158,7 @@ func (m *Monitor) Stop() {
 func (m *Monitor) monitorLoop() {
 	defer m.wg.Done()
 
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(3 * time.Second)
 	defer ticker.Stop()
 
 	for {
