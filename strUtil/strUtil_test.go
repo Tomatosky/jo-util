@@ -30,6 +30,16 @@ func TestIsInt(t *testing.T) {
 		{name: "仅包含小数点", input: ".", expected: false},
 		{name: "十六进制数字", input: "0xFF", expected: false},
 		{name: "中文字符", input: "一二三", expected: false},
+		// 新增场景
+		{name: "00_双个前导零", input: "00", expected: false},
+		{name: "0123_有前导零的正数", input: "0123", expected: false},
+		{name: "-0_负零", input: "-0", expected: false},
+		{name: "1.2.3_多小数点", input: "1.2.3", expected: false},
+		{name: "+_只有正号", input: "+", expected: false},
+		{name: "-_只有负号", input: "-", expected: false},
+		{name: " 123_带前导空格", input: " 123", expected: false},
+		{name: "123 _带后导空格", input: "123 ", expected: false},
+		{name: "1e10_科学计数法_确认", input: "1e10", expected: false},
 	}
 
 	for _, tt := range tests {
@@ -74,6 +84,18 @@ func TestIsFloat(t *testing.T) {
 		{name: "中文字符", input: "一二三", expected: false},
 		{name: "特殊字符", input: "123!456", expected: false},
 		{name: "多个符号", input: "+-123.45", expected: false},
+		// 新增场景
+		{name: "00_双个前导零", input: "00", expected: false},
+		{name: "0123.45_有前导零的小数", input: "0123.45", expected: false},
+		{name: "-0_负零", input: "-0", expected: false},
+		{name: ".5_无整数部分", input: ".5", expected: false},
+		{name: "5._无小数部分", input: "5.", expected: false},
+		{name: "1.2.3_多小数点_确认", input: "1.2.3", expected: false},
+		{name: "+_只有正号", input: "+", expected: false},
+		{name: "-_只有负号", input: "-", expected: false},
+		{name: " 1.23_带前导空格", input: " 1.23", expected: false},
+		{name: "1.23 _带后导空格", input: "1.23 ", expected: false},
+		{name: "1e10_科学计数法_确认", input: "1e10", expected: false},
 	}
 
 	for _, tt := range tests {
@@ -114,6 +136,16 @@ func TestIsNumeric(t *testing.T) {
 		{name: "科学计数法", input: "1.23e10", expected: false},
 		{name: "多个小数点", input: "123.45.67", expected: false},
 		{name: "逗号分隔符", input: "1,234.56", expected: false},
+		// 新增场景 - 与 IsFloat 相同
+		{name: "00_双个前导零", input: "00", expected: false},
+		{name: "0123.45_有前导零的小数", input: "0123.45", expected: false},
+		{name: "-0_负零", input: "-0", expected: false},
+		{name: ".5_无整数部分", input: ".5", expected: false},
+		{name: "5._无小数部分", input: "5.", expected: false},
+		{name: "1.2.3_多小数点_确认", input: "1.2.3", expected: false},
+		{name: " 1.23_带前导空格", input: " 1.23", expected: false},
+		{name: "1.23 _带后导空格", input: "1.23 ", expected: false},
+		{name: "1e10_科学计数法_确认", input: "1e10", expected: false},
 	}
 
 	for _, tt := range tests {
@@ -147,6 +179,8 @@ func TestIsBlankChar(t *testing.T) {
 		{name: "Hangul Filler", input: '\u3164', expected: true},
 		{name: "Braille Pattern Blank", input: '\u2800', expected: true},
 		{name: "MONGOLIAN VOWEL SEPARATOR", input: '\u180e', expected: true},
+		// 新增场景
+		{name: "不间断空格_NBSP", input: '\u00A0', expected: true}, // unicode.IsSpace 返回 true
 		// 异常情况 - 非空白字符
 		{name: "字母A", input: 'A', expected: false},
 		{name: "字母a", input: 'a', expected: false},
@@ -192,6 +226,8 @@ func TestIsBlank(t *testing.T) {
 		{name: "Hangul Filler", input: "\u3164", expected: true},
 		{name: "Braille Pattern Blank", input: "\u2800", expected: true},
 		{name: "MONGOLIAN VOWEL SEPARATOR", input: "\u180e", expected: true},
+		// 新增场景
+		{name: "零宽字符_零宽不折行空格加从左到右嵌入", input: "\ufeff\u202a", expected: true},
 		// 异常情况 - 非空白字符
 		{name: "单个可见字符", input: "a", expected: false},
 		{name: "英文字母", input: "abcd", expected: false},
@@ -297,7 +333,7 @@ func TestIsBlankUnicode(t *testing.T) {
 		input    string
 		expected bool
 	}{
-		{name: "不间断空格 NBSP", input: "\u00a0", expected: true},
+		{name: "不间断空格_NBSP", input: "\u00a0", expected: true},
 		{name: "全角空格", input: "\u3000", expected: true},
 		{name: "零宽空格", input: "\u200b", expected: false}, // 零宽空格不在 unicode.IsSpace 列表中
 		{name: "零宽不折行空格已包含", input: "\ufeff", expected: true},
