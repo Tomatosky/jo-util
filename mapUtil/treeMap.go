@@ -587,7 +587,8 @@ func (tm *TreeMap[K, V]) ToString() string {
 	defer tm.mu.RUnlock()
 	bytes, err := json.Marshal(tm.ToMap())
 	if err != nil {
-		logger.Log.Fatal(fmt.Sprintf("%v", err))
+		logger.Log.Error(fmt.Sprintf("%v", err))
+		panic(err)
 	}
 	return string(bytes)
 }

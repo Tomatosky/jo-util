@@ -214,7 +214,8 @@ func (m *OrderedMap[K, V]) ToString() string {
 	toMap := m.ToMap()
 	bytes, err := json.Marshal(toMap)
 	if err != nil {
-		logger.Log.Fatal(fmt.Sprintf("%v", err))
+		logger.Log.Error(fmt.Sprintf("%v", err))
+		panic(err)
 	}
 	return string(bytes)
 }

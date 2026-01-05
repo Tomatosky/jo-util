@@ -28,7 +28,8 @@ func (p *AntsPool) SubmitWithId(id any, task func()) {
 
 func (p *AntsPool) Submit(task func()) {
 	if task == nil {
-		logger.Log.Fatal(fmt.Sprintf("%v", "task cannot be nil"))
+		logger.Log.Error(fmt.Sprintf("%v", "task cannot be nil"))
+		panic("task cannot be nil")
 	}
 	p.wg.Add(1)
 	_ = p.pool.Submit(func() {

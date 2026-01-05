@@ -82,7 +82,8 @@ func (s *HashSet[T]) IsEmpty() bool {
 func (s *HashSet[T]) ToString() string {
 	bytes, err := json.Marshal(s.ToSlice())
 	if err != nil {
-		logger.Log.Fatal(fmt.Sprintf("%v", err))
+		logger.Log.Error(fmt.Sprintf("%v", err))
+		panic(err)
 	}
 	return string(bytes)
 }

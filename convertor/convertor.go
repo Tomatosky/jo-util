@@ -16,7 +16,8 @@ func ToBool(value any) bool {
 	s := ToString(value)
 	parseBool, err := strconv.ParseBool(s)
 	if err != nil {
-		logger.Log.Fatal(fmt.Sprintf("%v", err))
+		logger.Log.Error(fmt.Sprintf("%v", err))
+		panic(err)
 	}
 	return parseBool
 }
@@ -26,7 +27,8 @@ func ToInt(value any) int {
 	s := ToString(value)
 	f, err := strconv.ParseFloat(s, 64)
 	if err != nil {
-		logger.Log.Fatal(fmt.Sprintf("%v", err))
+		logger.Log.Error(fmt.Sprintf("%v", err))
+		panic(err)
 	}
 	return int(f)
 }
@@ -36,7 +38,8 @@ func ToInt32(value any) int32 {
 	s := ToString(value)
 	f, err := strconv.ParseFloat(s, 64)
 	if err != nil {
-		logger.Log.Fatal(fmt.Sprintf("%v", err))
+		logger.Log.Error(fmt.Sprintf("%v", err))
+		panic(err)
 	}
 	return int32(f)
 }
@@ -46,7 +49,8 @@ func ToInt64(value any) int64 {
 	s := ToString(value)
 	f, err := strconv.ParseFloat(s, 64)
 	if err != nil {
-		logger.Log.Fatal(fmt.Sprintf("%v", err))
+		logger.Log.Error(fmt.Sprintf("%v", err))
+		panic(err)
 	}
 	return int64(f)
 }
@@ -56,7 +60,8 @@ func ToFloat32(value any) float32 {
 	s := ToString(value)
 	f32, err := strconv.ParseFloat(s, 32)
 	if err != nil {
-		logger.Log.Fatal(fmt.Sprintf("%v", err))
+		logger.Log.Error(fmt.Sprintf("%v", err))
+		panic(err)
 	}
 	return float32(f32)
 }
@@ -66,7 +71,8 @@ func ToFloat64(value any) float64 {
 	s := ToString(value)
 	f64, err := strconv.ParseFloat(s, 64)
 	if err != nil {
-		logger.Log.Fatal(fmt.Sprintf("%v", err))
+		logger.Log.Error(fmt.Sprintf("%v", err))
+		panic(err)
 	}
 	return f64
 }

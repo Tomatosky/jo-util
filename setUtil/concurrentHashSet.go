@@ -76,7 +76,8 @@ func (s *ConcurrentHashSet[T]) IsEmpty() bool {
 func (s *ConcurrentHashSet[T]) ToString() string {
 	bytes, err := json.Marshal(s.ToSlice())
 	if err != nil {
-		logger.Log.Fatal(fmt.Sprintf("%v", err))
+		logger.Log.Error(fmt.Sprintf("%v", err))
+		panic(err)
 	}
 	return string(bytes)
 }

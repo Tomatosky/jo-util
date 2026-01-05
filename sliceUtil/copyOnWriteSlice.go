@@ -50,7 +50,8 @@ func (c *CopyOnWriteSlice[T]) Insert(index int, element T) {
 	defer c.mu.Unlock()
 
 	if index < 0 || index > len(c.data) {
-		logger.Log.Fatal(fmt.Sprintf("%v", "index out of range"))
+		logger.Log.Error(fmt.Sprintf("%v", "index out of range"))
+		panic("index out of range")
 	}
 
 	// 创建长度+1的新数组
@@ -73,7 +74,8 @@ func (c *CopyOnWriteSlice[T]) Get(index int) T {
 		index += len(c.data)
 	}
 	if index < 0 || index >= len(c.data) {
-		logger.Log.Fatal(fmt.Sprintf("%v", "index out of range"))
+		logger.Log.Error(fmt.Sprintf("%v", "index out of range"))
+		panic("index out of range")
 	}
 	return c.data[index]
 }
@@ -84,7 +86,8 @@ func (c *CopyOnWriteSlice[T]) Remove(index int) T {
 	defer c.mu.Unlock()
 
 	if index < 0 || index >= len(c.data) {
-		logger.Log.Fatal(fmt.Sprintf("%v", "index out of range"))
+		logger.Log.Error(fmt.Sprintf("%v", "index out of range"))
+		panic("index out of range")
 	}
 
 	removed := c.data[index]
@@ -162,7 +165,8 @@ func (c *CopyOnWriteSlice[T]) ToString() string {
 
 	bytes, err := json.Marshal(c.data)
 	if err != nil {
-		logger.Log.Fatal(fmt.Sprintf("%v", err))
+		logger.Log.Error(fmt.Sprintf("%v", err))
+		panic(err)
 	}
 	return string(bytes)
 }

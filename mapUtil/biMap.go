@@ -217,7 +217,8 @@ func (bm *BiMap[K, V]) ToString() string {
 	defer bm.mu.RUnlock()
 	bytes, err := json.Marshal(bm.forward)
 	if err != nil {
-		logger.Log.Fatal(fmt.Sprintf("%v", err))
+		logger.Log.Error(fmt.Sprintf("%v", err))
+		panic(err)
 	}
 	return string(bytes)
 }

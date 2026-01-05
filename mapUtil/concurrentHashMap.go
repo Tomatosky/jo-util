@@ -141,7 +141,8 @@ func (cm *ConcurrentHashMap[K, V]) ToString() string {
 	defer cm.mu.RUnlock()
 	bytes, err := json.Marshal(cm.m)
 	if err != nil {
-		logger.Log.Fatal(fmt.Sprintf("%v", err))
+		logger.Log.Error(fmt.Sprintf("%v", err))
+		panic(err)
 	}
 	return string(bytes)
 }

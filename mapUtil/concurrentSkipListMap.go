@@ -347,7 +347,8 @@ func (csm *ConcurrentSkipListMap[K, V]) ToString() string {
 
 	bytes, err := json.Marshal(m)
 	if err != nil {
-		logger.Log.Fatal(fmt.Sprintf("%v", err))
+		logger.Log.Error(fmt.Sprintf("%v", err))
+		panic(err)
 	}
 	return string(bytes)
 }

@@ -78,7 +78,8 @@ func Unique[T comparable](slice []T) []T {
 func ToString[T comparable](slice []T) string {
 	marshal, err := json.Marshal(slice)
 	if err != nil {
-		logger.Log.Fatal(fmt.Sprintf("%v", err))
+		logger.Log.Error(fmt.Sprintf("%v", err))
+		panic(err)
 	}
 	return string(marshal)
 }
@@ -268,7 +269,8 @@ func Union[T comparable](a, b []T) []T {
 
 func Max[T numberUtil.Number](nums []T) T {
 	if len(nums) < 1 {
-		logger.Log.Fatal(fmt.Sprintf("%v", "mathutil.Max: empty list"))
+		logger.Log.Error(fmt.Sprintf("%v", "mathutil.Max: empty list"))
+		panic("mathutil.Max: empty list")
 	}
 	max2 := nums[0]
 	for _, v := range nums {
@@ -281,7 +283,8 @@ func Max[T numberUtil.Number](nums []T) T {
 
 func Min[T numberUtil.Number](nums []T) T {
 	if len(nums) < 1 {
-		logger.Log.Fatal(fmt.Sprintf("%v", "mathutil.min: empty list"))
+		logger.Log.Error(fmt.Sprintf("%v", "mathutil.min: empty list"))
+		panic("mathutil.min: empty list")
 	}
 	min2 := nums[0]
 	for _, v := range nums {

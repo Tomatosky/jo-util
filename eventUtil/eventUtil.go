@@ -32,7 +32,8 @@ type EventOpt struct {
 // NewEventManager 创建一个新的事件管理器
 func NewEventManager(opt *EventOpt) *EventManager {
 	if opt.PoolSize <= 0 || opt.QueueSize <= 0 {
-		logger.Log.Fatal(fmt.Sprintf("pool size and queue size must be greater than 0"))
+		logger.Log.Error(fmt.Sprintf("pool size and queue size must be greater than 0"))
+		panic(fmt.Sprintf("pool size and queue size must be greater than 0"))
 	}
 
 	manager := &EventManager{

@@ -27,7 +27,8 @@ func getSnowflake() snowflake.ID {
 		var err error
 		snowflakeNode, err = snowflake.NewNode(1)
 		if err != nil {
-			logger.Log.Fatal(fmt.Sprintf("Snowflake node initialization failed: %v", err))
+			logger.Log.Error(fmt.Sprintf("Snowflake node initialization failed: %v", err))
+			panic(err)
 		}
 	}
 	return snowflakeNode.Generate()

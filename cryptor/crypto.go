@@ -55,7 +55,8 @@ func AesEcbEncryptWithErr(data, key []byte, paddingType PaddingType) ([]byte, er
 func AesEcbEncrypt(data, key []byte, paddingType PaddingType) []byte {
 	encrypted, err := AesEcbEncryptWithErr(data, key, paddingType)
 	if err != nil {
-		logger.Log.Fatal(fmt.Sprintf("%v", err))
+		logger.Log.Error(fmt.Sprintf("%v", err))
+		panic(err)
 	}
 	return encrypted
 }
@@ -79,7 +80,8 @@ func AesEcbDecryptWithErr(encrypted, key []byte, paddingType PaddingType) ([]byt
 func AesEcbDecrypt(encrypted, key []byte, paddingType PaddingType) []byte {
 	decrypted, err := AesEcbDecryptWithErr(encrypted, key, paddingType)
 	if err != nil {
-		logger.Log.Fatal(fmt.Sprintf("%v", err))
+		logger.Log.Error(fmt.Sprintf("%v", err))
+		panic(err)
 	}
 	return decrypted
 }
@@ -110,7 +112,8 @@ func AesCbcEncryptWithErr(data, key []byte, paddingType PaddingType) ([]byte, er
 func AesCbcEncrypt(data, key []byte, paddingType PaddingType) []byte {
 	encrypted, err := AesCbcEncryptWithErr(data, key, paddingType)
 	if err != nil {
-		logger.Log.Fatal(fmt.Sprintf("%v", err))
+		logger.Log.Error(fmt.Sprintf("%v", err))
+		panic(err)
 	}
 	return encrypted
 }
@@ -134,7 +137,8 @@ func AesCbcDecryptWithErr(encrypted, key []byte, paddingType PaddingType) ([]byt
 func AesCbcDecrypt(encrypted, key []byte, paddingType PaddingType) []byte {
 	decrypted, err := AesCbcDecryptWithErr(encrypted, key, paddingType)
 	if err != nil {
-		logger.Log.Fatal(fmt.Sprintf("%v", err))
+		logger.Log.Error(fmt.Sprintf("%v", err))
+		panic(err)
 	}
 	return decrypted
 }
@@ -170,7 +174,8 @@ func AesCfbEncrypt(data, key []byte, paddingType PaddingType) ([]byte, error) {
 	encrypted := make([]byte, aes.BlockSize+len(data))
 	iv := encrypted[:aes.BlockSize]
 	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
-		logger.Log.Fatal(fmt.Sprintf("%v", err))
+		logger.Log.Error(fmt.Sprintf("%v", err))
+		panic(err)
 	}
 	stream := cipher.NewCFBEncrypter(block, iv)
 	stream.XORKeyStream(encrypted[aes.BlockSize:], data)
@@ -283,7 +288,8 @@ func DesEcbDecrypt(encrypted, key []byte) []byte {
 func DesCbcEncrypt(data, key []byte) []byte {
 	size := len(key)
 	if size != 8 {
-		logger.Log.Fatal(fmt.Sprintf("key length shoud be 8"))
+		logger.Log.Error(fmt.Sprintf("key length shoud be 8"))
+		panic(fmt.Sprintf("key length shoud be 8"))
 	}
 
 	block, _ := des.NewCipher(key)
@@ -293,7 +299,8 @@ func DesCbcEncrypt(data, key []byte) []byte {
 	iv := encrypted[:des.BlockSize]
 
 	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
-		logger.Log.Fatal(fmt.Sprintf("%v", err))
+		logger.Log.Error(fmt.Sprintf("%v", err))
+		panic(err)
 	}
 
 	mode := cipher.NewCBCEncrypter(block, iv)
@@ -308,7 +315,8 @@ func DesCbcEncrypt(data, key []byte) []byte {
 func DesCbcDecrypt(encrypted, key []byte) []byte {
 	size := len(key)
 	if size != 8 {
-		logger.Log.Fatal(fmt.Sprintf("key length shoud be 8"))
+		logger.Log.Error(fmt.Sprintf("key length shoud be 8"))
+		panic(fmt.Sprintf("key length shoud be 8"))
 	}
 
 	block, _ := des.NewCipher(key)

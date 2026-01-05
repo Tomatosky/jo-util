@@ -43,7 +43,8 @@ func NewRequestClient() *RequestClient {
 func (rc *RequestClient) SetProxy(proxy string) {
 	proxyUrl, err := url.Parse(proxy)
 	if err != nil {
-		logger.Log.Fatal(fmt.Sprintf("%v", err))
+		logger.Log.Error(fmt.Sprintf("%v", err))
+		panic(err)
 	}
 	rc.Client.Transport = &http.Transport{
 		TLSClientConfig: &tls.Config{

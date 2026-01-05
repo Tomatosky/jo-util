@@ -57,7 +57,8 @@ func PutIfAbsent[K comparable, V any](m map[K]V, key K, defaultValue V) {
 func ToString[K comparable, V any](m map[K]V) string {
 	marshal, err := json.Marshal(m)
 	if err != nil {
-		logger.Log.Fatal(fmt.Sprintf("%v", err))
+		logger.Log.Error(fmt.Sprintf("%v", err))
+		panic(err)
 	}
 	return string(marshal)
 }

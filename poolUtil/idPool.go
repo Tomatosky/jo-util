@@ -45,7 +45,8 @@ type IdPoolOpt struct {
 
 func NewIdPool(opt *IdPoolOpt) *IdPool {
 	if opt.PoolSize <= 0 || opt.QueueSize <= 0 {
-		logger.Log.Fatal(fmt.Sprintf("%v", "pool size and queue size must be greater than 0"))
+		logger.Log.Error(fmt.Sprintf("%v", "pool size and queue size must be greater than 0"))
+		panic("pool size and queue size must be greater than 0")
 	}
 
 	idPool := &IdPool{
