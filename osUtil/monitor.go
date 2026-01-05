@@ -73,8 +73,8 @@ func NewMonitor(name string) *Monitor {
 	}
 }
 
-// SetAlert 设置自定义报警
-func (m *Monitor) SetAlert(alert Alert) {
+// AddAlert 设置自定义报警
+func (m *Monitor) AddAlert(alert Alert) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.alert = append(m.alert, alert)
@@ -120,6 +120,12 @@ func (m *Monitor) SetDisk(threshold float64, duration time.Duration) {
 	m.disk.enabled = true
 	m.disk.startTime = time.Time{}
 	m.disk.lastAlertTime = time.Time{}
+}
+
+func (m *Monitor) SetAll(threshold float64, duration time.Duration) {
+	m.SetCPU(threshold, duration)
+	m.SetMemory(threshold, duration)
+	m.SetDisk(threshold, duration)
 }
 
 // SetAlertInterval 设置报警间隔
