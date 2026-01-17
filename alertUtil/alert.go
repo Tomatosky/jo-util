@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/Tomatosky/jo-util/logger"
+	"go.uber.org/zap"
 )
 
 // Alert 报警接口，由用户自行实现
@@ -17,5 +18,5 @@ type DefaultAlert struct{}
 
 func (d *DefaultAlert) Alert(title string, content string) {
 	content = strings.ReplaceAll(content, "\n", "")
-	logger.Log.Warn(fmt.Sprintf("%s: %s", title, content))
+	logger.Log.Warn(fmt.Sprintf("%s: %s", title, content), zap.Bool("alert", true))
 }
