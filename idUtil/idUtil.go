@@ -3,6 +3,7 @@ package idUtil
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/Tomatosky/jo-util/logger"
 	"github.com/bwmarrin/snowflake"
@@ -10,7 +11,10 @@ import (
 )
 
 // 全局snowflake节点（默认节点ID为1）
-var snowflakeNode *snowflake.Node
+var (
+	snowflakeNode *snowflake.Node
+	once          sync.Once
+)
 
 // RandomUUID 生成标准格式UUID（带连字符）
 func RandomUUID() string {
@@ -23,14 +27,14 @@ func SimpleUUID() string {
 }
 
 func getSnowflake() snowflake.ID {
-	if snowflakeNode == nil {
+	once.Do(func() {
 		var err error
 		snowflakeNode, err = snowflake.NewNode(1)
 		if err != nil {
 			logger.Log.Error(fmt.Sprintf("Snowflake node initialization failed: %v", err))
 			panic(err)
 		}
-	}
+	})
 	return snowflakeNode.Generate()
 }
 
