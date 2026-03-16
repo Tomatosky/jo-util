@@ -13,17 +13,17 @@ import (
 
 // DingdingAlert 钉钉报警实现
 type DingdingAlert struct {
-	secret      string
-	accessToken string
+	Secret      string
+	AccessToken string
 }
 
 func (d *DingdingAlert) Alert(title string, content string) {
 	go func() {
 		timestamp := strconv.FormatInt(time.Now().UnixMilli(), 10)
-		hmacCode := cryptor.HmacSha256WithBase64(timestamp+"\n"+d.secret, d.secret)
+		hmacCode := cryptor.HmacSha256WithBase64(timestamp+"\n"+d.Secret, d.Secret)
 		sign := url.QueryEscape(hmacCode)
 
-		dingdingUrl := fmt.Sprintf("https://oapi.dingtalk.com/robot/send?access_token=%s&timestamp=%s&sign=%s", d.accessToken, timestamp, sign)
+		dingdingUrl := fmt.Sprintf("https://oapi.dingtalk.com/robot/send?access_token=%s&timestamp=%s&sign=%s", d.AccessToken, timestamp, sign)
 		postData := map[string]interface{}{
 			"msgtype": "markdown",
 			"markdown": map[string]string{

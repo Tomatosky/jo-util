@@ -9,8 +9,8 @@ import (
 
 // GotifyAlert Gotify报警实现
 type GotifyAlert struct {
-	host  string
-	token string
+	Host  string
+	Token string
 }
 
 func (g *GotifyAlert) Alert(title string, content string) {
@@ -25,7 +25,7 @@ func (g *GotifyAlert) Alert(title string, content string) {
 			},
 		}
 
-		gotifyUrl := fmt.Sprintf("%s/message?token=%s", g.host, g.token)
+		gotifyUrl := fmt.Sprintf("%s/message?token=%s", g.Host, g.Token)
 		client := httpUtil.NewRequestClient()
 		client.IsJson = true
 		resp := client.Post(gotifyUrl, postData)

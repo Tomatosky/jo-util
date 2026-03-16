@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Tomatosky/jo-util/alertUtil"
 	"github.com/Tomatosky/jo-util/logger"
 )
 
@@ -25,9 +26,9 @@ func TestMonitor_SetGotifyAlert(t *testing.T) {
 	monitor := NewMonitor("test")
 	monitor.SetMemory(5, 10*time.Second)
 	monitor.SetAlertInterval(30 * time.Second)
-	monitor.AddAlert(&GotifyAlert{
-		host:  "https://abc.gotify.com",
-		token: "123456",
+	monitor.AddAlert(&alertUtil.GotifyAlert{
+		Host:  "https://abc.gotify.com",
+		Token: "123456",
 	})
 	_ = monitor.Start()
 	logger.Log.Info("monitor started")
@@ -40,9 +41,9 @@ func TestMonitor_SetDingdingAlert(t *testing.T) {
 	monitor := NewMonitor("test")
 	monitor.SetMemory(5, 10*time.Second)
 	monitor.SetAlertInterval(30 * time.Second)
-	monitor.AddAlert(&DingdingAlert{
-		secret:      "abcdefg",
-		accessToken: "abcdefg",
+	monitor.AddAlert(&alertUtil.DingdingAlert{
+		Secret:      "abcdefg",
+		AccessToken: "abcdefg",
 	})
 	_ = monitor.Start()
 	logger.Log.Info("monitor started")
