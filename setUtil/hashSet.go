@@ -5,8 +5,7 @@ import (
 	"fmt"
 
 	"github.com/Tomatosky/jo-util/logger"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/bsontype"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 // HashSet 非并发安全的哈希集合实现
@@ -104,12 +103,12 @@ func (s *HashSet[T]) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (s *HashSet[T]) MarshalBSONValue() (bsontype.Type, []byte, error) {
+func (s *HashSet[T]) MarshalBSONValue() (bson.Type, []byte, error) {
 	elements := s.ToSlice()
 	return bson.MarshalValue(elements)
 }
 
-func (s *HashSet[T]) UnmarshalBSONValue(t bsontype.Type, data []byte) error {
+func (s *HashSet[T]) UnmarshalBSONValue(t bson.Type, data []byte) error {
 	var elements []T
 	if err := bson.UnmarshalValue(t, data, &elements); err != nil {
 		return err

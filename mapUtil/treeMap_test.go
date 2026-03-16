@@ -7,7 +7,7 @@ import (
 	"sync"
 	"testing"
 
-	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 // TestTreeMapNew 测试TreeMap的创建

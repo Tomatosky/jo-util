@@ -6,8 +6,7 @@ import (
 
 	"github.com/Tomatosky/jo-util/logger"
 	"github.com/Tomatosky/jo-util/mapUtil"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/bsontype"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 // ConcurrentHashSet 基于 ConcurrentHashMap 实现的并发安全集合
@@ -99,12 +98,12 @@ func (s *ConcurrentHashSet[T]) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (s *ConcurrentHashSet[T]) MarshalBSONValue() (bsontype.Type, []byte, error) {
+func (s *ConcurrentHashSet[T]) MarshalBSONValue() (bson.Type, []byte, error) {
 	elements := s.ToSlice()
 	return bson.MarshalValue(elements)
 }
 
-func (s *ConcurrentHashSet[T]) UnmarshalBSONValue(t bsontype.Type, data []byte) error {
+func (s *ConcurrentHashSet[T]) UnmarshalBSONValue(t bson.Type, data []byte) error {
 	var elements []T
 	if err := bson.UnmarshalValue(t, data, &elements); err != nil {
 		return err

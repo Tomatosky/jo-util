@@ -6,8 +6,7 @@ import (
 	"sync"
 
 	"github.com/Tomatosky/jo-util/logger"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/bsontype"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 // CopyOnWriteSlice 线程安全的动态数组，写时复制
@@ -190,12 +189,12 @@ func (c *CopyOnWriteSlice[T]) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (c *CopyOnWriteSlice[T]) MarshalBSONValue() (bsontype.Type, []byte, error) {
+func (c *CopyOnWriteSlice[T]) MarshalBSONValue() (bson.Type, []byte, error) {
 	elements := c.ToSlice()
 	return bson.MarshalValue(elements)
 }
 
-func (c *CopyOnWriteSlice[T]) UnmarshalBSONValue(t bsontype.Type, data []byte) error {
+func (c *CopyOnWriteSlice[T]) UnmarshalBSONValue(t bson.Type, data []byte) error {
 	var elements []T
 	if err := bson.UnmarshalValue(t, data, &elements); err != nil {
 		return err

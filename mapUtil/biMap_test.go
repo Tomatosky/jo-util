@@ -5,7 +5,7 @@ import (
 	"sync"
 	"testing"
 
-	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 // TestNewBiMap_Empty 测试创建空的BiMap

@@ -7,7 +7,6 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/panjf2000/ants/v2 v2.11.6
 	github.com/shirou/gopsutil/v3 v3.24.5
-	go.mongodb.org/mongo-driver v1.17.9
 	go.mongodb.org/mongo-driver/v2 v2.5.0
 	go.uber.org/zap v1.27.1
 	golang.org/x/exp v0.0.0-20260312153236-7ab1446f8b90
