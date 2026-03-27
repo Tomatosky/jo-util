@@ -7,6 +7,8 @@ import (
 	"github.com/Tomatosky/jo-util/logger"
 )
 
+var _ Alert = (*GotifyAlert)(nil)
+
 // GotifyAlert Gotify报警实现
 type GotifyAlert struct {
 	Host  string

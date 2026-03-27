@@ -10,6 +10,10 @@ import (
 )
 
 var _ IMap[string, int] = (*OrderedMap[string, int])(nil)
+var _ bson.Marshaler = (*OrderedMap)(nil)
+var _ bson.Unmarshaler = (*OrderedMap)(nil)
+var _ json.Marshaler = (*OrderedMap)(nil)
+var _ json.Unmarshaler = (*OrderedMap)(nil)
 
 type OrderedMap[K comparable, V any] struct {
 	kv     map[K]*Element[K, V]

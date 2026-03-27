@@ -8,6 +8,11 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
+var _ bson.ValueMarshaler = (*HashSet)(nil)
+var _ bson.ValueUnmarshaler = (*HashSet)(nil)
+var _ json.Marshaler = (*HashSet)(nil)
+var _ json.Unmarshaler = (*HashSet)(nil)
+
 // HashSet 非并发安全的哈希集合实现
 type HashSet[T comparable] struct {
 	m map[T]struct{} // 使用空结构体作为值类型（0内存占用）
@@ -103,14 +108,15 @@ func (s *HashSet[T]) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (s *HashSet[T]) MarshalBSONValue() (bson.Type, []byte, error) {
+func (s *HashSet[T]) MarshalBSONValue() (byte, []byte, error) {
 	elements := s.ToSlice()
-	return bson.MarshalValue(elements)
+	typ, data, err := bson.MarshalValue(elements)
+	return byte(typ), data, err
 }
 
-func (s *HashSet[T]) UnmarshalBSONValue(t bson.Type, data []byte) error {
+func (s *HashSet[T]) UnmarshalBSONValue(t byte, data []byte) error {
 	var elements []T
-	if err := bson.UnmarshalValue(t, data, &elements); err != nil {
+	if err := bson.UnmarshalValue(bson.Type(t), data, &elements); err != nil {
 		return err
 	}
 	s.m = make(map[T]struct{})

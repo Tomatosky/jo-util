@@ -13,6 +13,8 @@ type Alert interface {
 	Alert(title string, content string)
 }
 
+var _ Alert = (*DefaultAlert)(nil)
+
 // DefaultAlert 默认报警实现
 type DefaultAlert struct{}
 

@@ -15,6 +15,10 @@ const (
 )
 
 var _ IMap[string, int] = (*TreeMap[string, int])(nil)
+var _ bson.Marshaler = (*TreeMap)(nil)
+var _ bson.Unmarshaler = (*TreeMap)(nil)
+var _ json.Marshaler = (*TreeMap)(nil)
+var _ json.Unmarshaler = (*TreeMap)(nil)
 
 // TreeMap 是一个基于红黑树实现的并发安全的有序映射
 type TreeMap[K comparable, V any] struct {

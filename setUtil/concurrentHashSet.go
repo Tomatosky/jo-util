@@ -9,6 +9,11 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
+var _ bson.ValueMarshaler = (*ConcurrentHashSet)(nil)
+var _ bson.ValueUnmarshaler = (*ConcurrentHashSet)(nil)
+var _ json.Marshaler = (*ConcurrentHashSet)(nil)
+var _ json.Unmarshaler = (*ConcurrentHashSet)(nil)
+
 // ConcurrentHashSet 基于 ConcurrentHashMap 实现的并发安全集合
 type ConcurrentHashSet[T comparable] struct {
 	m *mapUtil.ConcurrentHashMap[T, struct{}] // 使用空结构体作为值类型
@@ -98,14 +103,15 @@ func (s *ConcurrentHashSet[T]) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (s *ConcurrentHashSet[T]) MarshalBSONValue() (bson.Type, []byte, error) {
+func (s *ConcurrentHashSet[T]) MarshalBSONValue() (byte, []byte, error) {
 	elements := s.ToSlice()
-	return bson.MarshalValue(elements)
+	typ, data, err := bson.MarshalValue(elements)
+	return byte(typ), data, err
 }
 
-func (s *ConcurrentHashSet[T]) UnmarshalBSONValue(t bson.Type, data []byte) error {
+func (s *ConcurrentHashSet[T]) UnmarshalBSONValue(t byte, data []byte) error {
 	var elements []T
-	if err := bson.UnmarshalValue(t, data, &elements); err != nil {
+	if err := bson.UnmarshalValue(bson.Type(t), data, &elements); err != nil {
 		return err
 	}
 	s.m = mapUtil.NewConcurrentHashMap[T, struct{}]()

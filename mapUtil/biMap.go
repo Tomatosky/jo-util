@@ -10,6 +10,10 @@ import (
 )
 
 var _ IMap[string, int] = (*BiMap[string, int])(nil)
+var _ bson.Marshaler = (*BiMap)(nil)
+var _ bson.Unmarshaler = (*BiMap)(nil)
+var _ json.Marshaler = (*BiMap)(nil)
+var _ json.Unmarshaler = (*BiMap)(nil)
 
 // BiMap 双向映射，支持根据key查找value和根据value查找key
 // K和V都需要是可比较类型

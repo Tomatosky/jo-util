@@ -10,6 +10,10 @@ import (
 )
 
 var _ IMap[string, int] = (*ConcurrentHashMap2[string, int])(nil)
+var _ bson.Marshaler = (*ConcurrentHashMap2)(nil)
+var _ bson.Unmarshaler = (*ConcurrentHashMap2)(nil)
+var _ json.Marshaler = (*ConcurrentHashMap2)(nil)
+var _ json.Unmarshaler = (*ConcurrentHashMap2)(nil)
 
 type ConcurrentHashMap2[K comparable, V any] struct {
 	m sync.Map

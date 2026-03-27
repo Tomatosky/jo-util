@@ -11,6 +11,8 @@ import (
 	"github.com/Tomatosky/jo-util/logger"
 )
 
+var _ Alert = (*DingdingAlert)(nil)
+
 // DingdingAlert 钉钉报警实现
 type DingdingAlert struct {
 	Secret      string

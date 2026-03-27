@@ -9,6 +9,11 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
+var _ bson.ValueMarshaler = (*CopyOnWriteSlice)(nil)
+var _ bson.ValueUnmarshaler = (*CopyOnWriteSlice)(nil)
+var _ json.Marshaler = (*CopyOnWriteSlice)(nil)
+var _ json.Unmarshaler = (*CopyOnWriteSlice)(nil)
+
 // CopyOnWriteSlice 线程安全的动态数组，写时复制
 type CopyOnWriteSlice[T comparable] struct {
 	mu   sync.RWMutex // 读写锁
@@ -189,14 +194,15 @@ func (c *CopyOnWriteSlice[T]) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (c *CopyOnWriteSlice[T]) MarshalBSONValue() (bson.Type, []byte, error) {
+func (c *CopyOnWriteSlice[T]) MarshalBSONValue() (byte, []byte, error) {
 	elements := c.ToSlice()
-	return bson.MarshalValue(elements)
+	typ, data, err := bson.MarshalValue(elements)
+	return byte(typ), data, err
 }
 
-func (c *CopyOnWriteSlice[T]) UnmarshalBSONValue(t bson.Type, data []byte) error {
+func (c *CopyOnWriteSlice[T]) UnmarshalBSONValue(t byte, data []byte) error {
 	var elements []T
-	if err := bson.UnmarshalValue(t, data, &elements); err != nil {
+	if err := bson.UnmarshalValue(bson.Type(t), data, &elements); err != nil {
 		return err
 	}
 	c.data = []T{}
