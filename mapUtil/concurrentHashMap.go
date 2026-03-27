@@ -140,6 +140,17 @@ func (cm *ConcurrentHashMap[K, V]) Range(f func(key K, value V) bool) {
 	}
 }
 
+// RangeWithLock 高效遍历，但回调中禁止调用 Put/Remove 等写操作，否则死锁
+func (cm *ConcurrentHashMap[K, V]) RangeWithLock(f func(key K, value V) bool) {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	for k, v := range cm.m {
+		if !f(k, v) {
+			break
+		}
+	}
+}
+
 func (cm *ConcurrentHashMap[K, V]) ToString() string {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
