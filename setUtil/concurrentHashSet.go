@@ -67,6 +67,12 @@ func (s *ConcurrentHashSet[T]) Range(f func(T) bool) {
 	})
 }
 
+func (s *ConcurrentHashSet[T]) RangeWithLock(f func(T) bool) {
+	s.m.RangeWithLock(func(key T, value struct{}) bool {
+		return f(key)
+	})
+}
+
 // ToSlice 转换为切片
 func (s *ConcurrentHashSet[T]) ToSlice() []T {
 	return s.m.Keys()
