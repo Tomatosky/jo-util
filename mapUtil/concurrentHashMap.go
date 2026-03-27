@@ -122,8 +122,8 @@ func (cm *ConcurrentHashMap[K, V]) ToMap() map[K]V {
 	return cm.m
 }
 
-// Range 遍历元素（返回false可提前终止）
-func (cm *ConcurrentHashMap[K, V]) Range(f func(key K, value V) bool) {
+// CopyRange 先复制再遍历元素（返回false可提前终止）
+func (cm *ConcurrentHashMap[K, V]) CopyRange(f func(key K, value V) bool) {
 	// 先复制数据再遍历
 	cm.mu.RLock()
 	tmp := make(map[K]V, len(cm.m))
@@ -140,8 +140,8 @@ func (cm *ConcurrentHashMap[K, V]) Range(f func(key K, value V) bool) {
 	}
 }
 
-// RangeWithLock 高效遍历，但回调中禁止调用 Put/Remove 等写操作，否则死锁
-func (cm *ConcurrentHashMap[K, V]) RangeWithLock(f func(key K, value V) bool) {
+// Range 高效遍历，但回调中禁止调用 Put/Remove 等写操作，否则死锁
+func (cm *ConcurrentHashMap[K, V]) Range(f func(key K, value V) bool) {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
 	for k, v := range cm.m {

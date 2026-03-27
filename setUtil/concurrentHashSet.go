@@ -60,15 +60,15 @@ func (s *ConcurrentHashSet[T]) Clear() {
 	s.m.Clear()
 }
 
-// Range 遍历元素（返回false可提前终止）
-func (s *ConcurrentHashSet[T]) Range(f func(T) bool) {
-	s.m.Range(func(key T, value struct{}) bool {
+// CopyRange 先复制再遍历元素（返回false可提前终止）
+func (s *ConcurrentHashSet[T]) CopyRange(f func(T) bool) {
+	s.m.CopyRange(func(key T, value struct{}) bool {
 		return f(key)
 	})
 }
 
-func (s *ConcurrentHashSet[T]) RangeWithLock(f func(T) bool) {
-	s.m.RangeWithLock(func(key T, value struct{}) bool {
+func (s *ConcurrentHashSet[T]) Range(f func(T) bool) {
+	s.m.Range(func(key T, value struct{}) bool {
 		return f(key)
 	})
 }
