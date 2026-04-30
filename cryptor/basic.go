@@ -14,7 +14,7 @@ import (
 	"crypto/sha512"
 	"encoding/base64"
 	"encoding/hex"
-	"fmt"
+	"hash"
 	"io"
 	"os"
 )
@@ -66,34 +66,7 @@ func Md5ByteWithBase64(data []byte) string {
 
 // Md5File return the md5 value of file.
 func Md5File(filename string) (string, error) {
-	if fileInfo, err := os.Stat(filename); err != nil {
-		return "", err
-	} else if fileInfo.IsDir() {
-		return "", nil
-	}
-
-	file, err := os.Open(filename)
-	if err != nil {
-		return "", err
-	}
-	defer file.Close()
-
-	hash := md5.New()
-
-	chunkSize := 65536
-	for buf, reader := make([]byte, chunkSize), bufio.NewReader(file); ; {
-		n, err := reader.Read(buf)
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return "", err
-		}
-		hash.Write(buf[:n])
-	}
-
-	checksum := fmt.Sprintf("%x", hash.Sum(nil))
-	return checksum, nil
+	return hashFile(filename, md5.New())
 }
 
 // HmacMd5 return the hmac hash of string use md5.
@@ -206,4 +179,48 @@ func Sha512WithBase64(str string) string {
 	sha512 := sha512.New()
 	sha512.Write([]byte(str))
 	return base64.StdEncoding.EncodeToString(sha512.Sum([]byte("")))
+}
+
+// Sha1File return the sha1 value of file.
+func Sha1File(filename string) (string, error) {
+	return hashFile(filename, sha1.New())
+}
+
+// Sha256File return the sha256 value of file.
+func Sha256File(filename string) (string, error) {
+	return hashFile(filename, sha256.New())
+}
+
+// Sha512File return the sha512 value of file.
+func Sha512File(filename string) (string, error) {
+	return hashFile(filename, sha512.New())
+}
+
+// hashFile return the hash value of file with given hash.
+func hashFile(filename string, h hash.Hash) (string, error) {
+	if fileInfo, err := os.Stat(filename); err != nil {
+		return "", err
+	} else if fileInfo.IsDir() {
+		return "", nil
+	}
+
+	file, err := os.Open(filename)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	chunkSize := 65536
+	for buf, reader := make([]byte, chunkSize), bufio.NewReader(file); ; {
+		n, err := reader.Read(buf)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return "", err
+		}
+		h.Write(buf[:n])
+	}
+
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
