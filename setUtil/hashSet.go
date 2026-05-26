@@ -8,10 +8,10 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
-var _ bson.ValueMarshaler = (*HashSet)(nil)
-var _ bson.ValueUnmarshaler = (*HashSet)(nil)
-var _ json.Marshaler = (*HashSet)(nil)
-var _ json.Unmarshaler = (*HashSet)(nil)
+var _ bson.ValueMarshaler = (*HashSet[int32])(nil)
+var _ bson.ValueUnmarshaler = (*HashSet[int32])(nil)
+var _ json.Marshaler = (*HashSet[int32])(nil)
+var _ json.Unmarshaler = (*HashSet[int32])(nil)
 
 // HashSet 非并发安全的哈希集合实现
 type HashSet[T comparable] struct {

@@ -9,10 +9,10 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
-var _ bson.ValueMarshaler = (*ConcurrentHashSet)(nil)
-var _ bson.ValueUnmarshaler = (*ConcurrentHashSet)(nil)
-var _ json.Marshaler = (*ConcurrentHashSet)(nil)
-var _ json.Unmarshaler = (*ConcurrentHashSet)(nil)
+var _ bson.ValueMarshaler = (*ConcurrentHashSet[int32])(nil)
+var _ bson.ValueUnmarshaler = (*ConcurrentHashSet[int32])(nil)
+var _ json.Marshaler = (*ConcurrentHashSet[int32])(nil)
+var _ json.Unmarshaler = (*ConcurrentHashSet[int32])(nil)
 
 // ConcurrentHashSet 基于 ConcurrentHashMap 实现的并发安全集合
 type ConcurrentHashSet[T comparable] struct {

@@ -10,10 +10,10 @@ import (
 )
 
 var _ IMap[string, int] = (*ConcurrentHashMap[string, int])(nil)
-var _ bson.Marshaler = (*ConcurrentHashMap)(nil)
-var _ bson.Unmarshaler = (*ConcurrentHashMap)(nil)
-var _ json.Marshaler = (*ConcurrentHashMap)(nil)
-var _ json.Unmarshaler = (*ConcurrentHashMap)(nil)
+var _ bson.Marshaler = (*ConcurrentHashMap[string, int])(nil)
+var _ bson.Unmarshaler = (*ConcurrentHashMap[string, int])(nil)
+var _ json.Marshaler = (*ConcurrentHashMap[string, int])(nil)
+var _ json.Unmarshaler = (*ConcurrentHashMap[string, int])(nil)
 
 type ConcurrentHashMap[K comparable, V any] struct {
 	mu sync.RWMutex

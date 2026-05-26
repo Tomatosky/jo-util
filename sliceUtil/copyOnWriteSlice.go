@@ -9,10 +9,10 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
-var _ bson.ValueMarshaler = (*CopyOnWriteSlice)(nil)
-var _ bson.ValueUnmarshaler = (*CopyOnWriteSlice)(nil)
-var _ json.Marshaler = (*CopyOnWriteSlice)(nil)
-var _ json.Unmarshaler = (*CopyOnWriteSlice)(nil)
+var _ bson.ValueMarshaler = (*CopyOnWriteSlice[int32])(nil)
+var _ bson.ValueUnmarshaler = (*CopyOnWriteSlice[int32])(nil)
+var _ json.Marshaler = (*CopyOnWriteSlice[int32])(nil)
+var _ json.Unmarshaler = (*CopyOnWriteSlice[int32])(nil)
 
 // CopyOnWriteSlice 线程安全的动态数组，写时复制
 type CopyOnWriteSlice[T comparable] struct {

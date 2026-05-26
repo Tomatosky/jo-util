@@ -12,10 +12,10 @@ import (
 )
 
 var _ IMap[string, int] = (*ConcurrentSkipListMap[string, int])(nil)
-var _ bson.Marshaler = (*ConcurrentSkipListMap)(nil)
-var _ bson.Unmarshaler = (*ConcurrentSkipListMap)(nil)
-var _ json.Marshaler = (*ConcurrentSkipListMap)(nil)
-var _ json.Unmarshaler = (*ConcurrentSkipListMap)(nil)
+var _ bson.Marshaler = (*ConcurrentSkipListMap[string, int])(nil)
+var _ bson.Unmarshaler = (*ConcurrentSkipListMap[string, int])(nil)
+var _ json.Marshaler = (*ConcurrentSkipListMap[string, int])(nil)
+var _ json.Unmarshaler = (*ConcurrentSkipListMap[string, int])(nil)
 
 const (
 	maxLevel    = 32   // 跳表最大层级
