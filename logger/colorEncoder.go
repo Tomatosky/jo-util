@@ -34,7 +34,7 @@ func (e *ColorEncoder) EncodeEntry(ent zapcore.Entry, fields []zapcore.Field) (*
 func getColor(level zapcore.Level) string {
 	switch level {
 	case zapcore.DebugLevel:
-		return "\x1b[32m" // 绿色
+		return "\x1b[90m" // 灰色
 	case zapcore.InfoLevel:
 		return "\x1b[34m" // 蓝色
 	case zapcore.WarnLevel:
