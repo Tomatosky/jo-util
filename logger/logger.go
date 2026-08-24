@@ -75,7 +75,7 @@ func InitLog(writers map[io.Writer]zapcore.Level) *zap.Logger {
 		fileEncoderConfig := zap.NewProductionEncoderConfig()
 		fileEncoderConfig.EncodeTime = zapcore.TimeEncoderOfLayout("2006-01-02 15:04:05.000")
 		fileEncoderConfig.EncodeLevel = zapcore.CapitalLevelEncoder
-		fileEncoder := zapcore.NewJSONEncoder(fileEncoderConfig)
+		fileEncoder := zapcore.NewConsoleEncoder(fileEncoderConfig)
 
 		for w, level := range writers {
 			levelEnabler := zap.LevelEnablerFunc(func(lev zapcore.Level) bool {

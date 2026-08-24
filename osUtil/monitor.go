@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Tomatosky/jo-util/alertUtil"
+	"github.com/Tomatosky/jo-util/logger"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/disk"
 	"github.com/shirou/gopsutil/v3/mem"
@@ -38,8 +38,6 @@ type Monitor struct {
 	memory thresholdConfig
 	disk   thresholdConfig
 
-	alert []alertUtil.Alert
-
 	stopChan chan struct{}
 	wg       sync.WaitGroup
 	mu       sync.Mutex
@@ -68,17 +66,9 @@ func NewMonitor(name string) *Monitor {
 			duration:      0,
 			alertInterval: 1 * time.Minute,
 		},
-		alert:    []alertUtil.Alert{&alertUtil.DefaultAlert{}},
 		stopChan: make(chan struct{}),
 		running:  false,
 	}
-}
-
-// AddAlert 设置自定义报警
-func (m *Monitor) AddAlert(alert alertUtil.Alert) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.alert = append(m.alert, alert)
 }
 
 // SetCPU 设置 CPU 监控阈值
@@ -239,12 +229,9 @@ func (m *Monitor) checkThreshold(config *thresholdConfig, resourceType ResourceT
 				} else {
 					durationStr = fmt.Sprintf("%ds", seconds)
 				}
-				for _, alert := range m.alert {
-					title := fmt.Sprintf("[%s 资源报警]", m.name)
-					content := fmt.Sprintf("[%s 资源报警] \n\n%s \n\n当前值: %.2f%% \n\n阈值: %.2f%% \n\n持续时间: %s",
-						m.name, string(resourceType), value, config.threshold, durationStr)
-					alert.Alert(title, content)
-				}
+				content := fmt.Sprintf("[%s 资源报警] \n\n%s \n\n当前值: %.2f%% \n\n阈值: %.2f%% \n\n持续时间: %s",
+					m.name, string(resourceType), value, config.threshold, durationStr)
+				logger.Log.Warn(content)
 				config.lastAlertTime = now
 			}
 		}
