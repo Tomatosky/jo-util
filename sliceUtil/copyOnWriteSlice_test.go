@@ -2,8 +2,12 @@ package sliceUtil
 
 import (
 	"encoding/json"
+	"reflect"
+	"sort"
 	"sync"
 	"testing"
+
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 // TestNewCopyOnWriteSlice 测试创建新实例
@@ -65,8 +69,8 @@ func TestAddAll(t *testing.T) {
 
 	// 继续添加
 	slice.AddAll(6, 7)
-	if slice.Size() != 7 {
-		t.Errorf("Expected size 7, got %d", slice.Size())
+	if got, want := slice.ToSlice(), []int{1, 2, 3, 4, 5, 6, 7}; !reflect.DeepEqual(got, want) {
+		t.Errorf("AddAll result = %v, want %v", got, want)
 	}
 }
 
@@ -95,11 +99,8 @@ func TestInsert(t *testing.T) {
 
 	// 在末尾插入
 	slice.Insert(slice.Size(), 6)
-	if slice.Size() != 6 {
-		t.Errorf("Expected size 6, got %d", slice.Size())
-	}
-	if slice.Get(5) != 6 {
-		t.Errorf("Expected element 6 at index 5, got %d", slice.Get(5))
+	if got, want := slice.ToSlice(), []int{0, 1, 2, 3, 5, 6}; !reflect.DeepEqual(got, want) {
+		t.Errorf("Insert result = %v, want %v", got, want)
 	}
 }
 
@@ -109,8 +110,8 @@ func TestInsertOutOfRange(t *testing.T) {
 	slice.AddAll(1, 2, 3)
 
 	defer func() {
-		if r := recover(); r == nil {
-			t.Error("Expected panic for negative index, but didn't get one")
+		if r := recover(); r != "index out of range" {
+			t.Errorf("Insert(-1) panic = %v, want %q", r, "index out of range")
 		}
 	}()
 	slice.Insert(-1, 0)
@@ -122,8 +123,8 @@ func TestInsertOutOfRangeHigh(t *testing.T) {
 	slice.AddAll(1, 2, 3)
 
 	defer func() {
-		if r := recover(); r == nil {
-			t.Error("Expected panic for index > size, but didn't get one")
+		if r := recover(); r != "index out of range" {
+			t.Errorf("Insert(4) panic = %v, want %q", r, "index out of range")
 		}
 	}()
 	slice.Insert(4, 0)
@@ -157,8 +158,8 @@ func TestGetOutOfRange(t *testing.T) {
 	slice.AddAll(1, 2, 3)
 
 	defer func() {
-		if r := recover(); r == nil {
-			t.Error("Expected panic for out of range index, but didn't get one")
+		if r := recover(); r != "index out of range" {
+			t.Errorf("Get(3) panic = %v, want %q", r, "index out of range")
 		}
 	}()
 	slice.Get(3)
@@ -170,8 +171,8 @@ func TestGetNegativeOutOfRange(t *testing.T) {
 	slice.AddAll(1, 2, 3)
 
 	defer func() {
-		if r := recover(); r == nil {
-			t.Error("Expected panic for negative out of range index, but didn't get one")
+		if r := recover(); r != "index out of range" {
+			t.Errorf("Get(-10) panic = %v, want %q", r, "index out of range")
 		}
 	}()
 	slice.Get(-10)
@@ -211,19 +212,32 @@ func TestRemove(t *testing.T) {
 	if slice.Size() != 2 {
 		t.Errorf("Expected size 2, got %d", slice.Size())
 	}
+	if got, want := slice.ToSlice(), []int{2, 4}; !reflect.DeepEqual(got, want) {
+		t.Errorf("Remove result = %v, want %v", got, want)
+	}
 }
 
 // TestRemoveOutOfRange 测试移除越界
 func TestRemoveOutOfRange(t *testing.T) {
-	slice := NewCopyOnWriteSlice[int]()
-	slice.AddAll(1, 2, 3)
-
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("Expected panic for out of range remove, but didn't get one")
-		}
-	}()
-	slice.Remove(5)
+	for _, tt := range []struct {
+		name  string
+		index int
+	}{
+		{name: "negative", index: -1},
+		{name: "equal to size", index: 3},
+		{name: "greater than size", index: 5},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			slice := NewCopyOnWriteSlice[int]()
+			slice.AddAll(1, 2, 3)
+			defer func() {
+				if r := recover(); r != "index out of range" {
+					t.Errorf("Remove(%d) panic = %v, want %q", tt.index, r, "index out of range")
+				}
+			}()
+			slice.Remove(tt.index)
+		})
+	}
 }
 
 // TestSize 测试大小
@@ -314,6 +328,9 @@ func TestRemoveObject(t *testing.T) {
 	}
 	if slice.Contains(2) {
 		t.Error("Slice should not contain 2 after removal")
+	}
+	if got, want := slice.ToSlice(), []int{1, 3, 4, 5}; !reflect.DeepEqual(got, want) {
+		t.Errorf("RemoveObject result = %v, want %v", got, want)
 	}
 
 	// 删除不存在的元素
@@ -406,6 +423,65 @@ func TestUnmarshalJSON(t *testing.T) {
 	}
 }
 
+func TestUnmarshalJSONRejectsInvalidDataWithoutChangingSlice(t *testing.T) {
+	slice := NewCopyOnWriteSlice[int]()
+	slice.AddAll(1, 2, 3)
+	if err := json.Unmarshal([]byte(`{"invalid":true}`), slice); err == nil {
+		t.Fatal("UnmarshalJSON should reject a non-array value")
+	}
+	if got, want := slice.ToSlice(), []int{1, 2, 3}; !reflect.DeepEqual(got, want) {
+		t.Errorf("slice after invalid JSON = %v, want %v", got, want)
+	}
+}
+
+func TestUnmarshalJSONIsAtomicForConcurrentReaders(t *testing.T) {
+	slice := NewCopyOnWriteSlice[int]()
+	slice.AddAll(1, 2, 3)
+	stop := make(chan struct{})
+	errors := make(chan []int, 1)
+	var readers sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		readers.Add(1)
+		go func() {
+			defer readers.Done()
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+					snapshot := slice.ToSlice()
+					if !reflect.DeepEqual(snapshot, []int{1, 2, 3}) && !reflect.DeepEqual(snapshot, []int{4, 5, 6}) {
+						select {
+						case errors <- snapshot:
+						default:
+						}
+						return
+					}
+				}
+			}
+		}()
+	}
+
+	for i := 0; i < 100; i++ {
+		data := []byte(`[1,2,3]`)
+		if i%2 == 1 {
+			data = []byte(`[4,5,6]`)
+		}
+		if err := json.Unmarshal(data, slice); err != nil {
+			t.Fatalf("UnmarshalJSON failed: %v", err)
+		}
+	}
+	close(stop)
+	readers.Wait()
+	close(errors)
+	for invalid := range errors {
+		t.Errorf("reader observed partial replacement: %v", invalid)
+	}
+	if got, want := slice.ToSlice(), []int{4, 5, 6}; !reflect.DeepEqual(got, want) {
+		t.Errorf("final slice = %v, want %v", got, want)
+	}
+}
+
 // TestJSONRoundTrip 测试JSON序列化往返
 func TestJSONRoundTrip(t *testing.T) {
 	original := NewCopyOnWriteSlice[string]()
@@ -447,11 +523,16 @@ func TestMarshalBSONValue(t *testing.T) {
 		t.Fatalf("MarshalBSONValue failed: %v", err)
 	}
 
-	if data == nil {
-		t.Error("Expected non-nil BSON data")
+	if bson.Type(bsonType) != bson.TypeArray {
+		t.Errorf("MarshalBSONValue type = %v, want array", bson.Type(bsonType))
 	}
-
-	_ = bsonType // 确保返回了类型
+	var decoded []int
+	if err := bson.UnmarshalValue(bson.Type(bsonType), data, &decoded); err != nil {
+		t.Fatalf("cannot decode marshaled BSON: %v", err)
+	}
+	if want := []int{1, 2, 3, 4, 5}; !reflect.DeepEqual(decoded, want) {
+		t.Errorf("marshaled BSON elements = %v, want %v", decoded, want)
+	}
 }
 
 // TestUnmarshalBSONValue 测试BSON反序列化
@@ -483,6 +564,17 @@ func TestUnmarshalBSONValue(t *testing.T) {
 			t.Errorf("Element mismatch at index %d: expected %d, got %d",
 				i, original.Get(i), restored.Get(i))
 		}
+	}
+}
+
+func TestUnmarshalBSONValueRejectsInvalidDataWithoutChangingSlice(t *testing.T) {
+	slice := NewCopyOnWriteSlice[int]()
+	slice.AddAll(1, 2, 3)
+	if err := slice.UnmarshalBSONValue(byte(bson.TypeArray), []byte{1, 2, 3}); err == nil {
+		t.Fatal("UnmarshalBSONValue should reject malformed BSON")
+	}
+	if got, want := slice.ToSlice(), []int{1, 2, 3}; !reflect.DeepEqual(got, want) {
+		t.Errorf("slice after invalid BSON = %v, want %v", got, want)
 	}
 }
 
@@ -541,6 +633,15 @@ func TestConcurrentAdd(t *testing.T) {
 	if slice.Size() != expectedSize {
 		t.Errorf("Expected size %d, got %d", expectedSize, slice.Size())
 	}
+	got := slice.ToSlice()
+	sort.Ints(got)
+	want := make([]int, expectedSize)
+	for i := range want {
+		want[i] = i
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("concurrently added elements = %v, want 0..%d", got, expectedSize-1)
+	}
 }
 
 // TestConcurrentReadWrite 测试并发读写
@@ -554,17 +655,22 @@ func TestConcurrentReadWrite(t *testing.T) {
 
 	var wg sync.WaitGroup
 	wg.Add(numReaders + numWriters)
+	errors := make(chan string, numReaders*iterations*3)
 
 	// 读取协程
 	for i := 0; i < numReaders; i++ {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < iterations; j++ {
-				size := slice.Size()
-				if size > 0 {
-					_ = slice.Get(0)
-					_ = slice.Contains(3)
-					_ = slice.ToSlice()
+				if got := slice.Get(0); got != 1 {
+					errors <- "first element changed during append-only writes"
+				}
+				if !slice.Contains(3) {
+					errors <- "stable element disappeared during append-only writes"
+				}
+				snapshot := slice.ToSlice()
+				if len(snapshot) < 5 || !reflect.DeepEqual(snapshot[:5], []int{1, 2, 3, 4, 5}) {
+					errors <- "snapshot lost its stable prefix"
 				}
 			}
 		}()
@@ -581,11 +687,27 @@ func TestConcurrentReadWrite(t *testing.T) {
 	}
 
 	wg.Wait()
+	close(errors)
+	for message := range errors {
+		t.Error(message)
+	}
 
 	// 验证最终大小
-	expectedMinSize := 5 + numWriters*iterations
-	if slice.Size() < expectedMinSize {
-		t.Errorf("Expected at least size %d, got %d", expectedMinSize, slice.Size())
+	expectedSize := 5 + numWriters*iterations
+	if got := slice.Size(); got != expectedSize {
+		t.Errorf("final size = %d, want %d", got, expectedSize)
+	}
+	got := slice.ToSlice()[5:]
+	sort.Ints(got)
+	want := make([]int, 0, numWriters*iterations)
+	for writer := 0; writer < numWriters; writer++ {
+		for iteration := 0; iteration < iterations; iteration++ {
+			want = append(want, writer*1000+iteration)
+		}
+	}
+	sort.Ints(want)
+	if !reflect.DeepEqual(got, want) {
+		t.Error("concurrent writes did not preserve the exact submitted elements")
 	}
 }
 
@@ -607,9 +729,7 @@ func TestConcurrentRemove(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < 50; j++ {
-				if slice.Size() > 0 {
-					slice.Remove(0)
-				}
+				slice.Remove(0)
 			}
 		}()
 	}
@@ -619,6 +739,14 @@ func TestConcurrentRemove(t *testing.T) {
 	expectedSize := 1000 - numGoroutines*50
 	if slice.Size() != expectedSize {
 		t.Errorf("Expected size %d, got %d", expectedSize, slice.Size())
+	}
+	got := slice.ToSlice()
+	want := make([]int, expectedSize)
+	for i := range want {
+		want[i] = i + numGoroutines*50
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("remaining elements = %v, want %v", got, want)
 	}
 }
 
@@ -630,15 +758,17 @@ func TestConcurrentRange(t *testing.T) {
 	numGoroutines := 100
 	var wg sync.WaitGroup
 	wg.Add(numGoroutines * 2)
+	snapshots := make([][]int, numGoroutines)
 
 	// 遍历协程
 	for i := 0; i < numGoroutines; i++ {
-		go func() {
+		go func(id int) {
 			defer wg.Done()
 			slice.Range(func(i int, v int) bool {
+				snapshots[id] = append(snapshots[id], v)
 				return true
 			})
-		}()
+		}(i)
 	}
 
 	// 同时进行修改
@@ -655,6 +785,22 @@ func TestConcurrentRange(t *testing.T) {
 	expectedSize := 5 + numGoroutines
 	if slice.Size() != expectedSize {
 		t.Errorf("Expected size %d, got %d", expectedSize, slice.Size())
+	}
+	for id, snapshot := range snapshots {
+		if len(snapshot) < 5 || !reflect.DeepEqual(snapshot[:5], []int{1, 2, 3, 4, 5}) {
+			t.Errorf("snapshot %d has invalid stable prefix: %v", id, snapshot)
+			continue
+		}
+		seen := make(map[int]struct{}, len(snapshot)-5)
+		for _, value := range snapshot[5:] {
+			if value < 100 || value >= 100+numGoroutines {
+				t.Errorf("snapshot %d contains unexpected value %d", id, value)
+			}
+			if _, duplicate := seen[value]; duplicate {
+				t.Errorf("snapshot %d contains duplicate value %d", id, value)
+			}
+			seen[value] = struct{}{}
+		}
 	}
 }
 

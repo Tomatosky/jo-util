@@ -2,6 +2,7 @@ package mapUtil
 
 import (
 	"encoding/json"
+	"reflect"
 	"sync"
 	"testing"
 
@@ -306,6 +307,12 @@ func TestToMap(t *testing.T) {
 	if m["a"] != 1 || m["b"] != 2 || m["c"] != 3 {
 		t.Error("ToMap返回的map内容不正确")
 	}
+
+	m["a"] = 100
+	delete(m, "b")
+	if cm.Get("a") != 1 || !cm.ContainsKey("b") {
+		t.Error("修改ToMap返回值不应影响ConcurrentHashMap")
+	}
 }
 
 // TestRange 测试Range方法
@@ -358,6 +365,23 @@ func TestRange(t *testing.T) {
 	})
 }
 
+func TestCopyRangeAllowsMutation(t *testing.T) {
+	cm := NewConcurrentHashMap(map[int]int{1: 10, 2: 20, 3: 30})
+	visited := make(map[int]int)
+	cm.CopyRange(func(key, value int) bool {
+		visited[key] = value
+		cm.Remove(key)
+		return true
+	})
+
+	if !reflect.DeepEqual(visited, map[int]int{1: 10, 2: 20, 3: 30}) {
+		t.Errorf("CopyRange visited %v, want complete snapshot", visited)
+	}
+	if cm.Size() != 0 {
+		t.Errorf("mutations from CopyRange callback left size %d, want 0", cm.Size())
+	}
+}
+
 // TestConcurrentHashMapToString 测试ToString方法
 func TestConcurrentHashMapToString(t *testing.T) {
 	cm := NewConcurrentHashMap[string, int]()
@@ -365,18 +389,14 @@ func TestConcurrentHashMapToString(t *testing.T) {
 	cm.Put("b", 2)
 
 	str := cm.ToString()
-	if str == "" {
-		t.Error("期望返回非空字符串")
-	}
-
 	// 验证是否为合法JSON
 	var m map[string]int
 	if err := json.Unmarshal([]byte(str), &m); err != nil {
-		t.Errorf("返回的字符串不是合法的JSON: %v", err)
+		t.Fatalf("返回的字符串不是合法的JSON: %v", err)
 	}
 
-	if m["a"] != 1 || m["b"] != 2 {
-		t.Error("JSON解析后的内容不正确")
+	if !reflect.DeepEqual(m, map[string]int{"a": 1, "b": 2}) {
+		t.Errorf("JSON解析后的内容=%v, want map[a:1 b:2]", m)
 	}
 }
 
@@ -397,8 +417,8 @@ func TestJSONSerialization(t *testing.T) {
 			t.Fatalf("反序列化为map失败: %v", err)
 		}
 
-		if m["x"] != 10 || m["y"] != 20 {
-			t.Error("序列化后的内容不正确")
+		if !reflect.DeepEqual(m, map[string]int{"x": 10, "y": 20}) {
+			t.Errorf("序列化后的内容=%v", m)
 		}
 	})
 
@@ -414,8 +434,8 @@ func TestJSONSerialization(t *testing.T) {
 			t.Errorf("期望size为2, 实际为 %d", cm.Size())
 		}
 
-		if !cm.ContainsKey("name") || !cm.ContainsKey("count") {
-			t.Error("反序列化后的key不完整")
+		if cm.Get("name") != "test" || cm.Get("count") != float64(42) {
+			t.Errorf("反序列化后的内容不正确: %v", cm.ToMap())
 		}
 	})
 
@@ -428,6 +448,16 @@ func TestJSONSerialization(t *testing.T) {
 
 		if string(data) != "{}" {
 			t.Errorf("期望序列化为{}, 实际为 %s", string(data))
+		}
+	})
+
+	t.Run("无效JSON", func(t *testing.T) {
+		cm := NewConcurrentHashMap(map[string]int{"kept": 1})
+		if err := json.Unmarshal([]byte(`{"broken":`), cm); err == nil {
+			t.Fatal("无效JSON应该返回错误")
+		}
+		if got := cm.ToMap(); !reflect.DeepEqual(got, map[string]int{"kept": 1}) {
+			t.Errorf("无效JSON修改了原状态: %v", got)
 		}
 	})
 }
@@ -449,8 +479,8 @@ func TestBSONSerialization(t *testing.T) {
 			t.Fatalf("BSON反序列化为map失败: %v", err)
 		}
 
-		if m["x"] != 10 || m["y"] != 20 {
-			t.Error("BSON序列化后的内容不正确")
+		if !reflect.DeepEqual(m, map[string]int{"x": 10, "y": 20}) {
+			t.Errorf("BSON序列化后的内容=%v", m)
 		}
 	})
 
@@ -472,6 +502,16 @@ func TestBSONSerialization(t *testing.T) {
 
 		if cm.Get("a") != 1 || cm.Get("b") != 2 {
 			t.Error("BSON反序列化后的内容不正确")
+		}
+	})
+
+	t.Run("无效BSON", func(t *testing.T) {
+		cm := NewConcurrentHashMap(map[string]int{"kept": 1})
+		if err := bson.Unmarshal([]byte{0, 1, 2}, cm); err == nil {
+			t.Fatal("无效BSON应该返回错误")
+		}
+		if got := cm.ToMap(); !reflect.DeepEqual(got, map[string]int{"kept": 1}) {
+			t.Errorf("无效BSON修改了原状态: %v", got)
 		}
 	})
 }
@@ -502,6 +542,11 @@ func TestConcurrentAccess(t *testing.T) {
 		if cm.Size() != expectedSize {
 			t.Errorf("期望size为%d, 实际为 %d", expectedSize, cm.Size())
 		}
+		for key := 0; key < expectedSize; key++ {
+			if got := cm.Get(key); got != key*2 {
+				t.Fatalf("并发写入后Get(%d)=%d, want %d", key, got, key*2)
+			}
+		}
 	})
 
 	t.Run("并发读写混合", func(t *testing.T) {
@@ -524,17 +569,18 @@ func TestConcurrentAccess(t *testing.T) {
 			}()
 		}
 
-		// 并发写
+		// 并发写入与原有键不重叠的新键
 		for i := 0; i < concurrency; i++ {
 			go func(id int) {
 				defer wg.Done()
 				for j := 0; j < iterations; j++ {
-					cm.Put(j%1000, id)
+					key := 1000 + id*iterations + j
+					cm.Put(key, key*2)
 				}
 			}(i)
 		}
 
-		// 并发删除
+		// 并发删除原有键；重复删除不改变确定的最终结果
 		for i := 0; i < concurrency; i++ {
 			go func() {
 				defer wg.Done()
@@ -545,7 +591,19 @@ func TestConcurrentAccess(t *testing.T) {
 		}
 
 		wg.Wait()
-		// 测试通过意味着没有竞态条件或死锁
+		if got, want := cm.Size(), concurrency*iterations; got != want {
+			t.Fatalf("并发读写删除后size=%d, want %d", got, want)
+		}
+		for key := 0; key < 1000; key++ {
+			if cm.ContainsKey(key) {
+				t.Errorf("被并发删除的key %d仍然存在", key)
+			}
+		}
+		for key := 1000; key < 1000+concurrency*iterations; key++ {
+			if got := cm.Get(key); got != key*2 {
+				t.Fatalf("并发写入的Get(%d)=%d, want %d", key, got, key*2)
+			}
+		}
 	})
 
 	t.Run("并发Range操作", func(t *testing.T) {
@@ -560,9 +618,15 @@ func TestConcurrentAccess(t *testing.T) {
 		for i := 0; i < concurrency; i++ {
 			go func() {
 				defer wg.Done()
+				count, sum := 0, 0
 				cm.Range(func(key, value int) bool {
+					count++
+					sum += value
 					return true
 				})
+				if count != 100 || sum != 4950 {
+					t.Errorf("并发Range得到count=%d sum=%d, want 100/4950", count, sum)
+				}
 			}()
 		}
 
@@ -610,8 +674,8 @@ func TestEdgeCases(t *testing.T) {
 			t.Errorf("期望size为%d, 实际为 %d", count, cm.Size())
 		}
 
-		// 验证部分数据
-		for i := 0; i < count; i += 1000 {
+		// 验证全部数据，避免大小正确但局部映射错误被放过
+		for i := 0; i < count; i++ {
 			if cm.Get(i) != i*2 {
 				t.Errorf("key %d 的值不正确", i)
 			}
@@ -669,7 +733,7 @@ func TestIMapInterface(t *testing.T) {
 }
 
 // BenchmarkPut 基准测试: Put操作
-func BenchmarkPut(b *testing.B) {
+func BenchmarkConcurrentHashMapPut(b *testing.B) {
 	cm := NewConcurrentHashMap[int, int]()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -678,7 +742,7 @@ func BenchmarkPut(b *testing.B) {
 }
 
 // BenchmarkGet 基准测试: Get操作
-func BenchmarkGet(b *testing.B) {
+func BenchmarkConcurrentHashMapGet(b *testing.B) {
 	cm := NewConcurrentHashMap[int, int]()
 	for i := 0; i < 10000; i++ {
 		cm.Put(i, i)
@@ -690,7 +754,7 @@ func BenchmarkGet(b *testing.B) {
 }
 
 // BenchmarkConcurrentReadWrite 基准测试: 并发读写
-func BenchmarkConcurrentReadWrite(b *testing.B) {
+func BenchmarkConcurrentHashMapReadWrite(b *testing.B) {
 	cm := NewConcurrentHashMap[int, int]()
 	for i := 0; i < 1000; i++ {
 		cm.Put(i, i)
@@ -711,7 +775,7 @@ func BenchmarkConcurrentReadWrite(b *testing.B) {
 }
 
 // BenchmarkRange 基准测试: Range操作
-func BenchmarkRange(b *testing.B) {
+func BenchmarkConcurrentHashMapRange(b *testing.B) {
 	cm := NewConcurrentHashMap[int, int]()
 	for i := 0; i < 1000; i++ {
 		cm.Put(i, i)
@@ -726,10 +790,19 @@ func BenchmarkRange(b *testing.B) {
 }
 
 // BenchmarkPutIfAbsent 基准测试: PutIfAbsent操作
-func BenchmarkPutIfAbsent(b *testing.B) {
-	cm := NewConcurrentHashMap[int, int]()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		cm.PutIfAbsent(i%1000, i)
-	}
+func BenchmarkConcurrentHashMapPutIfAbsent(b *testing.B) {
+	b.Run("new_keys", func(b *testing.B) {
+		cm := NewConcurrentHashMap[int, int]()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			cm.PutIfAbsent(i, i)
+		}
+	})
+	b.Run("existing_key", func(b *testing.B) {
+		cm := NewConcurrentHashMap(map[int]int{1: 1})
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			cm.PutIfAbsent(1, i)
+		}
+	})
 }

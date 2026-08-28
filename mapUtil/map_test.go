@@ -2,8 +2,32 @@ package mapUtil
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 )
+
+func TestContainValue(t *testing.T) {
+	tests := []struct {
+		name  string
+		m     map[string]int
+		value int
+		want  bool
+	}{
+		{name: "value exists", m: map[string]int{"a": 1, "b": 2}, value: 2, want: true},
+		{name: "value does not exist", m: map[string]int{"a": 1}, value: 2, want: false},
+		{name: "zero value exists", m: map[string]int{"zero": 0}, value: 0, want: true},
+		{name: "empty map", m: map[string]int{}, value: 0, want: false},
+		{name: "nil map", m: nil, value: 0, want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ContainValue(tt.m, tt.value); got != tt.want {
+				t.Fatalf("ContainValue() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
 
 func TestContainsKey(t *testing.T) {
 	tests := []struct {
@@ -59,6 +83,7 @@ func TestKeys(t *testing.T) {
 		want []string
 	}{
 		{name: "empty map", m: map[string]int{}, want: []string{}},
+		{name: "nil map", m: nil, want: []string{}},
 		{name: "single element", m: map[string]int{"a": 1}, want: []string{"a"}},
 		{name: "multiple elements", m: map[string]int{"a": 1, "b": 2, "c": 3}, want: []string{"a", "b", "c"}},
 	}
@@ -66,22 +91,16 @@ func TestKeys(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := Keys(tt.m)
-			if len(got) != len(tt.want) {
-				t.Errorf("Keys() length = %v, want %v", len(got), len(tt.want))
+			gotSet := make(map[string]int, len(got))
+			for _, key := range got {
+				gotSet[key]++
 			}
-
-			// 检查所有期望的键都存在
-			for _, k := range tt.want {
-				found := false
-				for _, gk := range got {
-					if gk == k {
-						found = true
-						break
-					}
-				}
-				if !found {
-					t.Errorf("Keys() missing key %v", k)
-				}
+			wantSet := make(map[string]int, len(tt.want))
+			for _, key := range tt.want {
+				wantSet[key]++
+			}
+			if !reflect.DeepEqual(gotSet, wantSet) {
+				t.Errorf("Keys() = %v, want keys %v", got, tt.want)
 			}
 		})
 	}
@@ -99,36 +118,35 @@ func TestValues(t *testing.T) {
 			want: []int{},
 		},
 		{
+			name: "nil map",
+			m:    nil,
+			want: []int{},
+		},
+		{
 			name: "single element",
 			m:    map[string]int{"a": 1},
 			want: []int{1},
 		},
 		{
 			name: "multiple elements",
-			m:    map[string]int{"a": 1, "b": 2, "c": 3},
-			want: []int{1, 2, 3},
+			m:    map[string]int{"a": 1, "b": 1, "c": 2},
+			want: []int{1, 1, 2},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := Values(tt.m)
-			if len(got) != len(tt.want) {
-				t.Errorf("Values() length = %v, want %v", len(got), len(tt.want))
+			gotCounts := make(map[int]int, len(got))
+			for _, value := range got {
+				gotCounts[value]++
 			}
-
-			// 检查所有期望的值都存在
-			for _, v := range tt.want {
-				found := false
-				for _, gv := range got {
-					if gv == v {
-						found = true
-						break
-					}
-				}
-				if !found {
-					t.Errorf("Values() missing value %v", v)
-				}
+			wantCounts := make(map[int]int, len(tt.want))
+			for _, value := range tt.want {
+				wantCounts[value]++
+			}
+			if !reflect.DeepEqual(gotCounts, wantCounts) {
+				t.Errorf("Values() = %v, want values %v", got, tt.want)
 			}
 		})
 	}
@@ -145,6 +163,8 @@ func TestGetOrDefault(t *testing.T) {
 		{name: "key exists", m: map[string]int{"a": 1, "b": 2}, key: "a", defaultValue: 0, want: 1},
 		{name: "key does not exist", m: map[string]int{"a": 1, "b": 2}, key: "c", defaultValue: 3, want: 3},
 		{name: "empty map", m: map[string]int{}, key: "a", defaultValue: 1, want: 1},
+		{name: "nil map", m: nil, key: "a", defaultValue: 1, want: 1},
+		{name: "existing zero value", m: map[string]int{"a": 0}, key: "a", defaultValue: 1, want: 0},
 	}
 
 	for _, tt := range tests {
@@ -211,6 +231,7 @@ func TestToString(t *testing.T) {
 		{name: "empty map", m: map[string]int{}, want: "{}"},
 		{name: "single element", m: map[string]int{"a": 1}, want: `{"a":1}`},
 		{name: "multiple elements", m: map[string]int{"a": 1, "b": 2}, want: `{"a":1,"b":2}`},
+		{name: "nil map", m: nil, want: `null`},
 	}
 
 	for _, tt := range tests {
@@ -227,14 +248,8 @@ func TestToString(t *testing.T) {
 				t.Errorf("Test case has invalid want JSON: %v", err)
 			}
 
-			if len(gotMap) != len(wantMap) {
-				t.Errorf("ToString() map length = %v, want %v", len(gotMap), len(wantMap))
-			}
-
-			for k, v := range wantMap {
-				if gotV, ok := gotMap[k]; !ok || gotV != v {
-					t.Errorf("ToString() map[%v] = %v, want %v", k, gotV, v)
-				}
+			if !reflect.DeepEqual(gotMap, wantMap) {
+				t.Errorf("ToString() parsed to %#v, want %#v", gotMap, wantMap)
 			}
 		})
 	}
@@ -250,7 +265,7 @@ func TestSortByValue(t *testing.T) {
 		{name: "empty map", input: map[string]int{}, reverse: false, expected: []string{}},
 		{name: "ascending sort", input: map[string]int{"a": 3, "b": 1, "c": 2}, reverse: false, expected: []string{"b", "c", "a"}},
 		{name: "descending sort", input: map[string]int{"a": 3, "b": 1, "c": 2}, reverse: true, expected: []string{"a", "c", "b"}},
-		{name: "same values ascending", input: map[string]int{"a": 1, "b": 1, "c": 1}, reverse: false, expected: []string{"a", "b", "c"}}, // 顺序不重要，但需要稳定
+		{name: "equal values", input: map[string]int{"a": 1, "b": 1, "c": 1}, reverse: false, expected: []string{"a", "b", "c"}},
 	}
 
 	for _, tt := range tests {
@@ -262,26 +277,21 @@ func TestSortByValue(t *testing.T) {
 				return
 			}
 
-			// 对于相同值的测试用例，我们只检查顺序是否稳定
-			if tt.name == "same values ascending" {
-				// 检查是否包含所有键
-				keys := make(map[string]bool)
-				for _, k := range got {
-					keys[k] = true
+			seen := make(map[string]bool, len(got))
+			for i, key := range got {
+				if _, exists := tt.input[key]; !exists || seen[key] {
+					t.Fatalf("result contains invalid or duplicate key %q: %v", key, got)
 				}
-				for _, k := range tt.expected {
-					if !keys[k] {
-						t.Errorf("missing key %s in result", k)
+				seen[key] = true
+				if i > 0 {
+					previous, current := tt.input[got[i-1]], tt.input[key]
+					if (!tt.reverse && previous > current) || (tt.reverse && previous < current) {
+						t.Errorf("values are not sorted at index %d: %d then %d", i, previous, current)
 					}
 				}
-				return
 			}
-
-			// 对于其他测试用例，检查顺序是否正确
-			for i := range got {
-				if got[i] != tt.expected[i] {
-					t.Errorf("at index %d, expected %s, got %s", i, tt.expected[i], got[i])
-				}
+			if tt.name != "equal values" && !reflect.DeepEqual(got, tt.expected) {
+				t.Errorf("SortByValue() = %v, want %v", got, tt.expected)
 			}
 		})
 	}
@@ -293,11 +303,8 @@ func TestSortByValueWithDifferentTypes(t *testing.T) {
 		input := map[string]float64{"a": 1.1, "b": 1.0, "c": 1.2}
 		expected := []string{"b", "a", "c"}
 		got := SortByValue(input, false)
-
-		for i := range got {
-			if got[i] != expected[i] {
-				t.Errorf("at index %d, expected %s, got %s", i, expected[i], got[i])
-			}
+		if !reflect.DeepEqual(got, expected) {
+			t.Errorf("SortByValue() = %v, want %v", got, expected)
 		}
 	})
 
@@ -305,11 +312,43 @@ func TestSortByValueWithDifferentTypes(t *testing.T) {
 		input := map[int]string{1: "z", 2: "a", 3: "m"}
 		expected := []int{2, 3, 1}
 		got := SortByValue(input, false)
-
-		for i := range got {
-			if got[i] != expected[i] {
-				t.Errorf("at index %d, expected %d, got %d", i, expected[i], got[i])
-			}
+		if !reflect.DeepEqual(got, expected) {
+			t.Errorf("SortByValue() = %v, want %v", got, expected)
 		}
 	})
+}
+
+func TestMapImplementationsMarshalJSONErrors(t *testing.T) {
+	value := make(chan int)
+	ordered := NewOrderedMap[string, chan int]()
+	ordered.Put("key", value)
+	hash := NewConcurrentHashMap[string, chan int]()
+	hash.Put("key", value)
+	hash2 := NewConcurrentHashMap2[string, chan int]()
+	hash2.Put("key", value)
+	skipList := NewConcurrentSkipListMap[string, chan int]()
+	skipList.Put("key", value)
+	tree := NewTreeMap[string, chan int](func(a, b string) bool { return a < b })
+	tree.Put("key", value)
+	biMap := NewBiMap[string, chan int]()
+	biMap.Put("key", value)
+
+	tests := []struct {
+		name      string
+		marshaler interface{ MarshalJSON() ([]byte, error) }
+	}{
+		{name: "ordered map", marshaler: ordered},
+		{name: "concurrent hash map", marshaler: hash},
+		{name: "sync map", marshaler: hash2},
+		{name: "skip list map", marshaler: skipList},
+		{name: "tree map", marshaler: tree},
+		{name: "bi-map", marshaler: biMap},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := tt.marshaler.MarshalJSON(); err == nil {
+				t.Error("MarshalJSON with an unsupported channel value expected an error")
+			}
+		})
+	}
 }

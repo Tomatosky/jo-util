@@ -30,10 +30,14 @@ func getPubKey(publickey []byte) (*rsa.PublicKey, error) {
 	}
 	// x509 parse public key
 	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
-	if err != nil {
-		return nil, err
+	if err == nil {
+		rsaPublicKey, ok := pub.(*rsa.PublicKey)
+		if !ok {
+			return nil, ErrPublicKey
+		}
+		return rsaPublicKey, nil
 	}
-	return pub.(*rsa.PublicKey), err
+	return x509.ParsePKCS1PublicKey(block.Bytes)
 }
 
 // 设置私钥
@@ -50,7 +54,11 @@ func getPriKey(privatekey []byte) (*rsa.PrivateKey, error) {
 	if err != nil {
 		return nil, err
 	}
-	return pri2.(*rsa.PrivateKey), nil
+	rsaPrivateKey, ok := pri2.(*rsa.PrivateKey)
+	if !ok {
+		return nil, ErrPrivateKey
+	}
+	return rsaPrivateKey, nil
 }
 
 // 公钥加密或解密byte
@@ -62,17 +70,15 @@ func pubKeyByte(pub *rsa.PublicKey, in []byte, isEncrytp bool) ([]byte, error) {
 	if len(in) <= k {
 		if isEncrytp {
 			return rsa.EncryptPKCS1v15(rand.Reader, pub, in)
-		} else {
-			return pubKeyDecrypt(pub, in)
 		}
-	} else {
-		iv := make([]byte, k)
-		out := bytes.NewBuffer(iv)
-		if err := pubKeyIO(pub, bytes.NewReader(in), out, isEncrytp); err != nil {
-			return nil, err
-		}
-		return io.ReadAll(out)
+		return pubKeyDecrypt(pub, in)
 	}
+	iv := make([]byte, k)
+	out := bytes.NewBuffer(iv)
+	if err := pubKeyIO(pub, bytes.NewReader(in), out, isEncrytp); err != nil {
+		return nil, err
+	}
+	return io.ReadAll(out)
 }
 
 // 私钥加密或解密byte
@@ -84,17 +90,15 @@ func priKeyByte(pri *rsa.PrivateKey, in []byte, isEncrytp bool) ([]byte, error) 
 	if len(in) <= k {
 		if isEncrytp {
 			return priKeyEncrypt(rand.Reader, pri, in)
-		} else {
-			return rsa.DecryptPKCS1v15(rand.Reader, pri, in)
 		}
-	} else {
-		iv := make([]byte, k)
-		out := bytes.NewBuffer(iv)
-		if err := priKeyIO(pri, bytes.NewReader(in), out, isEncrytp); err != nil {
-			return nil, err
-		}
-		return io.ReadAll(out)
+		return rsa.DecryptPKCS1v15(rand.Reader, pri, in)
 	}
+	iv := make([]byte, k)
+	out := bytes.NewBuffer(iv)
+	if err := priKeyIO(pri, bytes.NewReader(in), out, isEncrytp); err != nil {
+		return nil, err
+	}
+	return io.ReadAll(out)
 }
 
 // 公钥加密或解密Reader
@@ -131,7 +135,6 @@ func pubKeyIO(pub *rsa.PublicKey, in io.Reader, out io.Writer, isEncrytp bool) (
 			return err
 		}
 	}
-	return nil
 }
 
 // 私钥加密或解密Reader
@@ -168,7 +171,6 @@ func priKeyIO(pri *rsa.PrivateKey, r io.Reader, w io.Writer, isEncrytp bool) (er
 			return err
 		}
 	}
-	return nil
 }
 
 // 公钥解密
@@ -178,7 +180,7 @@ func pubKeyDecrypt(pub *rsa.PublicKey, data []byte) ([]byte, error) {
 		return nil, ErrDataLen
 	}
 	m := new(big.Int).SetBytes(data)
-	if m.Cmp(pub.N) > 0 {
+	if m.Cmp(pub.N) >= 0 {
 		return nil, ErrDataToLarge
 	}
 	m.Exp(m, big.NewInt(int64(pub.E)), pub.N)
@@ -186,24 +188,27 @@ func pubKeyDecrypt(pub *rsa.PublicKey, data []byte) ([]byte, error) {
 	if d[0] != 0 {
 		return nil, ErrDataBroken
 	}
-	if d[1] != 0 && d[1] != 1 {
+	if d[1] != 1 {
 		return nil, ErrKeyPairDismatch
 	}
-	var i = 2
-	for ; i < len(d); i++ {
+	separator := -1
+	for i := 2; i < len(d); i++ {
 		if d[i] == 0 {
+			separator = i
 			break
 		}
+		if d[i] != 0xff {
+			return nil, ErrDecryption
+		}
 	}
-	i++
-	if i == len(d) {
-		return nil, nil
+	if separator < 10 {
+		return nil, ErrDecryption
 	}
-	return d[i:], nil
+	return d[separator+1:], nil
 }
 
 // 私钥加密
-func priKeyEncrypt(rand io.Reader, priv *rsa.PrivateKey, hashed []byte) ([]byte, error) {
+func priKeyEncrypt(random io.Reader, priv *rsa.PrivateKey, hashed []byte) ([]byte, error) {
 	tLen := len(hashed)
 	k := (priv.N.BitLen() + 7) / 8
 	if k < tLen+11 {
@@ -216,7 +221,7 @@ func priKeyEncrypt(rand io.Reader, priv *rsa.PrivateKey, hashed []byte) ([]byte,
 	}
 	copy(em[k-tLen:k], hashed)
 	m := new(big.Int).SetBytes(em)
-	c, err := decrypt(rand, priv, m)
+	c, err := decrypt(random, priv, m)
 	if err != nil {
 		return nil, err
 	}
@@ -311,14 +316,14 @@ func copyWithLeftPad(dest, src []byte) {
 }
 
 // 从crypto/rsa复制
-func nonZeroRandomBytes(s []byte, rand io.Reader) (err error) {
-	_, err = io.ReadFull(rand, s)
+func nonZeroRandomBytes(s []byte, random io.Reader) (err error) {
+	_, err = io.ReadFull(random, s)
 	if err != nil {
 		return
 	}
 	for i := 0; i < len(s); i++ {
 		for s[i] == 0 {
-			_, err = io.ReadFull(rand, s[i:i+1])
+			_, err = io.ReadFull(random, s[i:i+1])
 			if err != nil {
 				return
 			}

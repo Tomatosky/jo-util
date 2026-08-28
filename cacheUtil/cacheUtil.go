@@ -40,7 +40,7 @@ func New[K comparable, V any](expiration time.Duration) *Cache[K, V] {
 	C := &Cache[K, V]{c}
 	if expiration > 0 {
 		runJanitor(c) // 自动启用janitor
-		runtime.SetFinalizer(C, stopJanitor[K, V])
+		runtime.AddCleanup(C, stopJanitor[K, V], c.janitor)
 	}
 	return C
 }
@@ -59,7 +59,7 @@ func NewAccessExpire[K comparable, V any](expiration time.Duration) *Cache[K, V]
 	C := &Cache[K, V]{c}
 	if expiration > 0 {
 		runJanitor(c) // 自动启用janitor
-		runtime.SetFinalizer(C, stopJanitor[K, V])
+		runtime.AddCleanup(C, stopJanitor[K, V], c.janitor)
 	}
 	return C
 }
@@ -71,9 +71,13 @@ func NewAccessExpire[K comparable, V any](expiration time.Duration) *Cache[K, V]
 // 参数 expiration 为可选的过期时间，可传入 0 个或 1 个 time.Duration 类型的值。
 func (c *cache[K, V]) Set(k K, x V, expiration ...time.Duration) {
 	c.mu.Lock()
-	exp := time.Now().Add(c.expiration).UnixNano()
+	duration := c.expiration
 	if len(expiration) > 0 {
-		exp = time.Now().Add(expiration[0]).UnixNano()
+		duration = expiration[0]
+	}
+	var exp int64
+	if duration > 0 {
+		exp = time.Now().Add(duration).UnixNano()
 	}
 	c.items[k] = &Item[V]{
 		Object:     x,
@@ -87,9 +91,13 @@ func (c *cache[K, V]) Set(k K, x V, expiration ...time.Duration) {
 // 参数 k 为缓存的键，类型为 K。
 // 参数 x 为缓存的值，类型为 V。
 func (c *cache[K, V]) set(k K, x V) {
+	var expiration int64
+	if c.expiration > 0 {
+		expiration = time.Now().Add(c.expiration).UnixNano()
+	}
 	c.items[k] = &Item[V]{
 		Object:     x,
-		Expiration: time.Now().Add(c.expiration).UnixNano(),
+		Expiration: expiration,
 	}
 }
 
@@ -114,8 +122,13 @@ func (c *cache[K, V]) SetIfAbsent(k K, x V) bool {
 // 参数 k 为要查找的缓存键。
 // 返回值依次为缓存项的值、缓存项是否存在且未过期的标志。
 func (c *cache[K, V]) Get(k K) (V, bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+	if c.accessExpire {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+	} else {
+		c.mu.RLock()
+		defer c.mu.RUnlock()
+	}
 
 	obj, found, _ := c.get(k)
 	return obj, found
@@ -133,21 +146,26 @@ func (c *cache[K, V]) get(k K) (V, bool, time.Time) {
 		var zero V
 		return zero, false, time.Time{}
 	}
-	if c.expiration > 0 && time.Now().UnixNano() > item.Expiration {
+	if item.Expiration > 0 && time.Now().UnixNano() > item.Expiration {
 		var zero V
 		return zero, false, time.Time{}
 	}
 
 	// 在访问过期模式下，重置过期时间
 	if c.accessExpire {
-		newExpiration := time.Now().Add(c.expiration)
-		item.Expiration = newExpiration.UnixNano()
+		var newExpiration time.Time
+		if c.expiration > 0 {
+			newExpiration = time.Now().Add(c.expiration)
+			item.Expiration = newExpiration.UnixNano()
+		} else {
+			item.Expiration = 0
+		}
 		return item.Object, true, newExpiration
 	}
 
-	expirationTime := time.Unix(0, item.Expiration)
-	if c.expiration == 0 {
-		expirationTime = time.Unix(0, 0)
+	var expirationTime time.Time
+	if item.Expiration > 0 {
+		expirationTime = time.Unix(0, item.Expiration)
 	}
 	return item.Object, true, expirationTime
 }
@@ -157,8 +175,13 @@ func (c *cache[K, V]) get(k K) (V, bool, time.Time) {
 // 参数 k 为要查找的缓存键。
 // 返回值依次为缓存项的值、缓存项是否存在且未过期的标志、缓存项的过期时间。
 func (c *cache[K, V]) GetWithExpiration(k K) (V, bool, time.Time) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+	if c.accessExpire {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+	} else {
+		c.mu.RLock()
+		defer c.mu.RUnlock()
+	}
 
 	return c.get(k)
 }
@@ -180,11 +203,7 @@ func (c *cache[K, V]) delete(k K) {
 }
 
 // deleteExpired 方法用于删除缓存中所有已过期的键值对。
-// 若缓存没有设置过期时间，该方法将直接返回，不进行任何操作。
 func (c *cache[K, V]) deleteExpired() {
-	if c.expiration <= 0 {
-		return
-	}
 	now := time.Now().UnixNano()
 	c.mu.Lock()
 	for k, v := range c.items {
@@ -204,10 +223,8 @@ func (c *cache[K, V]) Items() map[K]V {
 	m := make(map[K]V, len(c.items))
 	now := time.Now().UnixNano()
 	for k, v := range c.items {
-		if c.expiration > 0 && v.Expiration > 0 {
-			if now > v.Expiration {
-				continue
-			}
+		if v.Expiration > 0 && now > v.Expiration {
+			continue
 		}
 		m[k] = v.Object
 	}
@@ -225,7 +242,8 @@ func (c *cache[K, V]) Flush() {
 
 type janitor[K comparable, V any] struct {
 	Interval time.Duration
-	stop     chan bool
+	stop     chan struct{}
+	stopOnce sync.Once
 }
 
 // run 方法用于启动一个定时任务，定期清理缓存中已过期的键值对。
@@ -244,14 +262,16 @@ func (j *janitor[K, V]) run(c *cache[K, V]) {
 	}
 }
 
-func stopJanitor[K comparable, V any](c *Cache[K, V]) {
-	c.janitor.stop <- true
+func stopJanitor[K comparable, V any](j *janitor[K, V]) {
+	j.stopOnce.Do(func() {
+		close(j.stop)
+	})
 }
 
 func runJanitor[K comparable, V any](c *cache[K, V]) {
 	j := &janitor[K, V]{
 		Interval: cleanupInterval, // 使用固定间隔
-		stop:     make(chan bool),
+		stop:     make(chan struct{}),
 	}
 	c.janitor = j
 	go j.run(c)

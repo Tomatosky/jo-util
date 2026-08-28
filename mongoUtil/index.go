@@ -2,6 +2,7 @@ package mongoUtil
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"strings"
 	"sync"
@@ -18,23 +19,25 @@ var (
 
 // EnsureIndexes 确保集合的索引已创建
 func EnsureIndexes(ctx context.Context, collection *mongo.Collection, model interface{}) error {
-	typeName := reflect.TypeOf(model).String()
-	cacheKey := collection.Name() + ":" + typeName
+	t := reflect.TypeOf(model)
+	if t == nil {
+		return nil
+	}
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+
+	if t.Kind() != reflect.Struct {
+		return nil
+	}
+
+	cacheKey := makeIndexCacheKey(collection, t)
 
 	indexCacheLock.Lock()
 	defer indexCacheLock.Unlock()
 
 	// 检查是否已经创建过索引
 	if indexCache[cacheKey] {
-		return nil
-	}
-
-	t := reflect.TypeOf(model)
-	if t.Kind() == reflect.Ptr {
-		t = t.Elem()
-	}
-
-	if t.Kind() != reflect.Struct {
 		return nil
 	}
 
@@ -75,4 +78,9 @@ func EnsureIndexes(ctx context.Context, collection *mongo.Collection, model inte
 	// 标记为已创建
 	indexCache[cacheKey] = true
 	return nil
+}
+
+func makeIndexCacheKey(collection *mongo.Collection, modelType reflect.Type) string {
+	database := collection.Database()
+	return fmt.Sprintf("%p:%s:%s:%s", database.Client(), database.Name(), collection.Name(), modelType.String())
 }

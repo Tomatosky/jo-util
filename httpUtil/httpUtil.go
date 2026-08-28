@@ -65,6 +65,36 @@ type Resp struct {
 	Headers    map[string]string
 }
 
+func buildMultipartBody(data map[string]interface{}) (body *bytes.Buffer, contentType string, err error) {
+	body = &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	contentType = writer.FormDataContentType()
+	defer func() {
+		if closeErr := writer.Close(); err == nil {
+			err = closeErr
+		}
+	}()
+
+	for key, value := range data {
+		if file, ok := value.(*os.File); ok {
+			part, createErr := writer.CreateFormFile(key, filepath.Base(file.Name()))
+			if createErr != nil {
+				return nil, "", createErr
+			}
+			if _, err = io.Copy(part, file); err != nil {
+				return nil, "", err
+			}
+			continue
+		}
+
+		if err = writer.WriteField(key, fmt.Sprintf("%v", value)); err != nil {
+			return nil, "", err
+		}
+	}
+
+	return body, contentType, nil
+}
+
 func (r *Resp) Text() string {
 	return string(r.Body)
 }
@@ -81,8 +111,8 @@ func (r *Resp) JsonObj(v any) error {
 }
 
 // Get 发送GET请求
-func (rc *RequestClient) Get(url string) *Resp {
-	req, err := http.NewRequest("GET", url, nil)
+func (rc *RequestClient) Get(requestURL string) *Resp {
+	req, err := http.NewRequest("GET", requestURL, nil)
 	if err != nil {
 		return &Resp{Err: err}
 	}
@@ -133,38 +163,12 @@ func (rc *RequestClient) Post(postUrl string, data map[string]interface{}) *Resp
 	switch {
 	case rc.IsMultipart:
 		// multipart/form-data 格式
-		body := &bytes.Buffer{}
-		writer := multipart.NewWriter(body)
-
-		for key, value := range data {
-			// 处理文件上传情况
-			if file, ok := value.(*os.File); ok {
-				part, err := writer.CreateFormFile(key, filepath.Base(file.Name()))
-				if err != nil {
-					return &Resp{Err: err}
-				}
-				_, err = io.Copy(part, file)
-				if err != nil {
-					return &Resp{Err: err}
-				}
-				continue
-			}
-
-			// 处理普通字段
-			strValue := fmt.Sprintf("%v", value)
-			err := writer.WriteField(key, strValue)
-			if err != nil {
-				return &Resp{Err: err}
-			}
-		}
-
-		err := writer.Close()
+		body, multipartContentType, err := buildMultipartBody(data)
 		if err != nil {
 			return &Resp{Err: err}
 		}
-
 		reqBody = body
-		contentType = writer.FormDataContentType()
+		contentType = multipartContentType
 
 	case rc.IsJson:
 		// JSON 格式

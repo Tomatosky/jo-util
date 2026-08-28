@@ -589,7 +589,7 @@ func (tm *TreeMap[K, V]) inOrderFunc(n *node[K, V], f func(*node[K, V]) bool) bo
 func (tm *TreeMap[K, V]) ToString() string {
 	tm.mu.RLock()
 	defer tm.mu.RUnlock()
-	bytes, err := json.Marshal(tm.ToMap())
+	bytes, err := json.Marshal(tm.toMap())
 	if err != nil {
 		logger.Log.Error(fmt.Sprintf("%v", err))
 		panic(err)
@@ -597,8 +597,14 @@ func (tm *TreeMap[K, V]) ToString() string {
 	return string(bytes)
 }
 
-// ToMap 内部方法，将树转换为map
+// ToMap 将树转换为独立的map快照。
 func (tm *TreeMap[K, V]) ToMap() map[K]V {
+	tm.mu.RLock()
+	defer tm.mu.RUnlock()
+	return tm.toMap()
+}
+
+func (tm *TreeMap[K, V]) toMap() map[K]V {
 	m := make(map[K]V, tm.size)
 	tm.inOrder(tm.root, func(n *node[K, V]) {
 		m[n.key] = n.value
@@ -610,7 +616,7 @@ func (tm *TreeMap[K, V]) ToMap() map[K]V {
 func (tm *TreeMap[K, V]) MarshalJSON() ([]byte, error) {
 	tm.mu.RLock()
 	defer tm.mu.RUnlock()
-	return json.Marshal(tm.ToMap())
+	return json.Marshal(tm.toMap())
 }
 
 // UnmarshalJSON 实现JSON反序列化接口
@@ -635,7 +641,7 @@ func (tm *TreeMap[K, V]) UnmarshalJSON(data []byte) error {
 func (tm *TreeMap[K, V]) MarshalBSON() ([]byte, error) {
 	tm.mu.RLock()
 	defer tm.mu.RUnlock()
-	return bson.Marshal(tm.ToMap())
+	return bson.Marshal(tm.toMap())
 }
 
 // UnmarshalBSON 实现BSON反序列化接口

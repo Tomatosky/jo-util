@@ -2,8 +2,24 @@ package setUtil
 
 import (
 	"encoding/json"
+	"reflect"
+	"sort"
 	"testing"
+
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
+
+func assertIntSetElements(t *testing.T, got []int, want []int) {
+	t.Helper()
+
+	got = append([]int(nil), got...)
+	want = append([]int(nil), want...)
+	sort.Ints(got)
+	sort.Ints(want)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("set elements = %v, want %v", got, want)
+	}
+}
 
 func TestNewHashSet(t *testing.T) {
 	// 测试空集合
@@ -13,10 +29,11 @@ func TestNewHashSet(t *testing.T) {
 	}
 
 	// 测试带初始元素的集合
-	set := NewHashSet(1, 2, 3)
+	set := NewHashSet(1, 2, 3, 2)
 	if set.Size() != 3 {
 		t.Errorf("Expected set size 3, got %d", set.Size())
 	}
+	assertIntSetElements(t, set.ToSlice(), []int{1, 2, 3})
 }
 
 func TestAdd(t *testing.T) {
@@ -111,15 +128,21 @@ func TestClear(t *testing.T) {
 
 func TestRange(t *testing.T) {
 	set := NewHashSet(1, 2, 3, 4, 5)
-	count := 0
+	visited := make([]int, 0, set.Size())
 
 	set.Range(func(n int) bool {
-		count++
-		return count < 3 // 只处理前两个元素
+		visited = append(visited, n)
+		return true
 	})
+	assertIntSetElements(t, visited, []int{1, 2, 3, 4, 5})
 
-	if count != 3 { // 因为我们在处理第三个元素时返回了false
-		t.Errorf("Expected to process 3 elements, processed %d", count)
+	count := 0
+	set.Range(func(int) bool {
+		count++
+		return count < 3
+	})
+	if count != 3 {
+		t.Errorf("Range should stop on the third callback, got %d callbacks", count)
 	}
 }
 
@@ -128,23 +151,7 @@ func TestToSlice(t *testing.T) {
 	set := NewHashSet(elements...)
 	slice := set.ToSlice()
 
-	if len(slice) != len(elements) {
-		t.Errorf("Expected slice length %d, got %d", len(elements), len(slice))
-	}
-
-	// 检查所有元素都存在
-	for _, v := range elements {
-		found := false
-		for _, s := range slice {
-			if v == s {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("Expected element %d in slice", v)
-		}
-	}
+	assertIntSetElements(t, slice, elements)
 }
 
 func TestIsEmpty(t *testing.T) {
@@ -167,24 +174,68 @@ func TestToString(t *testing.T) {
 	var slice []string
 	err := json.Unmarshal([]byte(str), &slice)
 	if err != nil {
-		t.Errorf("Failed to unmarshal set string: %v", err)
+		t.Fatalf("Failed to unmarshal set string: %v", err)
+	}
+	sort.Strings(slice)
+	if want := []string{"apple", "banana", "cherry"}; !reflect.DeepEqual(slice, want) {
+		t.Errorf("ToString elements = %v, want %v", slice, want)
 	}
 
-	if len(slice) != 3 {
-		t.Errorf("Expected 3 elements in JSON, got %d", len(slice))
+	if got := NewHashSet[int]().ToString(); got != "[]" {
+		t.Errorf("empty set ToString() = %q, want []", got)
+	}
+}
+
+func TestHashSetJSON(t *testing.T) {
+	set := NewHashSet(1, 2, 2, 3)
+	data, err := json.Marshal(set)
+	if err != nil {
+		t.Fatalf("MarshalJSON failed: %v", err)
 	}
 
-	// 检查所有元素都存在
-	for _, v := range []string{"apple", "banana", "cherry"} {
-		found := false
-		for _, s := range slice {
-			if v == s {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("Expected element %s in JSON", v)
-		}
+	var encoded []int
+	if err := json.Unmarshal(data, &encoded); err != nil {
+		t.Fatalf("marshaled data is not a JSON array: %v", err)
 	}
+	assertIntSetElements(t, encoded, []int{1, 2, 3})
+
+	restored := NewHashSet(99)
+	if err := json.Unmarshal([]byte(`[3,2,2,1]`), restored); err != nil {
+		t.Fatalf("UnmarshalJSON failed: %v", err)
+	}
+	assertIntSetElements(t, restored.ToSlice(), []int{1, 2, 3})
+
+	before := restored.ToSlice()
+	if err := json.Unmarshal([]byte(`{"invalid":true}`), restored); err == nil {
+		t.Fatal("UnmarshalJSON should reject a non-array value")
+	}
+	assertIntSetElements(t, restored.ToSlice(), before)
+
+	if err := json.Unmarshal([]byte(`[]`), restored); err != nil {
+		t.Fatalf("UnmarshalJSON empty array failed: %v", err)
+	}
+	assertIntSetElements(t, restored.ToSlice(), []int{})
+}
+
+func TestHashSetBSONValue(t *testing.T) {
+	original := NewHashSet(1, 2, 2, 3)
+	typ, data, err := original.MarshalBSONValue()
+	if err != nil {
+		t.Fatalf("MarshalBSONValue failed: %v", err)
+	}
+	if bson.Type(typ) != bson.TypeArray {
+		t.Fatalf("MarshalBSONValue type = %v, want array", bson.Type(typ))
+	}
+
+	restored := NewHashSet(99)
+	if err := restored.UnmarshalBSONValue(typ, data); err != nil {
+		t.Fatalf("UnmarshalBSONValue failed: %v", err)
+	}
+	assertIntSetElements(t, restored.ToSlice(), []int{1, 2, 3})
+
+	before := restored.ToSlice()
+	if err := restored.UnmarshalBSONValue(byte(bson.TypeArray), []byte{1, 2, 3}); err == nil {
+		t.Fatal("UnmarshalBSONValue should reject malformed BSON")
+	}
+	assertIntSetElements(t, restored.ToSlice(), before)
 }

@@ -1,14 +1,43 @@
 package cacheUtil
 
 import (
+	"reflect"
 	"sync"
 	"testing"
 	"time"
 )
 
+func newTestCache[K comparable, V any](t *testing.T, expiration time.Duration) *Cache[K, V] {
+	t.Helper()
+	c := New[K, V](expiration)
+	if c.janitor != nil {
+		t.Cleanup(func() {
+			stopJanitor(c.janitor)
+		})
+	}
+	return c
+}
+
+func newAccessTestCache[K comparable, V any](t *testing.T, expiration time.Duration) *Cache[K, V] {
+	t.Helper()
+	c := NewAccessExpire[K, V](expiration)
+	if c.janitor != nil {
+		t.Cleanup(func() {
+			stopJanitor(c.janitor)
+		})
+	}
+	return c
+}
+
+func expireTestKey[K comparable, V any](c *Cache[K, V], key K) {
+	c.mu.Lock()
+	c.items[key].Expiration = time.Now().Add(-time.Nanosecond).UnixNano()
+	c.mu.Unlock()
+}
+
 // TestNew 测试基本的缓存创建
 func TestNew(t *testing.T) {
-	cache1 := New[string, int](5 * time.Second)
+	cache1 := newTestCache[string, int](t, 5*time.Second)
 	if cache1 == nil {
 		t.Fatal("New() returned nil")
 	}
@@ -25,7 +54,7 @@ func TestNew(t *testing.T) {
 
 // TestNewAccessExpire 测试访问过期模式的缓存创建
 func TestNewAccessExpire(t *testing.T) {
-	cache1 := NewAccessExpire[string, int](5 * time.Second)
+	cache1 := newAccessTestCache[string, int](t, 5*time.Second)
 	if cache1 == nil {
 		t.Fatal("NewAccessExpire() returned nil")
 	}
@@ -34,9 +63,21 @@ func TestNewAccessExpire(t *testing.T) {
 	}
 }
 
+func TestStopJanitorIsIdempotent(t *testing.T) {
+	j := &janitor[string, int]{stop: make(chan struct{})}
+	stopJanitor(j)
+	stopJanitor(j)
+
+	select {
+	case <-j.stop:
+	default:
+		t.Fatal("stopJanitor() did not close the stop channel")
+	}
+}
+
 // TestSetAndGet 测试基本的设置和获取功能
 func TestSetAndGet(t *testing.T) {
-	cache1 := New[string, string](5 * time.Second)
+	cache1 := newTestCache[string, string](t, 5*time.Second)
 
 	// 测试设置和获取
 	cache1.Set("key1", "value1")
@@ -57,10 +98,16 @@ func TestSetAndGet(t *testing.T) {
 
 // TestSetWithCustomExpiration 测试自定义过期时间
 func TestSetWithCustomExpiration(t *testing.T) {
-	cache1 := New[string, string](5 * time.Second)
+	cache1 := newTestCache[string, string](t, 5*time.Second)
 
 	// 使用自定义的短过期时间
-	cache1.Set("key1", "value1", 100*time.Millisecond)
+	beforeSet := time.Now()
+	cache1.Set("key1", "value1", time.Minute)
+	afterSet := time.Now()
+	gotExpiration := time.Unix(0, cache1.items["key1"].Expiration)
+	if gotExpiration.Before(beforeSet.Add(time.Minute)) || gotExpiration.After(afterSet.Add(time.Minute)) {
+		t.Fatalf("custom expiration = %v, want within [%v, %v]", gotExpiration, beforeSet.Add(time.Minute), afterSet.Add(time.Minute))
+	}
 
 	// 立即获取应该存在
 	val, found := cache1.Get("key1")
@@ -68,8 +115,8 @@ func TestSetWithCustomExpiration(t *testing.T) {
 		t.Error("Key should exist immediately after setting")
 	}
 
-	// 等待过期
-	time.Sleep(150 * time.Millisecond)
+	// 直接将条目推进到过期状态，避免依赖调度时序。
+	expireTestKey(cache1, "key1")
 	_, found = cache1.Get("key1")
 	if found {
 		t.Error("Key should have expired")
@@ -78,7 +125,7 @@ func TestSetWithCustomExpiration(t *testing.T) {
 
 // TestSetIfAbsent 测试 SetIfAbsent 功能
 func TestSetIfAbsent(t *testing.T) {
-	cache1 := New[string, int](5 * time.Second)
+	cache1 := newTestCache[string, int](t, 5*time.Second)
 
 	// 第一次设置应该成功
 	success := cache1.SetIfAbsent("key1", 100)
@@ -105,13 +152,12 @@ func TestSetIfAbsent(t *testing.T) {
 
 // TestSetIfAbsentWithExpiredKey 测试 SetIfAbsent 在键过期后的行为
 func TestSetIfAbsentWithExpiredKey(t *testing.T) {
-	cache1 := New[string, int](100 * time.Millisecond)
+	cache1 := newTestCache[string, int](t, time.Minute)
 
 	// 设置一个会过期的键
 	cache1.Set("key1", 100)
 
-	// 等待过期
-	time.Sleep(150 * time.Millisecond)
+	expireTestKey(cache1, "key1")
 
 	// 过期后应该可以再次设置
 	success := cache1.SetIfAbsent("key1", 200)
@@ -127,9 +173,11 @@ func TestSetIfAbsentWithExpiredKey(t *testing.T) {
 
 // TestGetWithExpiration 测试获取带过期时间的功能
 func TestGetWithExpiration(t *testing.T) {
-	cache1 := New[string, string](5 * time.Second)
+	cache1 := newTestCache[string, string](t, 5*time.Second)
 
+	beforeSet := time.Now()
 	cache1.Set("key1", "value1")
+	afterSet := time.Now()
 	val, found, expTime := cache1.GetWithExpiration("key1")
 
 	if !found {
@@ -138,44 +186,78 @@ func TestGetWithExpiration(t *testing.T) {
 	if val != "value1" {
 		t.Errorf("Expected value1, got %s", val)
 	}
-	if expTime.IsZero() {
-		t.Error("Expiration time should not be zero")
-	}
-
-	// 检查过期时间是否在合理范围内（大约5秒后）
-	expectedTime := time.Now().Add(5 * time.Second)
-	diff := expTime.Sub(expectedTime).Abs()
-	if diff > time.Second {
-		t.Errorf("Expiration time difference too large: %v", diff)
+	if expTime.Before(beforeSet.Add(5*time.Second)) || expTime.After(afterSet.Add(5*time.Second)) {
+		t.Errorf("expiration = %v, want within [%v, %v]", expTime, beforeSet.Add(5*time.Second), afterSet.Add(5*time.Second))
 	}
 }
 
 // TestAccessExpire 测试访问过期模式
 func TestAccessExpire(t *testing.T) {
-	cache1 := NewAccessExpire[string, string](200 * time.Millisecond)
+	const expiration = time.Minute
+	cache1 := newAccessTestCache[string, string](t, expiration)
 
 	cache1.Set("key1", "value1")
-
-	// 在过期前多次访问，每次访问都会重置过期时间
-	for i := 0; i < 5; i++ {
-		time.Sleep(100 * time.Millisecond)
-		val, found := cache1.Get("key1")
-		if !found || val != "value1" {
-			t.Errorf("Iteration %d: Key should still be valid due to access", i)
-		}
+	beforeGet := time.Now()
+	val, found, refreshedExpiration := cache1.GetWithExpiration("key1")
+	afterGet := time.Now()
+	if !found || val != "value1" {
+		t.Fatalf("GetWithExpiration() = (%q, %v), want (%q, true)", val, found, "value1")
+	}
+	if refreshedExpiration.Before(beforeGet.Add(expiration)) || refreshedExpiration.After(afterGet.Add(expiration)) {
+		t.Errorf("refreshed expiration = %v, want within [%v, %v]", refreshedExpiration, beforeGet.Add(expiration), afterGet.Add(expiration))
 	}
 
-	// 停止访问，等待过期
-	time.Sleep(250 * time.Millisecond)
-	_, found := cache1.Get("key1")
+	expireTestKey(cache1, "key1")
+	_, found = cache1.Get("key1")
 	if found {
 		t.Error("Key should have expired after no access")
 	}
 }
 
+func TestConcurrentAccessExpire(t *testing.T) {
+	const (
+		expiration = time.Minute
+		readers    = 100
+	)
+	cache1 := newAccessTestCache[string, string](t, expiration)
+	cache1.Set("key", "value")
+
+	type result struct {
+		value      string
+		found      bool
+		expiration time.Time
+	}
+	results := make(chan result, readers)
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for i := 0; i < readers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			value, found, refreshedExpiration := cache1.GetWithExpiration("key")
+			results <- result{value: value, found: found, expiration: refreshedExpiration}
+		}()
+	}
+	before := time.Now()
+	close(start)
+	wg.Wait()
+	after := time.Now()
+	close(results)
+
+	for got := range results {
+		if !got.found || got.value != "value" {
+			t.Errorf("GetWithExpiration() = (%q, %v), want (%q, true)", got.value, got.found, "value")
+		}
+		if got.expiration.Before(before.Add(expiration)) || got.expiration.After(after.Add(expiration)) {
+			t.Errorf("refreshed expiration = %v, want within [%v, %v]", got.expiration, before.Add(expiration), after.Add(expiration))
+		}
+	}
+}
+
 // TestDelete 测试删除功能
 func TestDelete(t *testing.T) {
-	cache1 := New[string, string](5 * time.Second)
+	cache1 := newTestCache[string, string](t, 5*time.Second)
 
 	cache1.Set("key1", "value1")
 	cache1.Set("key2", "value2")
@@ -204,7 +286,7 @@ func TestDelete(t *testing.T) {
 
 // TestItems 测试获取所有项
 func TestItems(t *testing.T) {
-	cache1 := New[string, int](5 * time.Second)
+	cache1 := newTestCache[string, int](t, 5*time.Second)
 
 	cache1.Set("key1", 1)
 	cache1.Set("key2", 2)
@@ -222,13 +304,13 @@ func TestItems(t *testing.T) {
 
 // TestItemsWithExpiredKeys 测试 Items 方法过滤过期键
 func TestItemsWithExpiredKeys(t *testing.T) {
-	cache1 := New[string, int](100 * time.Millisecond)
+	cache1 := newTestCache[string, int](t, time.Minute)
 
 	cache1.Set("key1", 1)
 	cache1.Set("key2", 2)
 
-	// 等待部分键过期
-	time.Sleep(150 * time.Millisecond)
+	expireTestKey(cache1, "key1")
+	expireTestKey(cache1, "key2")
 
 	// 添加新键
 	cache1.Set("key3", 3)
@@ -246,7 +328,7 @@ func TestItemsWithExpiredKeys(t *testing.T) {
 
 // TestFlush 测试清空缓存
 func TestFlush(t *testing.T) {
-	cache1 := New[string, int](5 * time.Second)
+	cache1 := newTestCache[string, int](t, 5*time.Second)
 
 	cache1.Set("key1", 1)
 	cache1.Set("key2", 2)
@@ -269,7 +351,7 @@ func TestFlush(t *testing.T) {
 
 // TestExpiration 测试过期机制
 func TestExpiration(t *testing.T) {
-	cache1 := New[string, string](200 * time.Millisecond)
+	cache1 := newTestCache[string, string](t, time.Minute)
 
 	cache1.Set("key1", "value1")
 
@@ -279,8 +361,7 @@ func TestExpiration(t *testing.T) {
 		t.Error("Key should exist immediately")
 	}
 
-	// 等待过期
-	time.Sleep(250 * time.Millisecond)
+	expireTestKey(cache1, "key1")
 
 	// 获取应该失败
 	_, found = cache1.Get("key1")
@@ -290,30 +371,33 @@ func TestExpiration(t *testing.T) {
 }
 
 // TestJanitorCleanup 测试自动清理功能
-func TestJanitorCleanup(t *testing.T) {
-	cache1 := New[string, string](100 * time.Millisecond)
+func TestDeleteExpired(t *testing.T) {
+	cache1 := newTestCache[string, string](t, time.Minute)
 
 	// 设置多个会过期的键
 	for i := 0; i < 10; i++ {
 		cache1.Set(string(rune('a'+i)), "value")
 	}
 
-	// 等待过期
-	time.Sleep(150 * time.Millisecond)
+	cache1.mu.Lock()
+	for _, item := range cache1.items {
+		item.Expiration = time.Now().Add(-time.Nanosecond).UnixNano()
+	}
+	cache1.mu.Unlock()
+	cache1.deleteExpired()
 
-	// 检查内部 map 是否被清理
 	cache1.mu.RLock()
-	itemCount := len(cache1.Items())
+	itemCount := len(cache1.items)
 	cache1.mu.RUnlock()
 
 	if itemCount != 0 {
-		t.Errorf("Expected janitor to clean up expired items, found %d items", itemCount)
+		t.Errorf("deleteExpired() left %d expired items in the backing map", itemCount)
 	}
 }
 
 // TestConcurrentAccess 测试并发访问
 func TestConcurrentAccess(t *testing.T) {
-	cache1 := New[int, int](5 * time.Second)
+	cache1 := newTestCache[int, int](t, 5*time.Second)
 	var wg sync.WaitGroup
 
 	// 并发写入
@@ -325,14 +409,24 @@ func TestConcurrentAccess(t *testing.T) {
 		}(i)
 	}
 
-	// 并发读取
+	wg.Wait()
+	for i := 0; i < 100; i++ {
+		if got, found := cache1.Get(i); !found || got != i*2 {
+			t.Fatalf("after concurrent writes Get(%d) = (%d, %v), want (%d, true)", i, got, found, i*2)
+		}
+	}
+
+	// 并发读取已知存在的键。
 	for i := 0; i < 100; i++ {
 		wg.Add(1)
 		go func(key int) {
 			defer wg.Done()
-			cache1.Get(key)
+			if got, found := cache1.Get(key); !found || got != key*2 {
+				t.Errorf("concurrent Get(%d) = (%d, %v), want (%d, true)", key, got, found, key*2)
+			}
 		}(i)
 	}
+	wg.Wait()
 
 	// 并发删除
 	for i := 0; i < 50; i++ {
@@ -344,18 +438,20 @@ func TestConcurrentAccess(t *testing.T) {
 	}
 
 	wg.Wait()
-
-	// 验证缓存仍然可用
-	cache1.Set(999, 999)
-	val, found := cache1.Get(999)
-	if !found || val != 999 {
-		t.Error("Cache should still be functional after concurrent access")
+	for i := 0; i < 100; i++ {
+		got, found := cache1.Get(i)
+		if i < 50 && found {
+			t.Errorf("Get(%d) found deleted value %d", i, got)
+		}
+		if i >= 50 && (!found || got != i*2) {
+			t.Errorf("Get(%d) = (%d, %v), want (%d, true)", i, got, found, i*2)
+		}
 	}
 }
 
 // TestConcurrentSetIfAbsent 测试并发 SetIfAbsent
 func TestConcurrentSetIfAbsent(t *testing.T) {
-	cache1 := New[string, int](5 * time.Second)
+	cache1 := newTestCache[string, int](t, 5*time.Second)
 	var wg sync.WaitGroup
 	successCount := 0
 	var mu sync.Mutex
@@ -381,9 +477,9 @@ func TestConcurrentSetIfAbsent(t *testing.T) {
 	}
 
 	// 验证值被正确设置
-	_, found := cache1.Get("key")
-	if !found {
-		t.Error("Key should exist")
+	value, found := cache1.Get("key")
+	if !found || value < 0 || value >= 10 {
+		t.Errorf("Get(key) = (%d, %v), want one submitted value in [0, 10)", value, found)
 	}
 }
 
@@ -392,9 +488,10 @@ func TestZeroExpiration(t *testing.T) {
 	cache1 := New[string, string](0)
 
 	cache1.Set("key1", "value1")
-
-	// 等待一段时间
-	time.Sleep(100 * time.Millisecond)
+	if expiration := cache1.items["key1"].Expiration; expiration != 0 {
+		t.Fatalf("zero-expiration item stored expiration %d, want 0", expiration)
+	}
+	cache1.deleteExpired()
 
 	// 键应该仍然存在
 	val, found := cache1.Get("key1")
@@ -403,10 +500,42 @@ func TestZeroExpiration(t *testing.T) {
 	}
 }
 
+func TestCustomExpirationWithZeroDefault(t *testing.T) {
+	cache1 := newTestCache[string, int](t, 0)
+	cache1.Set("get", 1, time.Minute)
+	cache1.Set("items", 2, time.Minute)
+	cache1.Set("janitor", 3, time.Minute)
+	cache1.Set("permanent", 4)
+
+	for _, key := range []string{"get", "items", "janitor"} {
+		expireTestKey(cache1, key)
+	}
+	if got, found := cache1.Get("get"); found || got != 0 {
+		t.Errorf("Get(expired custom item) = (%d, %v), want (0, false)", got, found)
+	}
+	if got := cache1.Items(); !reflect.DeepEqual(got, map[string]int{"permanent": 4}) {
+		t.Errorf("Items() = %v, want only permanent item", got)
+	}
+
+	cache1.deleteExpired()
+	cache1.mu.RLock()
+	_, getExists := cache1.items["get"]
+	_, itemsExists := cache1.items["items"]
+	_, janitorExists := cache1.items["janitor"]
+	permanent := cache1.items["permanent"]
+	cache1.mu.RUnlock()
+	if getExists || itemsExists || janitorExists {
+		t.Errorf("deleteExpired left custom-expired items: get=%v items=%v janitor=%v", getExists, itemsExists, janitorExists)
+	}
+	if permanent == nil || permanent.Expiration != 0 || permanent.Object != 4 {
+		t.Errorf("permanent item after cleanup = %#v", permanent)
+	}
+}
+
 // TestDifferentTypes 测试不同的数据类型
 func TestDifferentTypes(t *testing.T) {
 	// 测试 int 键和 string 值
-	cache1 := New[int, string](5 * time.Second)
+	cache1 := newTestCache[int, string](t, 5*time.Second)
 	cache1.Set(1, "one")
 	val1, found := cache1.Get(1)
 	if !found || val1 != "one" {
@@ -418,7 +547,7 @@ func TestDifferentTypes(t *testing.T) {
 		Name string
 		Age  int
 	}
-	cache2 := New[string, Person](5 * time.Second)
+	cache2 := newTestCache[string, Person](t, 5*time.Second)
 	cache2.Set("john", Person{Name: "John", Age: 30})
 	val2, found := cache2.Get("john")
 	if !found || val2.Name != "John" || val2.Age != 30 {
@@ -426,17 +555,17 @@ func TestDifferentTypes(t *testing.T) {
 	}
 
 	// 测试 string 键和 slice 值
-	cache3 := New[string, []int](5 * time.Second)
+	cache3 := newTestCache[string, []int](t, 5*time.Second)
 	cache3.Set("numbers", []int{1, 2, 3, 4, 5})
 	val3, found := cache3.Get("numbers")
-	if !found || len(val3) != 5 || val3[0] != 1 {
+	if !found || !reflect.DeepEqual(val3, []int{1, 2, 3, 4, 5}) {
 		t.Error("string/slice cache failed")
 	}
 }
 
 // TestUpdateExistingKey 测试更新已存在的键
 func TestUpdateExistingKey(t *testing.T) {
-	cache1 := New[string, int](5 * time.Second)
+	cache1 := newTestCache[string, int](t, 5*time.Second)
 
 	cache1.Set("key1", 100)
 	val, _ := cache1.Get("key1")
@@ -454,7 +583,7 @@ func TestUpdateExistingKey(t *testing.T) {
 
 // TestMultipleExpirationsInSameCache 测试同一缓存中的不同过期时间
 func TestMultipleExpirationsInSameCache(t *testing.T) {
-	cache1 := New[string, string](5 * time.Second)
+	cache1 := newTestCache[string, string](t, 5*time.Second)
 
 	// 使用默认过期时间
 	cache1.Set("key1", "value1")
@@ -465,8 +594,7 @@ func TestMultipleExpirationsInSameCache(t *testing.T) {
 	// 使用长过期时间
 	cache1.Set("key3", "value3", 10*time.Second)
 
-	// 等待一段时间
-	time.Sleep(150 * time.Millisecond)
+	expireTestKey(cache1, "key2")
 
 	// key1 应该仍然存在（5秒过期）
 	_, found := cache1.Get("key1")
@@ -489,7 +617,7 @@ func TestMultipleExpirationsInSameCache(t *testing.T) {
 
 // TestEmptyCache 测试空缓存操作
 func TestEmptyCache(t *testing.T) {
-	cache1 := New[string, string](5 * time.Second)
+	cache1 := newTestCache[string, string](t, 5*time.Second)
 
 	// 从空缓存获取
 	_, found := cache1.Get("nonexistent")
@@ -512,7 +640,7 @@ func TestEmptyCache(t *testing.T) {
 
 // BenchmarkSet 基准测试 Set 操作
 func BenchmarkSet(b *testing.B) {
-	cache1 := New[int, int](5 * time.Second)
+	cache1 := New[int, int](0)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		cache1.Set(i, i*2)
@@ -521,7 +649,7 @@ func BenchmarkSet(b *testing.B) {
 
 // BenchmarkGet 基准测试 Get 操作
 func BenchmarkGet(b *testing.B) {
-	cache1 := New[int, int](5 * time.Second)
+	cache1 := New[int, int](0)
 	for i := 0; i < 1000; i++ {
 		cache1.Set(i, i*2)
 	}
@@ -533,7 +661,7 @@ func BenchmarkGet(b *testing.B) {
 
 // BenchmarkSetIfAbsent 基准测试 SetIfAbsent 操作
 func BenchmarkSetIfAbsent(b *testing.B) {
-	cache1 := New[int, int](5 * time.Second)
+	cache1 := New[int, int](0)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		cache1.SetIfAbsent(i%100, i)
@@ -542,7 +670,7 @@ func BenchmarkSetIfAbsent(b *testing.B) {
 
 // BenchmarkConcurrentSet 基准测试并发 Set 操作
 func BenchmarkConcurrentSet(b *testing.B) {
-	cache1 := New[int, int](5 * time.Second)
+	cache1 := New[int, int](0)
 	b.RunParallel(func(pb *testing.PB) {
 		i := 0
 		for pb.Next() {
@@ -554,7 +682,7 @@ func BenchmarkConcurrentSet(b *testing.B) {
 
 // BenchmarkConcurrentGet 基准测试并发 Get 操作
 func BenchmarkConcurrentGet(b *testing.B) {
-	cache1 := New[int, int](5 * time.Second)
+	cache1 := New[int, int](0)
 	for i := 0; i < 1000; i++ {
 		cache1.Set(i, i*2)
 	}

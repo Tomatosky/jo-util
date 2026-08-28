@@ -54,6 +54,7 @@ func NewIdPool(opt *IdPoolOpt) *IdPool {
 		workers:      make([]*worker, opt.PoolSize),
 		taskIdMap:    mapUtil.NewConcurrentHashMap[string, int64](),
 		idTaskCounts: mapUtil.NewConcurrentHashMap[int64, *atomic.Int32](),
+		poolName:     opt.PoolName,
 	}
 	idPool.running.Store(true)
 	// 初始化 workers
@@ -86,11 +87,17 @@ func (i *IdPool) SubmitWithId(id any, task func()) {
 	// 记录任务映射
 	i.taskIdMap.Put(taskID, idInt64)
 	// 选择 worker（哈希取模）
-	w := i.workers[idInt64%i.cores]
+	workerIndex := idInt64 % i.cores
+	if workerIndex < 0 {
+		workerIndex += i.cores
+	}
+	w := i.workers[workerIndex]
 	// 发送任务
 	select {
 	case w.queue <- &customTask{taskID: taskID, task: task}:
 	default:
+		i.taskIdMap.Remove(taskID)
+		v.Add(-1)
 		logger.Log.Warn(fmt.Sprintf("%s queue is full", i.poolName))
 	}
 }

@@ -12,6 +12,9 @@ type SafeFixedQueue[T any] struct {
 }
 
 func NewSafeFixedQueue[T any](capacity int) *SafeFixedQueue[T] {
+	if capacity <= 0 {
+		panic("capacity must be greater than 0")
+	}
 	return &SafeFixedQueue[T]{
 		items:   make([]T, capacity),
 		head:    0,

@@ -1,220 +1,185 @@
 package eventUtil
 
 import (
-	"sync"
+	"fmt"
+	"reflect"
 	"testing"
 	"time"
 )
 
-func TestEventManager(t *testing.T) {
-	// 测试NewEventManager
-	t.Run("TestNewEventManager", func(t *testing.T) {
-		// 测试正常情况
-		opt := &EventOpt{
-			PoolSize:  2,
-			QueueSize: 10,
-		}
-		manager := NewEventManager(opt)
-		if manager == nil {
-			t.Error("NewEventManager should not return nil")
-		}
-
-		// 测试异常情况 - 参数不合法
-		invalidOpt := &EventOpt{
-			PoolSize:  0,
-			QueueSize: 0,
-		}
-		defer func() {
-			if r := recover(); r == nil {
-				t.Error("NewEventManager should panic with invalid options")
-			}
-		}()
-		_ = NewEventManager(invalidOpt)
-	})
-
-	// 测试Register
-	t.Run("TestRegister", func(t *testing.T) {
-		manager := NewEventManager(&EventOpt{PoolSize: 2, QueueSize: 10})
-
-		// 测试正常注册
-		err := manager.Register("testEvent", func(data interface{}) {})
-		if err != nil {
-			t.Errorf("Register should not return error, got: %v", err)
-		}
-
-		// 测试重复注册
-		err = manager.Register("testEvent", func(data interface{}) {})
-		if err != nil {
-			t.Errorf("Register should allow multiple handlers, got: %v", err)
-		}
-
-		// 测试空事件名
-		err = manager.Register("", func(data interface{}) {})
-		if err == nil {
-			t.Error("Register should return error for empty event name")
-		}
-
-		// 测试nil handler
-		err = manager.Register("testEvent", nil)
-		if err == nil {
-			t.Error("Register should return error for nil handler")
-		}
-
-		// 测试销毁状态下注册
+func newTestEventManager(t *testing.T) *EventManager {
+	t.Helper()
+	manager := NewEventManager(&EventOpt{PoolSize: 2, QueueSize: 10})
+	t.Cleanup(func() {
 		manager.ShutDown(time.Second)
-		err = manager.Register("testEvent", func(data interface{}) {})
-		if err == nil {
-			t.Error("Register should return error when manager is destroying")
-		}
 	})
+	return manager
+}
 
-	// 测试Trigger和TriggerSync
-	t.Run("TestTrigger", func(t *testing.T) {
-		manager := NewEventManager(&EventOpt{PoolSize: 2, QueueSize: 10})
-		var wg sync.WaitGroup
-		var triggered bool
+func panicValue(f func()) (recovered any) {
+	defer func() {
+		recovered = recover()
+	}()
+	f()
+	return nil
+}
 
-		// 注册测试handler
-		err := manager.Register("testEvent", func(data interface{}) {
-			defer wg.Done()
-			triggered = true
-			if data != "testData" {
-				t.Errorf("Expected data to be 'testData', got %v", data)
-			}
-		})
-		if err != nil {
-			t.Fatalf("Register failed: %v", err)
+func TestNewEventManager(t *testing.T) {
+	manager := newTestEventManager(t)
+	if manager.handlers == nil || manager.pool == nil {
+		t.Fatalf("NewEventManager() returned an incompletely initialized manager: %#v", manager)
+	}
+	if manager.destroying {
+		t.Error("new manager is already destroying")
+	}
+
+	for _, opt := range []*EventOpt{
+		{PoolSize: 0, QueueSize: 1},
+		{PoolSize: 1, QueueSize: 0},
+		{PoolSize: -1, QueueSize: -1},
+	} {
+		if got := panicValue(func() { NewEventManager(opt) }); got != "pool size and queue size must be greater than 0" {
+			t.Errorf("NewEventManager(%+v) panic = %v, want validation message", opt, got)
 		}
+	}
+}
 
-		// 测试Trigger
-		wg.Add(1)
-		err = manager.Trigger("testEvent", "testData")
-		if err != nil {
-			t.Errorf("Trigger failed: %v", err)
+func TestRegister(t *testing.T) {
+	manager := newTestEventManager(t)
+	handler := func(interface{}) {}
+	if err := manager.Register("event", handler); err != nil {
+		t.Fatalf("Register(valid): %v", err)
+	}
+	if err := manager.Register("event", handler); err != nil {
+		t.Fatalf("Register(second handler): %v", err)
+	}
+	if got := len(manager.handlers["event"]); got != 2 {
+		t.Errorf("registered handler count = %d, want 2", got)
+	}
+
+	if err := manager.Register("", handler); err == nil || err.Error() != "event name cannot be empty" {
+		t.Errorf("Register(empty name) error = %v", err)
+	}
+	if err := manager.Register("event", nil); err == nil || err.Error() != "handler cannot be nil" {
+		t.Errorf("Register(nil handler) error = %v", err)
+	}
+}
+
+func TestTriggerSync(t *testing.T) {
+	manager := newTestEventManager(t)
+	var got []string
+	if err := manager.Register("event", func(data interface{}) {
+		got = append(got, fmt.Sprintf("first:%v", data))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.Register("event", func(data interface{}) {
+		got = append(got, fmt.Sprintf("second:%v", data))
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	manager.TriggerSync("event", "payload")
+	if want := []string{"first:payload", "second:payload"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("TriggerSync handler calls = %#v, want %#v", got, want)
+	}
+	manager.TriggerSync("missing", nil)
+	if len(got) != 2 {
+		t.Errorf("TriggerSync(missing) unexpectedly invoked handlers: %#v", got)
+	}
+}
+
+func TestTriggerWithID(t *testing.T) {
+	manager := newTestEventManager(t)
+	received := make(chan interface{}, 1)
+	if err := manager.Register("event", func(data interface{}) {
+		received <- data
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := manager.TriggerWithId(1, "event", "payload"); err != nil {
+		t.Fatalf("TriggerWithId(valid): %v", err)
+	}
+	select {
+	case got := <-received:
+		if got != "payload" {
+			t.Errorf("handler data = %v, want payload", got)
 		}
-		wg.Wait()
-		if !triggered {
-			t.Error("Handler was not triggered")
-		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for asynchronous handler")
+	}
 
-		// 测试TriggerSync
-		triggered = false
-		wg.Add(1)
-		manager.TriggerSync("testEvent", "testData")
-		if !triggered {
-			t.Error("Handler was not triggered in TriggerSync")
-		}
+	if err := manager.TriggerWithId(1, "", nil); err == nil || err.Error() != "event name cannot be empty" {
+		t.Errorf("TriggerWithId(empty name) error = %v", err)
+	}
+	if err := manager.TriggerWithId(1, "missing", nil); err == nil || err.Error() != "event not found" {
+		t.Errorf("TriggerWithId(missing) error = %v", err)
+	}
+}
 
-		// 测试不存在的event
-		err = manager.Trigger("nonexistent", nil)
-		if err == nil {
-			t.Error("Trigger should return error for nonexistent event")
-		}
+func TestHasEventAndClear(t *testing.T) {
+	manager := newTestEventManager(t)
+	if manager.HasEvent("event") {
+		t.Error("HasEvent() = true before registration")
+	}
+	if err := manager.Register("event", func(interface{}) {}); err != nil {
+		t.Fatal(err)
+	}
+	if !manager.HasEvent("event") {
+		t.Error("HasEvent() = false after registration")
+	}
+	manager.Clear()
+	if manager.HasEvent("event") || len(manager.handlers) != 0 {
+		t.Errorf("Clear() left handlers: %#v", manager.handlers)
+	}
+}
 
-		// 测试空事件名
-		err = manager.Trigger("", nil)
-		if err == nil {
-			t.Error("Trigger should return error for empty event name")
-		}
+func TestShutDownRejectsNewWork(t *testing.T) {
+	manager := NewEventManager(&EventOpt{PoolSize: 1, QueueSize: 1})
+	if err := manager.Register("event", func(interface{}) {}); err != nil {
+		t.Fatal(err)
+	}
+	manager.ShutDown(time.Second)
 
-		// 测试销毁状态下触发
-		manager.ShutDown(time.Second)
-		err = manager.Trigger("testEvent", nil)
-		if err == nil {
-			t.Error("Trigger should return error when manager is destroying")
-		}
-	})
+	if !manager.isDestroying() {
+		t.Error("ShutDown() did not set destroying")
+	}
+	if err := manager.Register("new", func(interface{}) {}); err == nil || err.Error() != "event manager is destroying, cannot register new handlers" {
+		t.Errorf("Register(after shutdown) error = %v", err)
+	}
+	if err := manager.TriggerWithId(1, "event", nil); err == nil || err.Error() != "event manager is destroying, cannot trigger events" {
+		t.Errorf("TriggerWithId(after shutdown) error = %v", err)
+	}
+}
 
-	// 测试HasEvent
-	t.Run("TestHasEvent", func(t *testing.T) {
-		manager := NewEventManager(&EventOpt{PoolSize: 2, QueueSize: 10})
+func TestHandlerPanicDoesNotEscapeOrStopFollowingHandlers(t *testing.T) {
+	manager := newTestEventManager(t)
+	called := false
+	if err := manager.Register("sync", func(interface{}) { panic("test panic") }); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.Register("sync", func(interface{}) { called = true }); err != nil {
+		t.Fatal(err)
+	}
+	manager.TriggerSync("sync", nil)
+	if !called {
+		t.Error("handler after panicking handler was not called")
+	}
 
-		// 注册测试事件
-		_ = manager.Register("testEvent", func(data interface{}) {})
-
-		// 测试存在的事件
-		if !manager.HasEvent("testEvent") {
-			t.Error("HasEvent should return true for registered event")
-		}
-
-		// 测试不存在的事件
-		if manager.HasEvent("nonexistent") {
-			t.Error("HasEvent should return false for unregistered event")
-		}
-	})
-
-	// 测试Clear
-	t.Run("TestClear", func(t *testing.T) {
-		manager := NewEventManager(&EventOpt{PoolSize: 2, QueueSize: 10})
-
-		// 注册测试事件
-		_ = manager.Register("testEvent", func(data interface{}) {})
-		_ = manager.Register("testEvent2", func(data interface{}) {})
-
-		// 清除所有事件
-		manager.Clear()
-
-		// 验证事件是否被清除
-		if manager.HasEvent("testEvent") || manager.HasEvent("testEvent2") {
-			t.Error("Clear should remove all events")
-		}
-	})
-
-	// 测试ShutDown
-	t.Run("TestShutDown", func(t *testing.T) {
-		manager := NewEventManager(&EventOpt{PoolSize: 2, QueueSize: 10})
-
-		// 注册测试事件
-		_ = manager.Register("testEvent", func(data interface{}) {})
-
-		// 关闭管理器
-		manager.ShutDown(time.Second)
-
-		// 验证销毁标志
-		if !manager.isDestroying() {
-			t.Error("ShutDown should set destroying flag")
-		}
-
-		// 验证是否阻止新的事件注册
-		err := manager.Register("newEvent", func(data interface{}) {})
-		if err == nil {
-			t.Error("Register should fail after ShutDown")
-		}
-
-		// 验证是否阻止事件触发
-		err = manager.Trigger("testEvent", nil)
-		if err == nil {
-			t.Error("Trigger should fail after ShutDown")
-		}
-	})
-
-	// 测试panic恢复
-	t.Run("TestPanicRecovery", func(t *testing.T) {
-		manager := NewEventManager(&EventOpt{PoolSize: 2, QueueSize: 10})
-
-		// 注册会panic的handler
-		_ = manager.Register("panicEvent", func(data interface{}) {
-			panic("test panic")
-		})
-
-		// 测试TriggerSync是否会捕获panic
-		manager.TriggerSync("panicEvent", nil)
-
-		// 测试Trigger是否会捕获panic
-		_ = manager.Trigger("panicEvent", nil)
-		time.Sleep(100 * time.Millisecond) // 等待goroutine执行
-	})
-
-	// 测试无logger情况下的panic恢复
-	t.Run("TestPanicRecoveryWithoutLogger", func(t *testing.T) {
-		manager := NewEventManager(&EventOpt{PoolSize: 2, QueueSize: 10}) // 不传入logger
-
-		// 注册会panic的handler
-		_ = manager.Register("panicEvent", func(data interface{}) {
-			panic("test panic")
-		})
-
-		// 测试TriggerSync是否会捕获panic
-		manager.TriggerSync("panicEvent", nil)
-	})
+	done := make(chan struct{}, 1)
+	if err := manager.Register("async", func(interface{}) { panic("test panic") }); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.Register("async", func(interface{}) { done <- struct{}{} }); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.TriggerWithId(1, "async", nil); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("panicking asynchronous handler stopped the following handler")
+	}
 }

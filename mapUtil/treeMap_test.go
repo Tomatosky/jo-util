@@ -3,6 +3,7 @@ package mapUtil
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"sort"
 	"sync"
 	"testing"
@@ -422,6 +423,22 @@ func TestTreeMapToString(t *testing.T) {
 	}
 }
 
+func TestTreeMapToMap(t *testing.T) {
+	tm := NewTreeMap[int, string](func(a, b int) bool { return a < b })
+	tm.Put(1, "one")
+	tm.Put(2, "two")
+
+	got := tm.ToMap()
+	if !reflect.DeepEqual(got, map[int]string{1: "one", 2: "two"}) {
+		t.Errorf("ToMap()=%v, want exact contents", got)
+	}
+	got[1] = "changed"
+	delete(got, 2)
+	if tm.Get(1) != "one" || !tm.ContainsKey(2) {
+		t.Error("mutating ToMap result changed TreeMap")
+	}
+}
+
 // TestTreeMapMarshalJSON 测试JSON序列化
 func TestTreeMapMarshalJSON(t *testing.T) {
 	tm := NewTreeMap[int, string](func(a, b int) bool {
@@ -459,6 +476,7 @@ func TestTreeMapUnmarshalJSON(t *testing.T) {
 	tm := NewTreeMap[string, string](func(a, b string) bool {
 		return a < b
 	})
+	tm.Put("stale", "value")
 
 	err := json.Unmarshal([]byte(jsonStr), tm)
 	if err != nil {
@@ -480,6 +498,15 @@ func TestTreeMapUnmarshalJSON(t *testing.T) {
 		if key != expected[i] {
 			t.Errorf("索引%d处的键应为'%s'，实际为'%s'", i, expected[i], key)
 		}
+	}
+	if tm.ContainsKey("stale") {
+		t.Error("JSON unmarshal should replace existing contents")
+	}
+	if err := json.Unmarshal([]byte(`{"broken":`), tm); err == nil {
+		t.Error("invalid JSON should return an error")
+	}
+	if got, want := tm.ToMap(), map[string]string{"1": "one", "2": "two", "3": "three"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("invalid JSON mutated TreeMap: %v", got)
 	}
 }
 
@@ -529,6 +556,7 @@ func TestTreeMapUnmarshalBSON(t *testing.T) {
 	tm := NewTreeMap[string, int](func(a, b string) bool {
 		return a < b
 	})
+	tm.Put("stale", 99)
 
 	err = bson.Unmarshal(data, tm)
 	if err != nil {
@@ -542,6 +570,15 @@ func TestTreeMapUnmarshalBSON(t *testing.T) {
 	if tm.Get("one") != 1 || tm.Get("two") != 2 || tm.Get("three") != 3 {
 		t.Error("BSON反序列化后的数据不正确")
 	}
+	if tm.ContainsKey("stale") {
+		t.Error("BSON unmarshal should replace existing contents")
+	}
+	if err := bson.Unmarshal([]byte{0, 1, 2}, tm); err == nil {
+		t.Error("invalid BSON should return an error")
+	}
+	if got, want := tm.ToMap(), map[string]int{"one": 1, "two": 2, "three": 3}; !reflect.DeepEqual(got, want) {
+		t.Errorf("invalid BSON mutated TreeMap: %v", got)
+	}
 }
 
 // TestTreeMapConcurrency 测试并发安全性
@@ -552,6 +589,9 @@ func TestTreeMapConcurrency(t *testing.T) {
 
 	const goroutines = 10
 	const operations = 100
+	for i := 1; i <= goroutines*operations; i++ {
+		tm.Put(-i, -i)
+	}
 
 	var wg sync.WaitGroup
 	wg.Add(goroutines * 3) // 3种操作：Put, Get, Remove
@@ -576,29 +616,31 @@ func TestTreeMapConcurrency(t *testing.T) {
 		}(i)
 	}
 
-	// 并发Remove
+	// 并发Remove操作不重叠的预置负数键，最终状态可精确验证。
 	for i := 0; i < goroutines; i++ {
 		go func(start int) {
 			defer wg.Done()
-			for j := 0; j < operations/2; j++ {
-				tm.Remove(start*operations + j)
+			for j := 0; j < operations; j++ {
+				tm.Remove(-(start*operations + j + 1))
 			}
 		}(i)
 	}
 
 	wg.Wait()
 
-	// 验证TreeMap仍然有效
 	size := tm.Size()
 	keys := tm.Keys()
-
-	if size != len(keys) {
-		t.Errorf("Size()返回%d，但Keys()返回%d个键", size, len(keys))
+	wantSize := goroutines * operations
+	if size != wantSize || len(keys) != wantSize {
+		t.Fatalf("并发操作后Size=%d Keys=%d, want %d", size, len(keys), wantSize)
 	}
-
-	// 验证键已排序
-	if !sort.IntsAreSorted(keys) {
-		t.Error("并发操作后，Keys()返回的键应保持有序")
+	for i, key := range keys {
+		if key != i || tm.Get(key) != i%operations {
+			t.Errorf("并发结果key[%d]=%d value=%d, want %d/%d", i, key, tm.Get(key), i, i%operations)
+		}
+		if tm.ContainsKey(-(i + 1)) {
+			t.Errorf("删除的负数键%d仍存在", -(i + 1))
+		}
 	}
 }
 
@@ -644,8 +686,21 @@ func TestTreeMapConcurrentRange(t *testing.T) {
 
 	// 验证TreeMap仍然有效
 	keys := tm.Keys()
-	if !sort.IntsAreSorted(keys) {
-		t.Error("并发Range后，Keys()返回的键应保持有序")
+	if len(keys) != 75 {
+		t.Fatalf("并发Range/修改后key数=%d, want 75", len(keys))
+	}
+	for i, key := range keys {
+		wantKey := i
+		if i >= 50 {
+			wantKey += 25
+		}
+		wantValue := wantKey
+		if wantKey < 50 {
+			wantValue *= 2
+		}
+		if key != wantKey || tm.Get(key) != wantValue {
+			t.Errorf("结果[%d]=%d/%d, want %d/%d", i, key, tm.Get(key), wantKey, wantValue)
+		}
 	}
 }
 
@@ -696,8 +751,9 @@ func TestTreeMapComplexStruct(t *testing.T) {
 	}
 
 	values := tm.Values()
-	if len(values) != 3 {
-		t.Errorf("Values()应返回3个元素，实际为%d", len(values))
+	wantValues := []Person{{"Alice", 30}, {"Bob", 25}, {"Charlie", 35}}
+	if !reflect.DeepEqual(values, wantValues) {
+		t.Errorf("Values()=%v, want %v", values, wantValues)
 	}
 }
 
@@ -818,7 +874,7 @@ func TestTreeMapDescendingOrder(t *testing.T) {
 	}
 }
 
-// TestTreeMapRedBlackTreeProperties 测试红黑树性质（间接测试）
+// TestTreeMapRedBlackTreeProperties 直接验证红黑树颜色和黑高性质。
 func TestTreeMapRedBlackTreeProperties(t *testing.T) {
 	tm := NewTreeMap[int, string](func(a, b int) bool {
 		return a < b
@@ -829,23 +885,64 @@ func TestTreeMapRedBlackTreeProperties(t *testing.T) {
 		tm.Put(i, fmt.Sprintf("value%d", i))
 	}
 
-	// 如果是普通二叉搜索树，有序插入会导致退化成链表
-	// 红黑树应该保持平衡，所以所有操作应该很快完成
-	// 这里我们验证树的功能性
+	assertTreeMapRedBlackProperties(t, tm)
 
-	// 验证所有元素都能正确获取
-	for i := 1; i <= 100; i++ {
-		val := tm.Get(i)
-		expected := fmt.Sprintf("value%d", i)
-		if val != expected {
-			t.Errorf("Get(%d)应返回'%s'，实际为'%s'", i, expected, val)
-		}
+	// 删除会触发另一套平衡逻辑，逐步删除后都重新检查不变量。
+	for i := 1; i <= 100; i += 2 {
+		tm.Remove(i)
+		assertTreeMapRedBlackProperties(t, tm)
 	}
+}
 
-	// 验证键有序
-	keys := tm.Keys()
-	if !sort.IntsAreSorted(keys) {
-		t.Error("Keys()应返回有序的键")
+func assertTreeMapRedBlackProperties(t *testing.T, tm *TreeMap[int, string]) {
+	t.Helper()
+	tm.mu.RLock()
+	defer tm.mu.RUnlock()
+
+	if tm.root == nil {
+		if tm.size != 0 {
+			t.Errorf("nil root with non-zero size %d", tm.size)
+		}
+		return
+	}
+	if tm.root.color != BLACK {
+		t.Error("red-black tree root must be black")
+	}
+	count := 0
+	var check func(*node[int, string], *int, *int) int
+	check = func(n *node[int, string], lower, upper *int) int {
+		if n == nil {
+			return 1
+		}
+		count++
+		if lower != nil && n.key <= *lower {
+			t.Errorf("BST lower bound violated: key=%d lower=%d", n.key, *lower)
+		}
+		if upper != nil && n.key >= *upper {
+			t.Errorf("BST upper bound violated: key=%d upper=%d", n.key, *upper)
+		}
+		if n.left != nil && n.left.parent != n {
+			t.Errorf("left child %d has wrong parent", n.left.key)
+		}
+		if n.right != nil && n.right.parent != n {
+			t.Errorf("right child %d has wrong parent", n.right.key)
+		}
+		if n.color == RED && (colorOf(n.left) == RED || colorOf(n.right) == RED) {
+			t.Errorf("red node %d has a red child", n.key)
+		}
+		leftHeight := check(n.left, lower, &n.key)
+		rightHeight := check(n.right, &n.key, upper)
+		if leftHeight != rightHeight {
+			t.Errorf("black height differs at key %d: left=%d right=%d", n.key, leftHeight, rightHeight)
+		}
+		if n.color == BLACK {
+			return leftHeight + 1
+		}
+		return leftHeight
+	}
+	check(tm.root, nil, nil)
+	if count != tm.size {
+		t.Errorf("reachable node count=%d, size=%d", count, tm.size)
 	}
 }
 
@@ -879,17 +976,14 @@ func BenchmarkTreeMapGet(b *testing.B) {
 
 // BenchmarkTreeMapRemove 基准测试Remove操作
 func BenchmarkTreeMapRemove(b *testing.B) {
+	tm := NewTreeMap[int, int](func(a, b int) bool {
+		return a < b
+	})
 	b.StopTimer()
 	for i := 0; i < b.N; i++ {
-		tm := NewTreeMap[int, int](func(a, b int) bool {
-			return a < b
-		})
-		for j := 0; j < 1000; j++ {
-			tm.Put(j, j)
-		}
-
+		tm.Put(1, 1)
 		b.StartTimer()
-		tm.Remove(i % 1000)
+		tm.Remove(1)
 		b.StopTimer()
 	}
 }

@@ -2,7 +2,9 @@ package mapUtil
 
 import (
 	"encoding/json"
+	"reflect"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -57,6 +59,20 @@ func TestNewBiMap_WithDuplicateValues(t *testing.T) {
 
 	if !bm.ContainsValue(1) {
 		t.Error("Expected value 1 to be present")
+	}
+	key := bm.GetKey(1)
+	if key != "a" && key != "b" {
+		t.Fatalf("GetKey(1) = %q, want one of the input keys", key)
+	}
+	if bm.Get(key) != 1 || !bm.ContainsKey(key) {
+		t.Errorf("surviving mapping is inconsistent: key=%q value=%d", key, bm.Get(key))
+	}
+	other := "a"
+	if key == "a" {
+		other = "b"
+	}
+	if bm.ContainsKey(other) {
+		t.Errorf("duplicate value left both keys present: %q and %q", key, other)
 	}
 }
 
@@ -451,18 +467,14 @@ func TestBiMap_ToString(t *testing.T) {
 	bm.Put("key2", 200)
 
 	jsonStr := bm.ToString()
-	if jsonStr == "" {
-		t.Error("ToString returned empty string")
-	}
-
 	// 解析JSON验证
 	var m map[string]int
 	err := json.Unmarshal([]byte(jsonStr), &m)
 	if err != nil {
-		t.Errorf("Failed to parse JSON: %v", err)
+		t.Fatalf("Failed to parse JSON: %v", err)
 	}
-	if len(m) != 2 {
-		t.Errorf("Expected 2 entries in JSON, got %d", len(m))
+	if !reflect.DeepEqual(m, map[string]int{"key1": 100, "key2": 200}) {
+		t.Errorf("ToString parsed to %v, want exact map", m)
 	}
 }
 
@@ -510,9 +522,7 @@ func TestUnmarshalJSON(t *testing.T) {
 
 // TestUnmarshalJSON_DuplicateValues 测试JSON反序列化时有重复value
 func TestUnmarshalJSON_DuplicateValues(t *testing.T) {
-	// 在JSON中模拟重复value的情况是困难的，因为map本身不允许
-	// 但我们可以测试反序列化后再添加重复value
-	jsonData := `{"key1":100,"key2":200}`
+	jsonData := `{"key1":100,"key2":100}`
 
 	bm := &BiMap[string, int]{}
 	err := json.Unmarshal([]byte(jsonData), bm)
@@ -520,9 +530,22 @@ func TestUnmarshalJSON_DuplicateValues(t *testing.T) {
 		t.Errorf("Failed to unmarshal: %v", err)
 	}
 
-	// 验证双向映射正确建立
-	if bm.GetKey(100) != "key1" {
-		t.Error("Inverse mapping for 100 not correct")
+	if bm.Size() != 1 || !bm.ContainsValue(100) {
+		t.Fatalf("duplicate values should collapse to one mapping: size=%d map=%v", bm.Size(), bm.ToMap())
+	}
+	key := bm.GetKey(100)
+	if key != "key1" && key != "key2" {
+		t.Fatalf("GetKey(100) = %q, want one of the JSON keys", key)
+	}
+	if bm.Get(key) != 100 || !bm.ContainsKey(key) {
+		t.Errorf("inverse mapping does not point to surviving forward mapping: %v", bm.ToMap())
+	}
+	other := "key1"
+	if key == "key1" {
+		other = "key2"
+	}
+	if bm.ContainsKey(other) {
+		t.Errorf("both duplicate-value keys survived: %v", bm.ToMap())
 	}
 }
 
@@ -579,49 +602,57 @@ func TestUnmarshalBSON(t *testing.T) {
 func TestConcurrency(t *testing.T) {
 	bm := NewBiMap[int, int]()
 	var wg sync.WaitGroup
+	const count = 100
 
-	// 并发写入
-	for i := 0; i < 100; i++ {
+	// 先并发写入唯一的键和值，最终状态可精确验证。
+	for i := 0; i < count; i++ {
 		wg.Add(1)
 		go func(n int) {
 			defer wg.Done()
 			bm.Put(n, n*10)
 		}(i)
 	}
-
-	// 并发读取
-	for i := 0; i < 100; i++ {
-		wg.Add(1)
-		go func(n int) {
-			defer wg.Done()
-			_ = bm.Get(n)
-			_ = bm.GetKey(n * 10)
-		}(i)
+	wg.Wait()
+	if bm.Size() != count {
+		t.Fatalf("concurrent Put size=%d, want %d", bm.Size(), count)
 	}
 
-	// 并发删除
-	for i := 0; i < 50; i++ {
-		wg.Add(1)
+	// 同时读取现有映射并删除前一半，删除集合与保留集合确定。
+	for i := 0; i < count; i++ {
+		wg.Add(2)
 		go func(n int) {
 			defer wg.Done()
-			bm.Remove(n)
+			value := bm.Get(n)
+			if value != 0 && value != n*10 {
+				t.Errorf("Get(%d)=%d, want zero or %d during concurrent delete", n, value, n*10)
+			}
+			key := bm.GetKey(n * 10)
+			if key != 0 && key != n {
+				t.Errorf("GetKey(%d)=%d, want zero or %d during concurrent delete", n*10, key, n)
+			}
+		}(i)
+		go func(n int) {
+			defer wg.Done()
+			if n < count/2 {
+				bm.Remove(n)
+			}
 		}(i)
 	}
 
 	wg.Wait()
 
-	// 验证没有panic，并且数据一致性
-	size := bm.Size()
-	if size < 0 || size > 100 {
-		t.Errorf("Unexpected size after concurrent operations: %d", size)
+	if size := bm.Size(); size != count/2 {
+		t.Fatalf("concurrent read/remove size=%d, want %d", size, count/2)
 	}
-
-	// 验证双向映射的一致性
-	for _, key := range bm.Keys() {
-		value := bm.Get(key)
-		retrievedKey := bm.GetKey(value)
-		if retrievedKey != key {
-			t.Errorf("Inconsistent bidirectional mapping: key=%d, value=%d, retrievedKey=%d", key, value, retrievedKey)
+	for key := 0; key < count; key++ {
+		if key < count/2 {
+			if bm.ContainsKey(key) || bm.ContainsValue(key*10) {
+				t.Errorf("removed mapping still present: %d <-> %d", key, key*10)
+			}
+			continue
+		}
+		if bm.Get(key) != key*10 || bm.GetKey(key*10) != key {
+			t.Errorf("surviving mapping inconsistent: %d -> %d -> %d", key, bm.Get(key), bm.GetKey(key*10))
 		}
 	}
 }
@@ -686,8 +717,12 @@ func TestEmptyBiMapOperations(t *testing.T) {
 	bm := NewBiMap[string, int]()
 
 	// 所有操作都应该正常工作，不panic
-	_ = bm.Get("any")
-	_ = bm.GetKey(123)
+	if bm.Get("any") != 0 {
+		t.Error("Get on an empty BiMap should return the value zero")
+	}
+	if bm.GetKey(123) != "" {
+		t.Error("GetKey on an empty BiMap should return the key zero")
+	}
 	bm.Remove("any")
 	bm.RemoveValue(123)
 	bm.Clear()
@@ -712,6 +747,17 @@ func TestEmptyBiMapOperations(t *testing.T) {
 	m := bm.ToMap()
 	if len(m) != 0 {
 		t.Error("Empty BiMap should return empty map")
+	}
+	called := false
+	bm.Range(func(string, int) bool {
+		called = true
+		return true
+	})
+	if called {
+		t.Error("Range callback must not run for an empty BiMap")
+	}
+	if got := bm.GetOrDefault("missing", 99); got != 99 {
+		t.Errorf("GetOrDefault on empty map = %d, want 99", got)
 	}
 }
 
@@ -743,10 +789,13 @@ func TestDifferentTypes(t *testing.T) {
 func TestUnmarshalJSON_InvalidJSON(t *testing.T) {
 	invalidJSON := `{"key1": invalid}`
 
-	bm := &BiMap[string, int]{}
+	bm := NewBiMap(map[string]int{"kept": 1})
 	err := json.Unmarshal([]byte(invalidJSON), bm)
 	if err == nil {
 		t.Error("Expected error when unmarshaling invalid JSON")
+	}
+	if got := bm.ToMap(); !reflect.DeepEqual(got, map[string]int{"kept": 1}) {
+		t.Errorf("invalid JSON mutated BiMap: %v", got)
 	}
 }
 
@@ -754,10 +803,13 @@ func TestUnmarshalJSON_InvalidJSON(t *testing.T) {
 func TestUnmarshalBSON_InvalidBSON(t *testing.T) {
 	invalidBSON := []byte{0x00, 0x01, 0x02} // 无效的BSON数据
 
-	bm := &BiMap[string, int]{}
+	bm := NewBiMap(map[string]int{"kept": 1})
 	err := bson.Unmarshal(invalidBSON, bm)
 	if err == nil {
 		t.Error("Expected error when unmarshaling invalid BSON")
+	}
+	if got := bm.ToMap(); !reflect.DeepEqual(got, map[string]int{"kept": 1}) {
+		t.Errorf("invalid BSON mutated BiMap: %v", got)
 	}
 }
 
@@ -783,7 +835,7 @@ func BenchmarkBiMap_Get(b *testing.B) {
 }
 
 // BenchmarkGetKey 性能测试：GetKey操作
-func BenchmarkGetKey(b *testing.B) {
+func BenchmarkBiMap_GetKey(b *testing.B) {
 	bm := NewBiMap[int, int]()
 	for i := 0; i < 1000; i++ {
 		bm.Put(i, i*10)
@@ -801,15 +853,16 @@ func BenchmarkBiMap_ConcurrentReadWrite(b *testing.B) {
 		bm.Put(i, i*10)
 	}
 
+	var operation atomic.Uint64
+	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
-		i := 0
 		for pb.Next() {
+			i := int(operation.Add(1))
 			if i%2 == 0 {
-				bm.Put(i%100, i*10)
+				bm.Put(i, i*10)
 			} else {
-				_ = bm.Get(i % 100)
+				_ = bm.Get((i - 1) % 100)
 			}
-			i++
 		}
 	})
 }

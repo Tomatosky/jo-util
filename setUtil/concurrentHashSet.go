@@ -100,11 +100,13 @@ func (s *ConcurrentHashSet[T]) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON 实现 json.Unmarshaler 接口
 func (s *ConcurrentHashSet[T]) UnmarshalJSON(data []byte) error {
 	var tmp []T
-	err := json.Unmarshal(data, &tmp)
-	if err != nil {
+	if err := json.Unmarshal(data, &tmp); err != nil {
 		return err
 	}
-	s.m = mapUtil.NewConcurrentHashMap[T, struct{}]()
+	if s.m == nil {
+		s.m = mapUtil.NewConcurrentHashMap[T, struct{}]()
+	}
+	s.m.Clear()
 	s.AddAll(tmp...)
 	return nil
 }
@@ -120,7 +122,10 @@ func (s *ConcurrentHashSet[T]) UnmarshalBSONValue(t byte, data []byte) error {
 	if err := bson.UnmarshalValue(bson.Type(t), data, &elements); err != nil {
 		return err
 	}
-	s.m = mapUtil.NewConcurrentHashMap[T, struct{}]()
+	if s.m == nil {
+		s.m = mapUtil.NewConcurrentHashMap[T, struct{}]()
+	}
+	s.m.Clear()
 	s.AddAll(elements...)
 	return nil
 }

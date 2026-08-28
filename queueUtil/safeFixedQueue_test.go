@@ -1,6 +1,8 @@
 package queueUtil
 
 import (
+	"reflect"
+	"sort"
 	"sync"
 	"testing"
 )
@@ -22,6 +24,41 @@ func TestNewSafeFixedQueue(t *testing.T) {
 	}
 	if q.IsFull() {
 		t.Error("New queue should not be full")
+	}
+}
+
+func TestNewSafeFixedQueueRejectsNonPositiveCapacity(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		capacity int
+	}{
+		{name: "zero", capacity: 0},
+		{name: "negative", capacity: -1},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			defer func() {
+				if got := recover(); got != "capacity must be greater than 0" {
+					t.Fatalf("NewSafeFixedQueue(%d) panic = %v, want %q", tt.capacity, got, "capacity must be greater than 0")
+				}
+			}()
+			NewSafeFixedQueue[int](tt.capacity)
+		})
+	}
+}
+
+func TestSafeFixedQueueZeroValueState(t *testing.T) {
+	var q SafeFixedQueue[int]
+	if got := q.Len(); got != 0 {
+		t.Errorf("zero-value queue length = %d, want 0", got)
+	}
+	if !q.IsEmpty() {
+		t.Error("zero-value queue should be empty")
+	}
+	if value, ok := q.Dequeue(); ok || value != 0 {
+		t.Errorf("zero-value queue Dequeue() = (%d, %v), want (0, false)", value, ok)
+	}
+	if q.Enqueue(1) {
+		t.Error("zero-value queue should reject Enqueue")
 	}
 }
 
@@ -330,21 +367,48 @@ func TestSafeFixedQueueConcurrentEnqueue(t *testing.T) {
 	goroutines := 10
 	itemsPerGoroutine := 100
 
+	successCounts := make([]int, goroutines)
 	for i := 0; i < goroutines; i++ {
 		wg.Add(1)
 		go func(start int) {
 			defer wg.Done()
+			successes := 0
 			for j := 0; j < itemsPerGoroutine; j++ {
-				q.Enqueue(start*itemsPerGoroutine + j)
+				if q.Enqueue(start*itemsPerGoroutine + j) {
+					successes++
+				}
 			}
+			successCounts[start] = successes
 		}(i)
 	}
 
 	wg.Wait()
 
-	// 验证所有元素都已入队
-	if q.Len() != goroutines*itemsPerGoroutine {
-		t.Errorf("Expected %d elements, got %d", goroutines*itemsPerGoroutine, q.Len())
+	totalItems := goroutines * itemsPerGoroutine
+	totalSuccesses := 0
+	for _, count := range successCounts {
+		totalSuccesses += count
+	}
+	if totalSuccesses != totalItems {
+		t.Errorf("successful enqueues = %d, want %d", totalSuccesses, totalItems)
+	}
+	if q.Len() != totalItems {
+		t.Errorf("Expected %d elements, got %d", totalItems, q.Len())
+	}
+
+	seen := make([]bool, totalItems)
+	for i := 0; i < totalItems; i++ {
+		value, ok := q.Dequeue()
+		if !ok {
+			t.Fatalf("Dequeue %d failed", i)
+		}
+		if value < 0 || value >= totalItems {
+			t.Fatalf("unexpected dequeued value %d", value)
+		}
+		if seen[value] {
+			t.Fatalf("duplicate dequeued value %d", value)
+		}
+		seen[value] = true
 	}
 }
 
@@ -360,30 +424,38 @@ func TestSafeFixedQueueConcurrentDequeue(t *testing.T) {
 
 	var wg sync.WaitGroup
 	goroutines := 10
-	successCount := make([]int, goroutines)
+	dequeued := make([][]int, goroutines)
 
 	for i := 0; i < goroutines; i++ {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			count := 0
 			for {
-				_, ok := q.Dequeue()
+				value, ok := q.Dequeue()
 				if !ok {
 					break
 				}
-				count++
+				dequeued[id] = append(dequeued[id], value)
 			}
-			successCount[id] = count
 		}(i)
 	}
 
 	wg.Wait()
 
 	// 验证所有元素都已出队
+	seen := make([]bool, totalItems)
 	total := 0
-	for _, count := range successCount {
-		total += count
+	for _, values := range dequeued {
+		for _, value := range values {
+			total++
+			if value < 0 || value >= totalItems {
+				t.Fatalf("unexpected dequeued value %d", value)
+			}
+			if seen[value] {
+				t.Fatalf("value %d was dequeued more than once", value)
+			}
+			seen[value] = true
+		}
 	}
 	if total != totalItems {
 		t.Errorf("Expected %d items dequeued, got %d", totalItems, total)
@@ -399,14 +471,21 @@ func TestSafeFixedQueueConcurrentMixed(t *testing.T) {
 	q := NewSafeFixedQueue[int](100)
 	var wg sync.WaitGroup
 	iterations := 1000
+	gate := make(chan struct{})
+	accepted := make([][]int, 5)
+	dequeued := make([][]int, 5)
 
 	// 启动多个生产者
 	for i := 0; i < 5; i++ {
 		wg.Add(1)
-		go func(start int) {
+		go func(producer int) {
 			defer wg.Done()
+			<-gate
 			for j := 0; j < iterations; j++ {
-				q.Enqueue(start*iterations + j)
+				value := producer*iterations + j
+				if q.Enqueue(value) {
+					accepted[producer] = append(accepted[producer], value)
+				}
 			}
 		}(i)
 	}
@@ -414,19 +493,42 @@ func TestSafeFixedQueueConcurrentMixed(t *testing.T) {
 	// 启动多个消费者
 	for i := 0; i < 5; i++ {
 		wg.Add(1)
-		go func() {
+		go func(id int) {
 			defer wg.Done()
+			<-gate
 			for j := 0; j < iterations; j++ {
-				q.Dequeue()
+				if value, ok := q.Dequeue(); ok {
+					dequeued[id] = append(dequeued[id], value)
+				}
 			}
-		}()
+		}(i)
 	}
 
+	close(gate)
 	wg.Wait()
 
-	// 最终队列应该是空的(相同数量的入队和出队)
-	if !q.IsEmpty() {
-		t.Logf("Queue has %d elements remaining (this is normal in concurrent scenario)", q.Len())
+	acceptedValues := make([]int, 0)
+	for _, values := range accepted {
+		acceptedValues = append(acceptedValues, values...)
+	}
+	dequeuedValues := make([]int, 0)
+	for _, values := range dequeued {
+		dequeuedValues = append(dequeuedValues, values...)
+	}
+	if got, want := q.Len(), len(acceptedValues)-len(dequeuedValues); got != want {
+		t.Fatalf("queue length = %d, want accepted(%d)-dequeued(%d) = %d", got, len(acceptedValues), len(dequeuedValues), want)
+	}
+	for {
+		value, ok := q.Dequeue()
+		if !ok {
+			break
+		}
+		dequeuedValues = append(dequeuedValues, value)
+	}
+	sort.Ints(acceptedValues)
+	sort.Ints(dequeuedValues)
+	if !reflect.DeepEqual(dequeuedValues, acceptedValues) {
+		t.Errorf("dequeued and remaining values = %v, want accepted values %v", dequeuedValues, acceptedValues)
 	}
 }
 
@@ -457,6 +559,21 @@ func TestSafeFixedQueueConcurrentForceEnqueue(t *testing.T) {
 	// 长度应该等于容量
 	if q.Len() != 50 {
 		t.Errorf("Expected length 50, got %d", q.Len())
+	}
+
+	seen := make(map[int]struct{}, 50)
+	for i := 0; i < 50; i++ {
+		value, ok := q.Dequeue()
+		if !ok {
+			t.Fatalf("Dequeue %d failed", i)
+		}
+		if value < 0 || value >= goroutines*itemsPerGoroutine {
+			t.Fatalf("unexpected dequeued value %d", value)
+		}
+		if _, duplicate := seen[value]; duplicate {
+			t.Fatalf("duplicate dequeued value %d", value)
+		}
+		seen[value] = struct{}{}
 	}
 }
 
@@ -687,9 +804,9 @@ func TestSafeFixedQueueMixedOperations(t *testing.T) {
 	// 场景1: 正常入队出队
 	q.Enqueue(1)
 	q.Enqueue(2)
-	val, _ := q.Dequeue()
-	if val != 1 {
-		t.Errorf("Expected 1, got %d", val)
+	val, ok := q.Dequeue()
+	if !ok || val != 1 {
+		t.Errorf("Expected 1, got %d, ok=%v", val, ok)
 	}
 
 	// 场景2: 填满队列
@@ -724,7 +841,7 @@ func TestSafeFixedQueueMixedOperations(t *testing.T) {
 
 	// 场景5: 重新使用队列
 	q.Enqueue(10)
-	val, ok := q.Dequeue()
+	val, ok = q.Dequeue()
 	if !ok || val != 10 {
 		t.Errorf("Expected 10, got %d, ok=%v", val, ok)
 	}
@@ -736,9 +853,9 @@ func TestSafeFixedQueueEmptyDequeue(t *testing.T) {
 
 	// 多次从空队列出队
 	for i := 0; i < 10; i++ {
-		_, ok := q.Dequeue()
-		if ok {
-			t.Errorf("Iteration %d: dequeue from empty queue should fail", i)
+		value, ok := q.Dequeue()
+		if ok || value != 0 {
+			t.Errorf("Iteration %d: Dequeue() = (%d, %v), want (0, false)", i, value, ok)
 		}
 	}
 
@@ -765,6 +882,12 @@ func TestSafeFixedQueueFullEnqueue(t *testing.T) {
 
 	if q.Len() != 3 {
 		t.Errorf("Length should be 3, got %d", q.Len())
+	}
+	for want := 1; want <= 3; want++ {
+		value, ok := q.Dequeue()
+		if !ok || value != want {
+			t.Errorf("Dequeue() = (%d, %v), want (%d, true)", value, ok, want)
+		}
 	}
 }
 

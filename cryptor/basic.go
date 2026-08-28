@@ -136,49 +136,49 @@ func HmacSha512WithBase64(str, key string) string {
 // Sha1 return the sha1 value (SHA-1 hash algorithm) of string.
 // Play: https://go.dev/play/p/_m_uoD1deMT
 func Sha1(str string) string {
-	sha1 := sha1.New()
-	sha1.Write([]byte(str))
-	return hex.EncodeToString(sha1.Sum([]byte("")))
+	hasher := sha1.New()
+	hasher.Write([]byte(str))
+	return hex.EncodeToString(hasher.Sum([]byte("")))
 }
 
 // Sha1WithBase64 return the sha1 value (SHA-1 hash algorithm) of base64 string.
 // Play: https://go.dev/play/p/fSyx-Gl2l2-
 func Sha1WithBase64(str string) string {
-	sha1 := sha1.New()
-	sha1.Write([]byte(str))
-	return base64.StdEncoding.EncodeToString(sha1.Sum([]byte("")))
+	hasher := sha1.New()
+	hasher.Write([]byte(str))
+	return base64.StdEncoding.EncodeToString(hasher.Sum([]byte("")))
 }
 
 // Sha256 return the sha256 value (SHA256 hash algorithm) of string.
 // Play: https://go.dev/play/p/tU9tfBMIAr1
 func Sha256(str string) string {
-	sha256 := sha256.New()
-	sha256.Write([]byte(str))
-	return hex.EncodeToString(sha256.Sum([]byte("")))
+	hasher := sha256.New()
+	hasher.Write([]byte(str))
+	return hex.EncodeToString(hasher.Sum([]byte("")))
 }
 
 // Sha256WithBase64 return the sha256 value (SHA256 hash algorithm) of base64 string.
 // Play: https://go.dev/play/p/85IXJHIal1k
 func Sha256WithBase64(str string) string {
-	sha256 := sha256.New()
-	sha256.Write([]byte(str))
-	return base64.StdEncoding.EncodeToString(sha256.Sum([]byte("")))
+	hasher := sha256.New()
+	hasher.Write([]byte(str))
+	return base64.StdEncoding.EncodeToString(hasher.Sum([]byte("")))
 }
 
 // Sha512 return the sha512 value (SHA512 hash algorithm) of string.
 // Play: https://go.dev/play/p/3WsvLYZxsHa
 func Sha512(str string) string {
-	sha512 := sha512.New()
-	sha512.Write([]byte(str))
-	return hex.EncodeToString(sha512.Sum([]byte("")))
+	hasher := sha512.New()
+	hasher.Write([]byte(str))
+	return hex.EncodeToString(hasher.Sum([]byte("")))
 }
 
 // Sha512WithBase64 return the sha512 value (SHA512 hash algorithm) of base64 string.
 // Play: https://go.dev/play/p/q_fY2rA-k5I
 func Sha512WithBase64(str string) string {
-	sha512 := sha512.New()
-	sha512.Write([]byte(str))
-	return base64.StdEncoding.EncodeToString(sha512.Sum([]byte("")))
+	hasher := sha512.New()
+	hasher.Write([]byte(str))
+	return base64.StdEncoding.EncodeToString(hasher.Sum([]byte("")))
 }
 
 // Sha1File return the sha1 value of file.

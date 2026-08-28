@@ -6,54 +6,48 @@ import (
 )
 
 func TestNewTimer(t *testing.T) {
+	before := time.Now()
 	timer := NewTimer()
+	after := time.Now()
 	if timer == nil {
-		t.Error("NewTimer() returned nil")
+		t.Fatal("NewTimer() returned nil")
 	}
-	if timer.start.IsZero() {
-		t.Error("NewTimer() start time is zero")
+	if timer.start.Before(before) || timer.start.After(after) {
+		t.Errorf("NewTimer() start = %v, want within [%v, %v]", timer.start, before, after)
 	}
 }
 
 func TestInterval(t *testing.T) {
-	timer := &TimeInterval{start: time.Now()}
-
-	// Wait a short time
-	time.Sleep(10 * time.Millisecond)
-
-	elapsed := timer.Interval()
-	if elapsed <= 0 {
-		t.Errorf("Interval() returned non-positive value: %d", elapsed)
-	}
-	if elapsed > 100 {
-		t.Errorf("Interval() returned unexpectedly large value: %d", elapsed)
+	start := time.Now().Add(-2 * time.Second)
+	timer := &TimeInterval{start: start}
+	before := time.Since(start).Milliseconds()
+	got := timer.Interval()
+	after := time.Since(start).Milliseconds()
+	if got < before || got > after {
+		t.Errorf("Interval() = %dms, want within [%dms, %dms]", got, before, after)
 	}
 }
 
 func TestIntervalRestart(t *testing.T) {
-	timer := &TimeInterval{start: time.Now()}
+	originalStart := time.Now().Add(-2 * time.Second)
+	timer := &TimeInterval{start: originalStart}
+	beforeCall := time.Now()
+	wantLower := beforeCall.Sub(originalStart).Milliseconds()
+	got := timer.IntervalRestart()
+	afterCall := time.Now()
+	wantUpper := afterCall.Sub(originalStart).Milliseconds()
 
-	// Wait a short time
-	time.Sleep(10 * time.Millisecond)
-
-	firstElapsed := timer.IntervalRestart()
-	if firstElapsed <= 0 {
-		t.Errorf("IntervalRestart() first call returned non-positive value: %d", firstElapsed)
+	if got < wantLower || got > wantUpper {
+		t.Errorf("IntervalRestart() = %dms, want within [%dms, %dms]", got, wantLower, wantUpper)
 	}
-	if firstElapsed > 100 {
-		t.Errorf("IntervalRestart() first call returned unexpectedly large value: %d", firstElapsed)
+	if timer.start.Before(beforeCall) || timer.start.After(afterCall) {
+		t.Errorf("restart time = %v, want within [%v, %v]", timer.start, beforeCall, afterCall)
 	}
 
-	// Check if timer was restarted
-	time.Sleep(5 * time.Millisecond)
-	secondElapsed := timer.Interval()
-	if secondElapsed <= 0 {
-		t.Errorf("Interval() after restart returned non-positive value: %d", secondElapsed)
-	}
-	if secondElapsed > 50 {
-		t.Errorf("Interval() after restart returned unexpectedly large value: %d", secondElapsed)
-	}
-	if secondElapsed >= firstElapsed {
-		t.Errorf("Interval() after restart (%d) should be less than first interval (%d)", secondElapsed, firstElapsed)
+	beforeInterval := time.Since(timer.start).Milliseconds()
+	second := timer.Interval()
+	afterInterval := time.Since(timer.start).Milliseconds()
+	if second < beforeInterval || second > afterInterval {
+		t.Errorf("Interval() after restart = %dms, want within [%dms, %dms]", second, beforeInterval, afterInterval)
 	}
 }

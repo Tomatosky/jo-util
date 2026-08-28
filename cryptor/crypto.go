@@ -68,11 +68,14 @@ func AesEcbDecryptWithErr(encrypted, key []byte, paddingType PaddingType) ([]byt
 	if err != nil {
 		return nil, err
 	}
+	if len(encrypted)%block.BlockSize() != 0 {
+		return nil, errors.New("ciphertext is not aligned to block size")
+	}
 	decrypted := make([]byte, len(encrypted))
 	for bs, be := 0, block.BlockSize(); bs < len(encrypted); bs, be = bs+block.BlockSize(), be+block.BlockSize() {
 		block.Decrypt(decrypted[bs:be], encrypted[bs:be])
 	}
-	return removePadding(decrypted, paddingType)
+	return removePadding(decrypted, block.BlockSize(), paddingType)
 }
 
 // AesEcbDecrypt decrypt data with key use AES ECB algorithm.
@@ -125,11 +128,20 @@ func AesCbcDecryptWithErr(encrypted, key []byte, paddingType PaddingType) ([]byt
 	if err != nil {
 		return nil, err
 	}
+	if len(encrypted) < aes.BlockSize {
+		return nil, errors.New("invalid ciphertext size")
+	}
 	iv := encrypted[:aes.BlockSize]
 	encrypted = encrypted[aes.BlockSize:]
+	if len(encrypted)%block.BlockSize() != 0 {
+		return nil, errors.New("ciphertext is not aligned to block size")
+	}
+	if len(encrypted) == 0 && paddingType == Pkcs7Padding {
+		return nil, errors.New("invalid ciphertext size")
+	}
 	mode := cipher.NewCBCDecrypter(block, iv)
 	mode.CryptBlocks(encrypted, encrypted)
-	return removePadding(encrypted, paddingType)
+	return removePadding(encrypted, block.BlockSize(), paddingType)
 }
 
 // AesCbcDecrypt decrypt data with key use AES CBC algorithm.
@@ -146,7 +158,7 @@ func AesCbcDecrypt(encrypted, key []byte, paddingType PaddingType) []byte {
 // AesCtrCrypt encrypt/decrypt data with key use AES CTR algorithm.
 // len(key) must be 16, 24 or 32.
 // Note: CTR mode is a stream cipher mode, no padding is needed.
-func AesCtrCrypt(data, key []byte, paddingType PaddingType) ([]byte, error) {
+func AesCtrCrypt(data, key []byte) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
@@ -177,8 +189,7 @@ func AesCfbEncrypt(data, key []byte, paddingType PaddingType) ([]byte, error) {
 		logger.Log.Error(fmt.Sprintf("%v", err))
 		panic(err)
 	}
-	stream := cipher.NewCFBEncrypter(block, iv)
-	stream.XORKeyStream(encrypted[aes.BlockSize:], data)
+	cfbXOR(block, encrypted[aes.BlockSize:], data, iv, false)
 	return encrypted, nil
 }
 
@@ -195,10 +206,9 @@ func AesCfbDecrypt(encrypted, key []byte, paddingType PaddingType) ([]byte, erro
 	}
 	iv := encrypted[:aes.BlockSize]
 	encrypted = encrypted[aes.BlockSize:]
-	stream := cipher.NewCFBDecrypter(block, iv)
-	stream.XORKeyStream(encrypted, encrypted)
+	cfbXOR(block, encrypted, encrypted, iv, true)
 
-	return removePadding(encrypted, paddingType)
+	return removePadding(encrypted, block.BlockSize(), paddingType)
 }
 
 // AesOfbEncrypt encrypt data with key use AES OFB algorithm.
@@ -217,8 +227,7 @@ func AesOfbEncrypt(data, key []byte, paddingType PaddingType) ([]byte, error) {
 	if _, err = io.ReadFull(rand.Reader, iv); err != nil {
 		return nil, err
 	}
-	stream := cipher.NewOFB(block, iv)
-	stream.XORKeyStream(encrypted[aes.BlockSize:], data)
+	ofbXOR(block, encrypted[aes.BlockSize:], data, iv)
 	return encrypted, nil
 }
 
@@ -234,10 +243,9 @@ func AesOfbDecrypt(encrypted, key []byte, paddingType PaddingType) ([]byte, erro
 	}
 	iv := encrypted[:aes.BlockSize]
 	encrypted = encrypted[aes.BlockSize:]
-	stream := cipher.NewOFB(block, iv)
 	decrypted := make([]byte, len(encrypted))
-	stream.XORKeyStream(decrypted, encrypted)
-	return removePadding(decrypted, paddingType)
+	ofbXOR(block, decrypted, encrypted, iv)
+	return removePadding(decrypted, block.BlockSize(), paddingType)
 }
 
 // DesEcbEncrypt encrypt data with key use DES ECB algorithm
@@ -254,10 +262,10 @@ func DesEcbEncrypt(data, key []byte) []byte {
 	}
 
 	encrypted := make([]byte, len(plain))
-	cipher, _ := des.NewCipher(generateDesKey(key))
+	block, _ := des.NewCipher(generateDesKey(key))
 
-	for bs, be := 0, cipher.BlockSize(); bs <= len(data); bs, be = bs+cipher.BlockSize(), be+cipher.BlockSize() {
-		cipher.Encrypt(encrypted[bs:be], plain[bs:be])
+	for bs, be := 0, block.BlockSize(); bs <= len(data); bs, be = bs+block.BlockSize(), be+block.BlockSize() {
+		block.Encrypt(encrypted[bs:be], plain[bs:be])
 	}
 
 	return encrypted
@@ -267,11 +275,11 @@ func DesEcbEncrypt(data, key []byte) []byte {
 // len(key) should be 8.
 // Play: https://go.dev/play/p/8qivmPeZy4P
 func DesEcbDecrypt(encrypted, key []byte) []byte {
-	cipher, _ := des.NewCipher(generateDesKey(key))
+	block, _ := des.NewCipher(generateDesKey(key))
 	decrypted := make([]byte, len(encrypted))
 
-	for bs, be := 0, cipher.BlockSize(); bs < len(encrypted); bs, be = bs+cipher.BlockSize(), be+cipher.BlockSize() {
-		cipher.Decrypt(decrypted[bs:be], encrypted[bs:be])
+	for bs, be := 0, block.BlockSize(); bs < len(encrypted); bs, be = bs+block.BlockSize(), be+block.BlockSize() {
+		block.Decrypt(decrypted[bs:be], encrypted[bs:be])
 	}
 
 	trim := 0
@@ -371,8 +379,7 @@ func DesCfbEncrypt(data, key []byte) []byte {
 		panic(err)
 	}
 
-	stream := cipher.NewCFBEncrypter(block, iv)
-	stream.XORKeyStream(encrypted[des.BlockSize:], data)
+	cfbXOR(block, encrypted[des.BlockSize:], data, iv, false)
 
 	return encrypted
 }
@@ -393,8 +400,7 @@ func DesCfbDecrypt(encrypted, key []byte) []byte {
 	iv := encrypted[:des.BlockSize]
 	encrypted = encrypted[des.BlockSize:]
 
-	stream := cipher.NewCFBDecrypter(block, iv)
-	stream.XORKeyStream(encrypted, encrypted)
+	cfbXOR(block, encrypted, encrypted, iv, true)
 
 	return encrypted
 }
@@ -419,8 +425,7 @@ func DesOfbEncrypt(data, key []byte) []byte {
 		panic(err)
 	}
 
-	stream := cipher.NewOFB(block, iv)
-	stream.XORKeyStream(encrypted[des.BlockSize:], data)
+	ofbXOR(block, encrypted[des.BlockSize:], data, iv)
 
 	return encrypted
 }
@@ -446,8 +451,7 @@ func DesOfbDecrypt(data, key []byte) []byte {
 	}
 
 	decrypted := make([]byte, len(data))
-	mode := cipher.NewOFB(block, iv)
-	mode.XORKeyStream(decrypted, data)
+	ofbXOR(block, decrypted, data, iv)
 
 	decrypted = pkcs7UnPadding(decrypted)
 
@@ -470,16 +474,9 @@ func GenerateRsaKey(keySize int, priKeyFile, pubKeyFile string) error {
 		Bytes: derText,
 	}
 
-	file, err := os.Create(priKeyFile)
-	if err != nil {
-		panic(err)
-	}
-	err = pem.Encode(file, &block)
-	if err != nil {
+	if err = os.WriteFile(priKeyFile, pem.EncodeToMemory(&block), 0666); err != nil {
 		return err
 	}
-
-	file.Close()
 
 	// public key
 	publicKey := privateKey.PublicKey
@@ -494,36 +491,17 @@ func GenerateRsaKey(keySize int, priKeyFile, pubKeyFile string) error {
 		Bytes: derpText,
 	}
 
-	file, err = os.Create(pubKeyFile)
-	if err != nil {
+	if err = os.WriteFile(pubKeyFile, pem.EncodeToMemory(&block), 0666); err != nil {
 		return err
 	}
-
-	err = pem.Encode(file, &block)
-	if err != nil {
-		return err
-	}
-
-	file.Close()
 
 	return nil
 }
 
-// RsaEncrypt encrypt data with ras algorithm.
+// RsaEncrypt encrypts data with RSA PKCS#1 v1.5 for backward compatibility.
 // Play: https://go.dev/play/p/rDqTT01SPkZ
 func RsaEncrypt(data []byte, pubKeyFileName string) []byte {
-	file, err := os.Open(pubKeyFileName)
-	if err != nil {
-		panic(err)
-	}
-	fileInfo, err := file.Stat()
-	if err != nil {
-		panic(err)
-	}
-	defer file.Close()
-	buf := make([]byte, fileInfo.Size())
-
-	_, err = file.Read(buf)
+	buf, err := os.ReadFile(pubKeyFileName)
 	if err != nil {
 		panic(err)
 	}
@@ -536,6 +514,7 @@ func RsaEncrypt(data []byte, pubKeyFileName string) []byte {
 	}
 	pubKey := pubInterface.(*rsa.PublicKey)
 
+	//noinspection GoDeprecation // Existing callers and stored ciphertext depend on PKCS#1 v1.5.
 	cipherText, err := rsa.EncryptPKCS1v15(rand.Reader, pubKey, data)
 	if err != nil {
 		panic(err)
@@ -543,21 +522,10 @@ func RsaEncrypt(data []byte, pubKeyFileName string) []byte {
 	return cipherText
 }
 
-// RsaDecrypt decrypt data with ras algorithm.
+// RsaDecrypt decrypts RSA PKCS#1 v1.5 data for backward compatibility.
 // Play: https://go.dev/play/p/rDqTT01SPkZ
 func RsaDecrypt(data []byte, privateKeyFileName string) []byte {
-	file, err := os.Open(privateKeyFileName)
-	if err != nil {
-		panic(err)
-	}
-	fileInfo, err := file.Stat()
-	if err != nil {
-		panic(err)
-	}
-	buf := make([]byte, fileInfo.Size())
-	defer file.Close()
-
-	_, err = file.Read(buf)
+	buf, err := os.ReadFile(privateKeyFileName)
 	if err != nil {
 		panic(err)
 	}
@@ -569,6 +537,7 @@ func RsaDecrypt(data []byte, privateKeyFileName string) []byte {
 		panic(err)
 	}
 
+	//noinspection GoDeprecation // Existing callers and stored ciphertext depend on PKCS#1 v1.5.
 	plainText, err := rsa.DecryptPKCS1v15(rand.Reader, priKey, data)
 	if err != nil {
 		panic(err)
@@ -597,7 +566,7 @@ func RsaEncryptOAEP(data []byte, label []byte, key rsa.PublicKey) ([]byte, error
 // RsaDecryptOAEP decrypts the data with RSA-OAEP.
 // Play: https://go.dev/play/p/sSVmkfENKMz
 func RsaDecryptOAEP(ciphertext []byte, label []byte, key rsa.PrivateKey) ([]byte, error) {
-	decryptedBytes, err := rsa.DecryptOAEP(sha256.New(), rand.Reader, &key, ciphertext, label)
+	decryptedBytes, err := rsa.DecryptOAEP(sha256.New(), nil, &key, ciphertext, label)
 	if err != nil {
 		return nil, err
 	}

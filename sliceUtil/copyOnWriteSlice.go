@@ -185,12 +185,12 @@ func (c *CopyOnWriteSlice[T]) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON 实现 json.Unmarshaler 接口
 func (c *CopyOnWriteSlice[T]) UnmarshalJSON(data []byte) error {
 	var tmp []T
-	err := json.Unmarshal(data, &tmp)
-	if err != nil {
+	if err := json.Unmarshal(data, &tmp); err != nil {
 		return err
 	}
-	c.data = []T{}
-	c.AddAll(tmp...)
+	c.mu.Lock()
+	c.data = append(make([]T, 0, len(tmp)), tmp...)
+	c.mu.Unlock()
 	return nil
 }
 
@@ -205,7 +205,8 @@ func (c *CopyOnWriteSlice[T]) UnmarshalBSONValue(t byte, data []byte) error {
 	if err := bson.UnmarshalValue(bson.Type(t), data, &elements); err != nil {
 		return err
 	}
-	c.data = []T{}
-	c.AddAll(elements...)
+	c.mu.Lock()
+	c.data = append(make([]T, 0, len(elements)), elements...)
+	c.mu.Unlock()
 	return nil
 }

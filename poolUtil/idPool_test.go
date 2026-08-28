@@ -5,242 +5,262 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
-
-	"github.com/Tomatosky/jo-util/randomUtil"
 )
 
+func newTestIDPool(poolSize int64, queueSize int) *IdPool {
+	return NewIdPool(&IdPoolOpt{
+		PoolSize:  poolSize,
+		QueueSize: queueSize,
+		PoolName:  "test-id-pool",
+	})
+}
+
 func TestIdPool(t *testing.T) {
-	// 测试用例1: 基本功能测试
-	t.Run("BasicFunctionality", func(t *testing.T) {
-		pool := NewIdPool(&IdPoolOpt{
-			PoolSize:  4,
-			QueueSize: 10,
-			PoolName:  "TestPool",
-		})
-
-		// 测试任务提交和计数
-		var counter int32
-		pool.SubmitWithId(1, func() {
-			atomic.AddInt32(&counter, 1)
-		})
-		pool.SubmitWithId(1, func() {
-			atomic.AddInt32(&counter, 1)
-		})
-
-		// 等待任务执行完成
-		time.Sleep(100 * time.Millisecond)
-
-		if got := pool.GetTaskCount(1); got != 0 {
-			t.Errorf("Expected task count 0, got %d", got)
+	t.Run("rejects invalid sizes", func(t *testing.T) {
+		tests := []IdPoolOpt{
+			{PoolSize: 0, QueueSize: 1},
+			{PoolSize: 1, QueueSize: 0},
+			{PoolSize: -1, QueueSize: 1},
+			{PoolSize: 1, QueueSize: -1},
 		}
-		if atomic.LoadInt32(&counter) != 2 {
-			t.Errorf("Expected counter 2, got %d", counter)
-		}
-
-		// 测试关闭
-		pool.Shutdown(time.Second)
-	})
-
-	// 测试用例2: 并发任务提交
-	t.Run("ConcurrentSubmission", func(t *testing.T) {
-		pool := NewIdPool(&IdPoolOpt{
-			PoolSize:  4,
-			QueueSize: 2048,
-		})
-
-		var wg sync.WaitGroup
-		var counter int32
-		const numTasks = 1000
-
-		// 并发提交任务
-		for i := 0; i < numTasks; i++ {
-			wg.Add(1)
-			go func(id int32) {
-				defer wg.Done()
-				pool.SubmitWithId(id%4, func() {
-					atomic.AddInt32(&counter, 1)
-				})
-			}(int32(i))
-		}
-
-		wg.Wait()
-		time.Sleep(500 * time.Millisecond) // 等待所有任务执行完成
-
-		if atomic.LoadInt32(&counter) != numTasks {
-			t.Errorf("Expected counter %d, got %d", numTasks, counter)
-		}
-
-		// 检查所有ID的任务计数是否清零
-		for i := 0; i < 4; i++ {
-			if count := pool.GetTaskCount(int32(i)); count != 0 {
-				t.Errorf("Expected task count 0 for id %d, got %d", i, count)
-			}
-		}
-
-		pool.Shutdown(time.Second)
-	})
-
-	// 测试用例3: 大并发压力测试
-	t.Run("HighConcurrencyStressTest", func(t *testing.T) {
-		pool := NewIdPool(&IdPoolOpt{
-			PoolSize:  16,
-			QueueSize: 1000,
-		})
-
-		var wg sync.WaitGroup
-		var counter int32
-		const numTasks = 10000
-		const numWorkers = 100
-
-		// 使用多个worker并发提交任务
-		for w := 0; w < numWorkers; w++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				for i := 0; i < numTasks/numWorkers; i++ {
-					pool.SubmitWithId(int32(i%16), func() {
-						atomic.AddInt32(&counter, 1)
-					})
-				}
+		for _, opt := range tests {
+			func() {
+				defer func() {
+					if got := recover(); got != "pool size and queue size must be greater than 0" {
+						t.Errorf("NewIdPool(%+v) panic = %v", opt, got)
+					}
+				}()
+				NewIdPool(&opt)
 			}()
 		}
-
-		wg.Wait()
-		time.Sleep(2 * time.Second) // 给足够时间执行所有任务
-
-		if atomic.LoadInt32(&counter) != numTasks {
-			t.Errorf("Expected counter %d, got %d", numTasks, counter)
-		}
-
-		pool.Shutdown(5 * time.Second)
 	})
 
-	// 测试用例4: 队列满的情况
-	t.Run("QueueFull", func(t *testing.T) {
-		pool := NewIdPool(&IdPoolOpt{
-			PoolSize:  2,
-			QueueSize: 2,
-			PoolName:  "SmallQueuePool",
-		})
-
-		// 填满队列
+	t.Run("executes tasks and cleans bookkeeping", func(t *testing.T) {
+		pool := newTestIDPool(2, 4)
+		if got := pool.poolName; got != "test-id-pool" {
+			t.Errorf("pool name = %q, want %q", got, "test-id-pool")
+		}
+		var counter atomic.Int32
+		done := make(chan struct{}, 2)
 		for i := 0; i < 2; i++ {
-			pool.SubmitWithId(0, func() {
-				time.Sleep(100 * time.Millisecond)
+			pool.SubmitWithId("1", func() {
+				counter.Add(1)
+				done <- struct{}{}
 			})
 		}
+		waitForSignal(t, done, time.Second, "first id-pool task")
+		waitForSignal(t, done, time.Second, "second id-pool task")
 
-		// 尝试提交更多任务（应该会触发队列满警告）
-		pool.SubmitWithId(0, func() {})
-		pool.SubmitWithId(0, func() {})
-
-		pool.Shutdown(time.Second)
+		if timedOut := pool.Shutdown(time.Second); timedOut {
+			t.Fatal("shutdown timed out")
+		}
+		if got := counter.Load(); got != 2 {
+			t.Errorf("executed task count = %d, want 2", got)
+		}
+		if got := pool.GetTaskCount(1); got != 0 {
+			t.Errorf("task count after completion = %d, want 0", got)
+		}
+		if got := pool.taskIdMap.Size(); got != 0 {
+			t.Errorf("task-id map size after completion = %d, want 0", got)
+		}
 	})
 
-	// 测试用例5: 关闭时处理剩余任务
-	t.Run("ShutdownWithPendingTasks", func(t *testing.T) {
-		pool := NewIdPool(&IdPoolOpt{
-			PoolSize:  2,
-			QueueSize: 4096,
-		})
+	t.Run("negative id selects a valid worker", func(t *testing.T) {
+		pool := newTestIDPool(2, 2)
+		executed := make(chan struct{}, 1)
+		pool.SubmitWithId(-1, func() { executed <- struct{}{} })
+		waitForSignal(t, executed, time.Second, "task with negative id")
+		if timedOut := pool.Shutdown(time.Second); timedOut {
+			t.Fatal("shutdown timed out")
+		}
+		if got := pool.GetTaskCount(-1); got != 0 {
+			t.Errorf("task count for negative id = %d, want 0", got)
+		}
+	})
 
-		var counter int32
-		const numTasks = 5
+	t.Run("Submit executes task without explicit id", func(t *testing.T) {
+		pool := newTestIDPool(2, 2)
+		executed := make(chan struct{}, 1)
+		pool.Submit(func() { executed <- struct{}{} })
+		waitForSignal(t, executed, time.Second, "task submitted without id")
+		if timedOut := pool.Shutdown(time.Second); timedOut {
+			t.Fatal("shutdown timed out")
+		}
+		if got := pool.GetTaskCount(999999); got != 0 {
+			t.Errorf("unknown id task count = %d, want 0", got)
+		}
+	})
 
-		// 提交一些长时间运行的任务
+	t.Run("concurrent submissions all complete", func(t *testing.T) {
+		pool := newTestIDPool(8, 512)
+		const numTasks = 2000
+		var counter atomic.Int32
+		var submitters sync.WaitGroup
 		for i := 0; i < numTasks; i++ {
-			pool.SubmitWithId(0, func() {
-				time.Sleep(200 * time.Millisecond)
-				atomic.AddInt32(&counter, 1)
-			})
+			submitters.Add(1)
+			go func(id int) {
+				defer submitters.Done()
+				pool.SubmitWithId(id%8, func() { counter.Add(1) })
+			}(i)
 		}
+		submitters.Wait()
 
-		// 立即关闭
-		pool.Shutdown(3 * time.Second)
-
-		if atomic.LoadInt32(&counter) != numTasks {
-			t.Errorf("Expected all %d tasks to complete, got %d", numTasks, counter)
+		if timedOut := pool.Shutdown(3 * time.Second); timedOut {
+			t.Fatal("shutdown timed out after concurrent submissions")
+		}
+		if got := counter.Load(); got != numTasks {
+			t.Errorf("executed task count = %d, want %d", got, numTasks)
+		}
+		for id := 0; id < 8; id++ {
+			if got := pool.GetTaskCount(id); got != 0 {
+				t.Errorf("task count for id %d = %d, want 0", id, got)
+			}
+		}
+		if got := pool.taskIdMap.Size(); got != 0 {
+			t.Errorf("task-id map size = %d, want 0", got)
 		}
 	})
 
-	// 测试用例6: 关闭超时
-	t.Run("ShutdownTimeout", func(t *testing.T) {
-		pool := NewIdPool(&IdPoolOpt{
-			PoolSize:  2,
-			QueueSize: 10,
-			PoolName:  "TimeoutPool",
-		})
-
-		// 提交一个长时间运行的任务
+	t.Run("full queue rolls back rejected task", func(t *testing.T) {
+		pool := newTestIDPool(1, 1)
+		started := make(chan struct{})
+		release := make(chan struct{})
+		var executed atomic.Int32
 		pool.SubmitWithId(0, func() {
-			time.Sleep(2 * time.Second)
+			close(started)
+			<-release
+			executed.Add(1)
 		})
+		waitForSignal(t, started, time.Second, "blocking id-pool task")
+		pool.SubmitWithId(0, func() { executed.Add(1) })
+		pool.SubmitWithId(0, func() { executed.Add(100) })
 
-		// 设置很短的超时时间
-		pool.Shutdown(100 * time.Millisecond)
+		if got := pool.GetTaskCount(0); got != 2 {
+			t.Errorf("accepted task count = %d, want 2", got)
+		}
+		if got := pool.taskIdMap.Size(); got != 2 {
+			t.Errorf("task-id map size while two tasks are accepted = %d, want 2", got)
+		}
+		if got := pool.MaxQueue(); got != 1 {
+			t.Errorf("maximum queued tasks = %d, want 1", got)
+		}
 
-		// 预期会触发超时警告
+		close(release)
+		if timedOut := pool.Shutdown(time.Second); timedOut {
+			t.Fatal("shutdown timed out while draining accepted tasks")
+		}
+		if got := executed.Load(); got != 2 {
+			t.Errorf("executed value = %d, want 2; rejected task must not run", got)
+		}
+		if got := pool.GetTaskCount(0); got != 0 {
+			t.Errorf("task count after drain = %d, want 0", got)
+		}
+		if got := pool.taskIdMap.Size(); got != 0 {
+			t.Errorf("task-id map size after drain = %d, want 0", got)
+		}
 	})
 
-	// 测试用例7: 任务ID映射清理
-	t.Run("TaskIdMapCleanup", func(t *testing.T) {
-		pool := NewIdPool(&IdPoolOpt{
-			PoolSize:  8,
-			QueueSize: 1024,
-		})
-
-		const numTasks = 100
+	t.Run("shutdown drains pending tasks", func(t *testing.T) {
+		pool := newTestIDPool(1, 10)
+		const numTasks = 5
+		var counter atomic.Int32
 		for i := 0; i < numTasks; i++ {
-			pool.SubmitWithId(int32(randomUtil.RandomInt(0, 32)), func() {})
+			pool.SubmitWithId(0, func() { counter.Add(1) })
 		}
 
-		time.Sleep(100 * time.Millisecond)
-
-		// 检查任务ID映射是否被清理
-		if size := pool.taskIdMap.Size(); size != 0 {
-			t.Errorf("Expected taskIdMap size 0, got %d", size)
+		if timedOut := pool.Shutdown(time.Second); timedOut {
+			t.Fatal("shutdown timed out while draining pending tasks")
 		}
-
-		pool.Shutdown(time.Second)
+		if got := counter.Load(); got != numTasks {
+			t.Errorf("drained task count = %d, want %d", got, numTasks)
+		}
 	})
 
-	// 测试用例8: 任务计数准确性
-	t.Run("TaskCountAccuracy", func(t *testing.T) {
-		pool := NewIdPool(&IdPoolOpt{
-			PoolSize:  4,
-			QueueSize: 100,
+	t.Run("shutdown reports timeout without leaking worker", func(t *testing.T) {
+		pool := newTestIDPool(1, 1)
+		started := make(chan struct{})
+		release := make(chan struct{})
+		pool.SubmitWithId(0, func() {
+			close(started)
+			<-release
 		})
+		waitForSignal(t, started, time.Second, "blocking id-pool task")
 
-		const numTasksPerID = 50
-		const numIDs = 4
+		if timedOut := pool.Shutdown(20 * time.Millisecond); !timedOut {
+			t.Error("Shutdown should report timeout while task is blocked")
+		}
+		close(release)
+		pool.wg.Wait()
+		if got := pool.GetTaskCount(0); got != 0 {
+			t.Errorf("task count after timed-out task completes = %d, want 0", got)
+		}
+		if got := pool.taskIdMap.Size(); got != 0 {
+			t.Errorf("task-id map after timed-out task completes = %d, want 0", got)
+		}
+	})
 
-		// 提交任务
-		for id := 0; id < numIDs; id++ {
-			for i := 0; i < numTasksPerID; i++ {
-				pool.SubmitWithId(int32(id), func() {
-					time.Sleep(10 * time.Millisecond)
-				})
+	t.Run("task counts are exact while blocked", func(t *testing.T) {
+		pool := newTestIDPool(4, 64)
+		const tasksPerID = 50
+		release := make(chan struct{})
+		for id := 0; id < 4; id++ {
+			for i := 0; i < tasksPerID; i++ {
+				pool.SubmitWithId(id, func() { <-release })
 			}
 		}
 
-		// 立即检查任务计数（可能还在队列中）
-		for id := 0; id < numIDs; id++ {
-			count := pool.GetTaskCount(int32(id))
-			if count <= 0 || count > numTasksPerID {
-				t.Errorf("Unexpected task count %d for id %d", count, id)
+		for id := 0; id < 4; id++ {
+			if got := pool.GetTaskCount(id); got != tasksPerID {
+				t.Errorf("blocked task count for id %d = %d, want %d", id, got, tasksPerID)
 			}
 		}
-
-		// 等待所有任务完成
-		time.Sleep(600 * time.Millisecond)
-
-		// 再次检查任务计数（应该为0）
-		for id := 0; id < numIDs; id++ {
-			if count := pool.GetTaskCount(int32(id)); count != 0 {
-				t.Errorf("Expected task count 0 for id %d, got %d", id, count)
-			}
+		if got := pool.taskIdMap.Size(); got != 4*tasksPerID {
+			t.Errorf("task-id map size = %d, want %d", got, 4*tasksPerID)
 		}
 
-		pool.Shutdown(time.Second)
+		close(release)
+		if timedOut := pool.Shutdown(2 * time.Second); timedOut {
+			t.Fatal("shutdown timed out after releasing blocked tasks")
+		}
+		for id := 0; id < 4; id++ {
+			if got := pool.GetTaskCount(id); got != 0 {
+				t.Errorf("completed task count for id %d = %d, want 0", id, got)
+			}
+		}
+		if got := pool.taskIdMap.Size(); got != 0 {
+			t.Errorf("task-id map size after completion = %d, want 0", got)
+		}
+	})
+
+	t.Run("task panic still cleans bookkeeping", func(t *testing.T) {
+		pool := newTestIDPool(1, 1)
+		pool.SubmitWithId(7, func() { panic("test panic") })
+		if timedOut := pool.Shutdown(time.Second); timedOut {
+			t.Fatal("shutdown timed out after panicking task")
+		}
+		if got := pool.GetTaskCount(7); got != 0 {
+			t.Errorf("task count after panic = %d, want 0", got)
+		}
+		if got := pool.taskIdMap.Size(); got != 0 {
+			t.Errorf("task-id map size after panic = %d, want 0", got)
+		}
+	})
+
+	t.Run("submission after shutdown is ignored", func(t *testing.T) {
+		pool := newTestIDPool(1, 1)
+		if timedOut := pool.Shutdown(time.Second); timedOut {
+			t.Fatal("initial shutdown timed out")
+		}
+		var executed atomic.Bool
+		pool.SubmitWithId(0, func() { executed.Store(true) })
+		if executed.Load() {
+			t.Error("task submitted after shutdown was executed")
+		}
+		if got := pool.GetTaskCount(0); got != 0 {
+			t.Errorf("task count after rejected submission = %d, want 0", got)
+		}
+		if got := pool.taskIdMap.Size(); got != 0 {
+			t.Errorf("task-id map size after rejected submission = %d, want 0", got)
+		}
 	})
 }

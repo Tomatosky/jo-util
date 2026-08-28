@@ -212,7 +212,7 @@ func ParseToTime(str, format string, timezone ...string) (time.Time, error) {
 	}
 
 	location := Loc
-	if timezone != nil && timezone[0] != "" {
+	if len(timezone) > 0 && timezone[0] != "" {
 		var err error
 		location, err = time.LoadLocation(timezone[0])
 		if err != nil {

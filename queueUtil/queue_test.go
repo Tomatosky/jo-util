@@ -13,6 +13,9 @@ func TestNewQueue(t *testing.T) {
 	if q.Len() != 0 {
 		t.Errorf("New queue should have length 0, got %d", q.Len())
 	}
+	if len(q.items) != 0 || q.head != 0 {
+		t.Errorf("new queue state = len(items) %d, head %d; want both 0", len(q.items), q.head)
+	}
 }
 
 // TestEnqueue 测试入队操作
@@ -38,9 +41,9 @@ func TestDequeue(t *testing.T) {
 	q := NewQueue[int]()
 
 	// 测试空队列出队
-	_, ok := q.Dequeue()
-	if ok {
-		t.Error("Dequeue from empty queue should return false")
+	value, ok := q.Dequeue()
+	if ok || value != 0 {
+		t.Errorf("Dequeue from empty queue = (%d, %v), want (0, false)", value, ok)
 	}
 
 	// 测试正常出队
@@ -118,6 +121,12 @@ func TestShrink(t *testing.T) {
 	if q.Len() != 50 {
 		t.Errorf("Expected 50 remaining items, got %d", q.Len())
 	}
+	if got := len(q.items); got != 99 {
+		t.Errorf("backing slice length after shrink = %d, want 99", got)
+	}
+	if got := q.head; got != 49 {
+		t.Errorf("head after shrink and 49 more dequeues = %d, want 49", got)
+	}
 
 	// 验证剩余元素的正确性
 	for i := 150; i < 200; i++ {
@@ -181,6 +190,20 @@ func TestZeroValue(t *testing.T) {
 	}
 	if val != 0 {
 		t.Errorf("Expected 0, got %d", val)
+	}
+}
+
+func TestQueueZeroValueIsUsable(t *testing.T) {
+	var q Queue[string]
+	if got := q.Len(); got != 0 {
+		t.Errorf("zero-value queue length = %d, want 0", got)
+	}
+	if value, ok := q.Dequeue(); ok || value != "" {
+		t.Errorf("zero-value queue Dequeue() = (%q, %v), want (empty, false)", value, ok)
+	}
+	q.Enqueue("first")
+	if value, ok := q.Dequeue(); !ok || value != "first" {
+		t.Errorf("zero-value queue Dequeue() = (%q, %v), want (first, true)", value, ok)
 	}
 }
 
@@ -275,7 +298,9 @@ func TestEmptyQueueLen(t *testing.T) {
 
 	// 入队后出队
 	q.Enqueue(1)
-	q.Dequeue()
+	if value, ok := q.Dequeue(); !ok || value != 1 {
+		t.Fatalf("Dequeue() = (%d, %v), want (1, true)", value, ok)
+	}
 
 	if q.Len() != 0 {
 		t.Errorf("Queue should be empty after dequeue, got length %d", q.Len())
@@ -289,13 +314,16 @@ func TestDequeueAll(t *testing.T) {
 	q.Enqueue(1)
 	q.Enqueue(2)
 
-	q.Dequeue()
-	q.Dequeue()
+	for want := 1; want <= 2; want++ {
+		if value, ok := q.Dequeue(); !ok || value != want {
+			t.Fatalf("Dequeue() = (%d, %v), want (%d, true)", value, ok, want)
+		}
+	}
 
 	// 尝试从空队列出队
-	_, ok := q.Dequeue()
-	if ok {
-		t.Error("Dequeue from empty queue should return false")
+	value, ok := q.Dequeue()
+	if ok || value != 0 {
+		t.Errorf("Dequeue from empty queue = (%d, %v), want (0, false)", value, ok)
 	}
 
 	// 再次入队应该正常工作

@@ -1,108 +1,279 @@
 package cryptor
 
 import (
+	"bytes"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/pem"
+	"math/big"
+	"strings"
 	"testing"
 )
 
-func init() {
+func rsaPEMFixture(t *testing.T) (string, string, *rsa.PrivateKey) {
+	t.Helper()
+	privateKey, publicKey := GenerateRsaKeyPair(1024)
+	if privateKey == nil || publicKey == nil {
+		t.Fatal("GenerateRsaKeyPair() returned nil")
+	}
+	privatePEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
+	})
+	publicDER, err := x509.MarshalPKIXPublicKey(publicKey)
+	if err != nil {
+		t.Fatalf("marshal public key: %v", err)
+	}
+	publicPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "PUBLIC KEY",
+		Bytes: publicDER,
+	})
+	return string(publicPEM), string(privatePEM), privateKey
+}
+
+func configuredRSASecurity(t *testing.T) *RSASecurity {
+	t.Helper()
+	publicPEM, privatePEM, _ := rsaPEMFixture(t)
+	security := &RSASecurity{}
+	if err := security.SetPublicKey("\n  " + publicPEM + "  \n"); err != nil {
+		t.Fatalf("SetPublicKey(): %v", err)
+	}
+	if err := security.SetPrivateKey(privatePEM); err != nil {
+		t.Fatalf("SetPrivateKey(): %v", err)
+	}
+	return security
+}
+
+func TestRSASetAndGetKeys(t *testing.T) {
+	publicPEM, privatePEM, privateKey := rsaPEMFixture(t)
+	security := &RSASecurity{}
+	if err := security.SetPublicKey(publicPEM); err != nil {
+		t.Fatalf("SetPublicKey(): %v", err)
+	}
+	if err := security.SetPrivateKey(privatePEM); err != nil {
+		t.Fatalf("SetPrivateKey(): %v", err)
+	}
+
+	publicKey, err := security.GetPublickey()
+	if err != nil {
+		t.Fatalf("GetPublickey(): %v", err)
+	}
+	loadedPrivateKey, err := security.GetPrivatekey()
+	if err != nil {
+		t.Fatalf("GetPrivatekey(): %v", err)
+	}
+	if publicKey.N.Cmp(privateKey.N) != 0 || loadedPrivateKey.N.Cmp(privateKey.N) != 0 {
+		t.Error("loaded keys do not match input key pair")
+	}
+
+	block, _ := pem.Decode([]byte(publicPEM))
+	if block == nil {
+		t.Fatal("decode public key fixture")
+	}
+	rawBase64 := base64.StdEncoding.EncodeToString(block.Bytes)
+	wrappedRawBase64 := rawBase64[:len(rawBase64)/2] + "\n  " + rawBase64[len(rawBase64)/2:]
+	rawSecurity := &RSASecurity{}
+	if err := rawSecurity.SetPublicKey(wrappedRawBase64); err != nil {
+		t.Fatalf("SetPublicKey(raw Base64 DER): %v", err)
+	}
+	rawPublicKey, err := rawSecurity.GetPublickey()
+	if err != nil {
+		t.Fatalf("GetPublickey() after raw Base64 DER: %v", err)
+	}
+	if rawPublicKey.N.Cmp(privateKey.N) != 0 || rawPublicKey.E != privateKey.E {
+		t.Error("raw Base64 DER public key does not match input key")
+	}
+
+	pkcs1PublicDER := x509.MarshalPKCS1PublicKey(&privateKey.PublicKey)
+	for name, encoded := range map[string]string{
+		"PKCS1 PEM":            string(pem.EncodeToMemory(&pem.Block{Type: "RSA PUBLIC KEY", Bytes: pkcs1PublicDER})),
+		"raw PKCS1 Base64 DER": base64.StdEncoding.EncodeToString(pkcs1PublicDER),
+	} {
+		t.Run(name, func(t *testing.T) {
+			security := &RSASecurity{}
+			if err := security.SetPublicKey(encoded); err != nil {
+				t.Fatalf("SetPublicKey(): %v", err)
+			}
+			if security.pubkey.N.Cmp(privateKey.N) != 0 || security.pubkey.E != privateKey.E {
+				t.Error("loaded PKCS1 public key does not match input key")
+			}
+		})
+	}
+
+	pkcs8PrivateDER, err := x509.MarshalPKCS8PrivateKey(privateKey)
+	if err != nil {
+		t.Fatalf("marshal PKCS8 private key: %v", err)
+	}
+	for name, encoded := range map[string]string{
+		"PKCS8 PEM":            string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: pkcs8PrivateDER})),
+		"raw PKCS8 Base64 DER": base64.StdEncoding.EncodeToString(pkcs8PrivateDER),
+		"raw PKCS1 Base64 DER": base64.StdEncoding.EncodeToString(x509.MarshalPKCS1PrivateKey(privateKey)),
+	} {
+		t.Run(name, func(t *testing.T) {
+			security := &RSASecurity{}
+			if err := security.SetPrivateKey(encoded); err != nil {
+				t.Fatalf("SetPrivateKey(): %v", err)
+			}
+			if security.prikey.N.Cmp(privateKey.N) != 0 {
+				t.Error("loaded private key does not match input key")
+			}
+		})
+	}
+
+	ecPrivateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("generate EC key: %v", err)
+	}
+	ecPublicDER, err := x509.MarshalPKIXPublicKey(&ecPrivateKey.PublicKey)
+	if err != nil {
+		t.Fatalf("marshal EC public key: %v", err)
+	}
+	ecPrivateDER, err := x509.MarshalPKCS8PrivateKey(ecPrivateKey)
+	if err != nil {
+		t.Fatalf("marshal EC private key: %v", err)
+	}
+	if err := (&RSASecurity{}).SetPublicKey(string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: ecPublicDER}))); err == nil {
+		t.Error("SetPublicKey(EC key) returned nil error")
+	}
+	if err := (&RSASecurity{}).SetPrivateKey(string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: ecPrivateDER}))); err == nil {
+		t.Error("SetPrivateKey(EC key) returned nil error")
+	}
+
+	if err := (&RSASecurity{}).SetPublicKey(" "); err == nil || err.Error() != "public key is empty" {
+		t.Errorf("SetPublicKey(empty) error = %v", err)
+	}
+	if err := (&RSASecurity{}).SetPublicKey("not a public key"); err == nil {
+		t.Error("SetPublicKey(malformed) returned nil error")
+	}
+	if err := (&RSASecurity{}).SetPrivateKey("not a private key"); err == nil {
+		t.Error("SetPrivateKey(malformed) returned nil error")
+	}
+	if err := (&RSASecurity{}).SetPrivateKey(" "); err == nil || err.Error() != "private key is empty" {
+		t.Errorf("SetPrivateKey(empty) error = %v", err)
+	}
+}
+
+func TestRSASecurityMissingKeyErrors(t *testing.T) {
+	security := &RSASecurity{}
+	tests := []struct {
+		name string
+		call func() ([]byte, error)
+		want string
+	}{
+		{name: "public encrypt", call: func() ([]byte, error) { return security.PubKeyENCTYPT([]byte("x")) }, want: "please set the public key in advance"},
+		{name: "public decrypt", call: func() ([]byte, error) { return security.PubKeyDECRYPT([]byte("x")) }, want: "please set the public key in advance"},
+		{name: "private encrypt", call: func() ([]byte, error) { return security.PriKeyENCTYPT([]byte("x")) }, want: "please set the private key in advance"},
+		{name: "private decrypt", call: func() ([]byte, error) { return security.PriKeyDECRYPT([]byte("x")) }, want: "please set the private key in advance"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.call()
+			if err == nil || err.Error() != tt.want || len(got) != 0 {
+				t.Errorf("call = (%v, %v), want (empty, %q)", got, err, tt.want)
+			}
+		})
+	}
+}
+
+func TestRSASecurityPublicEncryptPrivateDecrypt(t *testing.T) {
+	security := configuredRSASecurity(t)
+	data := []byte(strings.Repeat("chunked payload ", 40))
+	encrypted, err := security.PubKeyENCTYPT(data)
+	if err != nil {
+		t.Fatalf("PubKeyENCTYPT(): %v", err)
+	}
+	second, err := security.PubKeyENCTYPT(data)
+	if err != nil {
+		t.Fatalf("second PubKeyENCTYPT(): %v", err)
+	}
+	if bytes.Equal(encrypted, data) || bytes.Equal(encrypted, second) {
+		t.Error("public-key ciphertext is plaintext or is not randomized")
+	}
+	decrypted, err := security.PriKeyDECRYPT(encrypted)
+	if err != nil {
+		t.Fatalf("PriKeyDECRYPT(): %v", err)
+	}
+	if !bytes.Equal(decrypted, data) {
+		t.Errorf("round trip length/content mismatch: got %d bytes, want %d", len(decrypted), len(data))
+	}
+
+	if _, err := security.PriKeyDECRYPT(make([]byte, security.prikey.Size())); err == nil {
+		t.Error("PriKeyDECRYPT(deterministic invalid block) returned nil error")
+	}
+}
+
+func TestRSASecurityPrivateEncryptPublicDecrypt(t *testing.T) {
+	security := configuredRSASecurity(t)
+	data := []byte(strings.Repeat("chunked payload ", 40))
+	encrypted, err := security.PriKeyENCTYPT(data)
+	if err != nil {
+		t.Fatalf("PriKeyENCTYPT(): %v", err)
+	}
+	if bytes.Equal(encrypted, data) {
+		t.Error("private-key ciphertext equals plaintext")
+	}
+	decrypted, err := security.PubKeyDECRYPT(encrypted)
+	if err != nil {
+		t.Fatalf("PubKeyDECRYPT(): %v", err)
+	}
+	if !bytes.Equal(decrypted, data) {
+		t.Errorf("round trip length/content mismatch: got %d bytes, want %d", len(decrypted), len(data))
+	}
 
 }
 
-var Pubkey = `-----BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAk+89V7vpOj1rG6bTAKYM
-56qmFLwNCBVDJ3MltVVtxVUUByqc5b6u909MmmrLBqS//PWC6zc3wZzU1+ayh8xb
-UAEZuA3EjlPHIaFIVIz04RaW10+1xnby/RQE23tDqsv9a2jv/axjE/27b62nzvCW
-eItu1kNQ3MGdcuqKjke+LKhQ7nWPRCOd/ffVqSuRvG0YfUEkOz/6UpsPr6vrI331
-hWRB4DlYy8qFUmDsyvvExe4NjZWblXCqkEXRRAhi2SQRCl3teGuIHtDUxCskRIDi
-aMD+Qt2Yp+Vvbz6hUiqIWSIH1BoHJer/JOq2/O6X3cmuppU4AdVNgy8Bq236iXvr
-MQIDAQAB
------END PUBLIC KEY-----
-`
+func TestPubKeyDecryptRejectsMalformedEncodedMessages(t *testing.T) {
+	_, _, privateKey := rsaPEMFixture(t)
+	publicKey := &privateKey.PublicKey
+	keySize := publicKey.Size()
 
-var Pirvatekey = `-----BEGIN RSA PRIVATE KEY-----
-MIIEpAIBAAKCAQEAk+89V7vpOj1rG6bTAKYM56qmFLwNCBVDJ3MltVVtxVUUByqc
-5b6u909MmmrLBqS//PWC6zc3wZzU1+ayh8xbUAEZuA3EjlPHIaFIVIz04RaW10+1
-xnby/RQE23tDqsv9a2jv/axjE/27b62nzvCWeItu1kNQ3MGdcuqKjke+LKhQ7nWP
-RCOd/ffVqSuRvG0YfUEkOz/6UpsPr6vrI331hWRB4DlYy8qFUmDsyvvExe4NjZWb
-lXCqkEXRRAhi2SQRCl3teGuIHtDUxCskRIDiaMD+Qt2Yp+Vvbz6hUiqIWSIH1BoH
-Jer/JOq2/O6X3cmuppU4AdVNgy8Bq236iXvrMQIDAQABAoIBAQCCbxZvHMfvCeg+
-YUD5+W63dMcq0QPMdLLZPbWpxMEclH8sMm5UQ2SRueGY5UBNg0WkC/R64BzRIS6p
-jkcrZQu95rp+heUgeM3C4SmdIwtmyzwEa8uiSY7Fhbkiq/Rly6aN5eB0kmJpZfa1
-6S9kTszdTFNVp9TMUAo7IIE6IheT1x0WcX7aOWVqp9MDXBHV5T0Tvt8vFrPTldFg
-IuK45t3tr83tDcx53uC8cL5Ui8leWQjPh4BgdhJ3/MGTDWg+LW2vlAb4x+aLcDJM
-CH6Rcb1b8hs9iLTDkdVw9KirYQH5mbACXZyDEaqj1I2KamJIU2qDuTnKxNoc96HY
-2XMuSndhAoGBAMPwJuPuZqioJfNyS99x++ZTcVVwGRAbEvTvh6jPSGA0k3cYKgWR
-NnssMkHBzZa0p3/NmSwWc7LiL8whEFUDAp2ntvfPVJ19Xvm71gNUyCQ/hojqIAXy
-tsNT1gBUTCMtFZmAkUsjqdM/hUnJMM9zH+w4lt5QM2y/YkCThoI65BVbAoGBAMFI
-GsIbnJDNhVap7HfWcYmGOlWgEEEchG6Uq6Lbai9T8c7xMSFc6DQiNMmQUAlgDaMV
-b6izPK4KGQaXMFt5h7hekZgkbxCKBd9xsLM72bWhM/nd/HkZdHQqrNAPFhY6/S8C
-IjRnRfdhsjBIA8K73yiUCsQlHAauGfPzdHET8ktjAoGAQdxeZi1DapuirhMUN9Zr
-kr8nkE1uz0AafiRpmC+cp2Hk05pWvapTAtIXTo0jWu38g3QLcYtWdqGa6WWPxNOP
-NIkkcmXJjmqO2yjtRg9gevazdSAlhXpRPpTWkSPEt+o2oXNa40PomK54UhYDhyeu
-akuXQsD4mCw4jXZJN0suUZMCgYAgzpBcKjulCH19fFI69RdIdJQqPIUFyEViT7Hi
-bsPTTLham+3u78oqLzQukmRDcx5ddCIDzIicMfKVf8whertivAqSfHytnf/pMW8A
-vUPy5G3iF5/nHj76CNRUbHsfQtv+wqnzoyPpHZgVQeQBhcoXJSm+qV3cdGjLU6OM
-HgqeaQKBgQCnmL5SX7GSAeB0rSNugPp2GezAQj0H4OCc8kNrHK8RUvXIU9B2zKA2
-z/QUKFb1gIGcKxYr+LqQ25/+TGvINjuf6P3fVkHL0U8jOG0IqpPJXO3Vl9B8ewWL
-cFQVB/nQfmaMa4ChK0QEUe+Mqi++MwgYbRHx1lIOXEfUJO+PXrMekw==
------END RSA PRIVATE KEY-----
-`
-
-func Test_SetPublicKey(t *testing.T) {
-	RSA := &RSASecurity{}
-	if err := RSA.SetPublicKey(Pubkey); err != nil {
-		t.Error(err)
-	}
-}
-
-func Test_SetPrivateKey(t *testing.T) {
-	RSA := &RSASecurity{}
-	if err := RSA.SetPrivateKey(Pirvatekey); err != nil {
-		t.Error(err)
-	}
-}
-
-// 公钥加密私钥解密
-func Test_PubENCTYPTPriDECRYPT(t *testing.T) {
-	RSA := &RSASecurity{}
-	if err := RSA.SetPublicKey(Pubkey); err != nil {
-		t.Error(err)
-	}
-	if err := RSA.SetPrivateKey(Pirvatekey); err != nil {
-		t.Error(err)
-	}
-	pubenctypt, err := RSA.PubKeyENCTYPT([]byte(`hello world`))
-	if err != nil {
-		t.Error(err)
+	if _, err := pubKeyDecrypt(publicKey, leftPad(publicKey.N.Bytes(), keySize)); err != ErrDataToLarge {
+		t.Errorf("pubKeyDecrypt(N) error = %v, want %v", err, ErrDataToLarge)
 	}
 
-	pridecrypt, err := RSA.PriKeyDECRYPT(pubenctypt)
-	if err != nil {
-		t.Error(err)
+	privateTransform := func(encoded []byte) []byte {
+		representative := new(big.Int).SetBytes(encoded)
+		representative.Exp(representative, privateKey.D, privateKey.N)
+		return leftPad(representative.Bytes(), keySize)
 	}
-	if string(pridecrypt) != `hello world` {
-		t.Error(`不符合预期`)
+	malformed := map[string][]byte{
+		"wrong block type": func() []byte {
+			encoded := make([]byte, keySize)
+			encoded[1] = 0
+			return encoded
+		}(),
+		"missing separator": func() []byte {
+			encoded := bytes.Repeat([]byte{0xff}, keySize)
+			encoded[0], encoded[1] = 0, 1
+			return encoded
+		}(),
+		"short padding": func() []byte {
+			encoded := make([]byte, keySize)
+			encoded[1] = 1
+			for i := 2; i < 6; i++ {
+				encoded[i] = 0xff
+			}
+			return encoded
+		}(),
+		"invalid padding byte": func() []byte {
+			encoded := make([]byte, keySize)
+			encoded[1] = 1
+			for i := 2; i < 12; i++ {
+				encoded[i] = 0xff
+			}
+			encoded[5] = 0xfe
+			return encoded
+		}(),
 	}
-}
-
-// 公钥解密私钥加密
-func Test_PriENCTYPTPubDECRYPT(t *testing.T) {
-	RSA := &RSASecurity{}
-	if err := RSA.SetPublicKey(Pubkey); err != nil {
-		t.Error(err)
-	}
-	if err := RSA.SetPrivateKey(Pirvatekey); err != nil {
-		t.Error(err)
-	}
-	prienctypt, err := RSA.PriKeyENCTYPT([]byte(`hello world`))
-	if err != nil {
-		t.Error(err)
-	}
-	pubdecrypt, err := RSA.PubKeyDECRYPT(prienctypt)
-	if err != nil {
-		t.Error(err)
-	}
-	if string(pubdecrypt) != `hello world` {
-		t.Error(`不符合预期`)
+	for name, encoded := range malformed {
+		t.Run(name, func(t *testing.T) {
+			if got, err := pubKeyDecrypt(publicKey, privateTransform(encoded)); err == nil || got != nil {
+				t.Errorf("pubKeyDecrypt(malformed) = (%v, %v), want (nil, error)", got, err)
+			}
+		})
 	}
 }

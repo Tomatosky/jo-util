@@ -1,7 +1,11 @@
 package setUtil
 
 import (
+	"encoding/json"
+	"sync"
 	"testing"
+
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 func TestNewConcurrentHashSet(t *testing.T) {
@@ -12,10 +16,11 @@ func TestNewConcurrentHashSet(t *testing.T) {
 	}
 
 	// 测试带初始元素的集合创建
-	set := NewConcurrentHashSet(1, 2, 3)
+	set := NewConcurrentHashSet(1, 2, 3, 2)
 	if set.Size() != 3 {
 		t.Errorf("Expected set size 3, got %d", set.Size())
 	}
+	assertIntSetElements(t, set.ToSlice(), []int{1, 2, 3})
 }
 
 func TestAddAndContains(t *testing.T) {
@@ -35,7 +40,7 @@ func TestAddAndContains(t *testing.T) {
 
 func TestAddAll3(t *testing.T) {
 	set := NewConcurrentHashSet[int]()
-	set.AddAll(1, 2, 3, 4, 5)
+	set.AddAll(1, 2, 3, 4, 5, 3)
 
 	// 测试批量添加后的数量
 	if set.Size() != 5 {
@@ -91,22 +96,7 @@ func TestToSlice3(t *testing.T) {
 	set := NewConcurrentHashSet(elements...)
 	slice := set.ToSlice()
 
-	// 测试切片长度
-	if len(slice) != len(elements) {
-		t.Errorf("Expected slice length %d, got %d", len(elements), len(slice))
-	}
-
-	// 测试所有元素都存在
-	elementMap := make(map[int]bool)
-	for _, e := range elements {
-		elementMap[e] = true
-	}
-
-	for _, e := range slice {
-		if !elementMap[e] {
-			t.Errorf("Unexpected element %d in slice", e)
-		}
-	}
+	assertIntSetElements(t, slice, elements)
 }
 
 func TestIsEmpty3(t *testing.T) {
@@ -133,10 +123,11 @@ func TestToString3(t *testing.T) {
 	set := NewConcurrentHashSet(1, 2, 3)
 	str := set.ToString()
 
-	// 简单测试字符串格式
-	if len(str) < 5 { // 至少包含 "[1,2,3]"
-		t.Errorf("Unexpected string representation: %s", str)
+	var elements []int
+	if err := json.Unmarshal([]byte(str), &elements); err != nil {
+		t.Fatalf("ToString returned invalid JSON: %v", err)
 	}
+	assertIntSetElements(t, elements, []int{1, 2, 3})
 
 	// 测试空集合的字符串表示
 	emptySet := NewConcurrentHashSet[int]()
@@ -145,57 +136,138 @@ func TestToString3(t *testing.T) {
 	}
 }
 
+func TestConcurrentHashSetRange(t *testing.T) {
+	set := NewConcurrentHashSet(1, 2, 3, 4, 5)
+	for name, rangeFn := range map[string]func(func(int) bool){
+		"Range":     set.Range,
+		"CopyRange": set.CopyRange,
+	} {
+		t.Run(name+" visits every element", func(t *testing.T) {
+			visited := make([]int, 0, set.Size())
+			rangeFn(func(value int) bool {
+				visited = append(visited, value)
+				return true
+			})
+			assertIntSetElements(t, visited, []int{1, 2, 3, 4, 5})
+		})
+
+		t.Run(name+" stops immediately", func(t *testing.T) {
+			count := 0
+			rangeFn(func(int) bool {
+				count++
+				return false
+			})
+			if count != 1 {
+				t.Fatalf("%s callbacks = %d, want 1", name, count)
+			}
+		})
+	}
+}
+
+func TestConcurrentHashSetJSON(t *testing.T) {
+	set := NewConcurrentHashSet(1, 2, 2, 3)
+	data, err := json.Marshal(set)
+	if err != nil {
+		t.Fatalf("MarshalJSON failed: %v", err)
+	}
+
+	var encoded []int
+	if err := json.Unmarshal(data, &encoded); err != nil {
+		t.Fatalf("marshaled data is not a JSON array: %v", err)
+	}
+	assertIntSetElements(t, encoded, []int{1, 2, 3})
+
+	restored := NewConcurrentHashSet(99)
+	originalMap := restored.m
+	if err := json.Unmarshal([]byte(`[3,2,2,1]`), restored); err != nil {
+		t.Fatalf("UnmarshalJSON failed: %v", err)
+	}
+	assertIntSetElements(t, restored.ToSlice(), []int{1, 2, 3})
+	if restored.m != originalMap {
+		t.Error("UnmarshalJSON replaced the synchronized map instance")
+	}
+
+	before := restored.ToSlice()
+	if err := json.Unmarshal([]byte(`{"invalid":true}`), restored); err == nil {
+		t.Fatal("UnmarshalJSON should reject a non-array value")
+	}
+	assertIntSetElements(t, restored.ToSlice(), before)
+
+	if err := json.Unmarshal([]byte(`[]`), restored); err != nil {
+		t.Fatalf("UnmarshalJSON empty array failed: %v", err)
+	}
+	assertIntSetElements(t, restored.ToSlice(), []int{})
+
+	var zeroValue ConcurrentHashSet[int]
+	if err := json.Unmarshal([]byte(`[4,5,5]`), &zeroValue); err != nil {
+		t.Fatalf("UnmarshalJSON into zero value failed: %v", err)
+	}
+	assertIntSetElements(t, zeroValue.ToSlice(), []int{4, 5})
+}
+
+func TestConcurrentHashSetBSONValue(t *testing.T) {
+	original := NewConcurrentHashSet(1, 2, 2, 3)
+	typ, data, err := original.MarshalBSONValue()
+	if err != nil {
+		t.Fatalf("MarshalBSONValue failed: %v", err)
+	}
+	if bson.Type(typ) != bson.TypeArray {
+		t.Fatalf("MarshalBSONValue type = %v, want array", bson.Type(typ))
+	}
+
+	restored := NewConcurrentHashSet[int]()
+	originalMap := restored.m
+	if err := restored.UnmarshalBSONValue(typ, data); err != nil {
+		t.Fatalf("UnmarshalBSONValue failed: %v", err)
+	}
+	assertIntSetElements(t, restored.ToSlice(), []int{1, 2, 3})
+	if restored.m != originalMap {
+		t.Error("UnmarshalBSONValue replaced the synchronized map instance")
+	}
+
+	before := restored.ToSlice()
+	if err := restored.UnmarshalBSONValue(byte(bson.TypeArray), []byte{1, 2, 3}); err == nil {
+		t.Fatal("UnmarshalBSONValue should reject malformed BSON")
+	}
+	assertIntSetElements(t, restored.ToSlice(), before)
+
+	var zeroValue ConcurrentHashSet[int]
+	if err := zeroValue.UnmarshalBSONValue(typ, data); err != nil {
+		t.Fatalf("UnmarshalBSONValue into zero value failed: %v", err)
+	}
+	assertIntSetElements(t, zeroValue.ToSlice(), []int{1, 2, 3})
+}
+
 func TestConcurrentOperations(t *testing.T) {
 	set := NewConcurrentHashSet[int]()
 	const numOperations = 1000
-	done := make(chan bool, 2) // 缓冲通道避免goroutine泄漏
+	for i := 0; i < numOperations; i += 2 {
+		set.Add(i)
+	}
 
-	// 并发添加偶数
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(2)
 	go func() {
-		for i := 0; i < numOperations; i += 2 {
-			set.Add(i)
-		}
-		done <- true
-	}()
-
-	// 并发添加奇数并移除偶数
-	go func() {
+		defer wg.Done()
+		<-start
 		for i := 1; i < numOperations; i += 2 {
 			set.Add(i)
-			set.Remove(i - 1) // 尝试移除前一个偶数
 		}
-		done <- true
 	}()
-
-	// 等待两个goroutine完成
-	<-done
-	<-done
-
-	// 验证结果
-	for i := 0; i < numOperations; i++ {
-		contains := set.Contains(i)
-		// 偶数应该被移除（除非在奇数goroutine执行前添加goroutine已经添加了它）
-		if i%2 == 0 {
-
-		} else {
-			// 奇数应该存在
-			if !contains {
-				t.Errorf("Odd number %d should be present", i)
-			}
+	go func() {
+		defer wg.Done()
+		<-start
+		for i := 0; i < numOperations; i += 2 {
+			set.Remove(i)
 		}
-	}
+	}()
+	close(start)
+	wg.Wait()
 
-	// 更可靠的验证方式：检查至少所有奇数都存在
+	want := make([]int, 0, numOperations/2)
 	for i := 1; i < numOperations; i += 2 {
-		if !set.Contains(i) {
-			t.Errorf("Odd number %d is missing", i)
-		}
+		want = append(want, i)
 	}
-
-	// 检查集合大小在合理范围内
-	size := set.Size()
-	if size < numOperations/2 || size > numOperations {
-		t.Errorf("Unexpected set size %d, expected between %d and %d",
-			size, numOperations/2, numOperations)
-	}
+	assertIntSetElements(t, set.ToSlice(), want)
 }

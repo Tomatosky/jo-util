@@ -62,7 +62,7 @@ func (cm *ConcurrentHashMap2[K, V]) ContainsKey(key K) bool {
 }
 
 func (cm *ConcurrentHashMap2[K, V]) Clear() {
-	cm.m = sync.Map{}
+	cm.m.Clear()
 }
 
 func (cm *ConcurrentHashMap2[K, V]) Keys() []K {
@@ -129,7 +129,7 @@ func (cm *ConcurrentHashMap2[K, V]) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &m); err != nil {
 		return err
 	}
-	cm.m = sync.Map{}
+	cm.m.Clear()
 	for k, v := range m {
 		cm.m.Store(k, v)
 	}
@@ -145,7 +145,7 @@ func (cm *ConcurrentHashMap2[K, V]) UnmarshalBSON(data []byte) error {
 	if err := bson.Unmarshal(data, &m); err != nil {
 		return err
 	}
-	cm.m = sync.Map{}
+	cm.m.Clear()
 	for k, v := range m {
 		cm.m.Store(k, v)
 	}

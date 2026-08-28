@@ -3,6 +3,7 @@ package mapUtil
 import (
 	"encoding/json"
 	"reflect"
+	"sync"
 	"testing"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -44,6 +45,15 @@ func TestOrderedMapNewWithElements(t *testing.T) {
 	}
 	if om.Get("b") != 2 {
 		t.Errorf("期望值为2，实际为%d", om.Get("b"))
+	}
+
+	om = NewOrderedMapWithElements(
+		&Element[string, int]{Key: "a", Value: 1},
+		&Element[string, int]{Key: "b", Value: 2},
+		&Element[string, int]{Key: "a", Value: 3},
+	)
+	if got := om.Keys(); !reflect.DeepEqual(got, []string{"a", "b"}) || om.Get("a") != 3 {
+		t.Errorf("重复元素应更新值并保留首次顺序，keys=%v value=%d", got, om.Get("a"))
 	}
 }
 
@@ -255,6 +265,9 @@ func TestOrderedMapReplaceKey(t *testing.T) {
 	if om.ReplaceKey("d", "a") {
 		t.Error("新键已存在时应该失败")
 	}
+	if om.ReplaceKey("d", "d") {
+		t.Error("用相同键替换应该失败")
+	}
 }
 
 // TestOrderedMapOrderPreservation 测试插入顺序保持
@@ -453,6 +466,11 @@ func TestOrderedMapToMap(t *testing.T) {
 	if m["a"] != 1 || m["b"] != 2 || m["c"] != 3 {
 		t.Error("ToMap的值不正确")
 	}
+	m["a"] = 100
+	delete(m, "b")
+	if om.Get("a") != 1 || !om.ContainsKey("b") {
+		t.Error("修改ToMap结果不应影响OrderedMap")
+	}
 }
 
 // TestOrderedMapToString 测试ToString方法
@@ -463,15 +481,13 @@ func TestOrderedMapToString(t *testing.T) {
 	om.Put("b", 2)
 
 	str := om.ToString()
-	if str == "" {
-		t.Error("ToString不应该返回空字符串")
-	}
-
-	// 验证是否为有效的JSON
 	var m map[string]int
 	err := json.Unmarshal([]byte(str), &m)
 	if err != nil {
-		t.Errorf("ToString应该返回有效的JSON: %v", err)
+		t.Fatalf("ToString应该返回有效的JSON: %v", err)
+	}
+	if !reflect.DeepEqual(m, map[string]int{"a": 1, "b": 2}) {
+		t.Errorf("ToString解析结果=%v, want map[a:1 b:2]", m)
 	}
 }
 
@@ -491,6 +507,7 @@ func TestOrderedMapJSONMarshalUnmarshal(t *testing.T) {
 
 	// Unmarshal
 	om2 := NewOrderedMap[string, int]()
+	om2.Put("stale", 99)
 	err = json.Unmarshal(data, om2)
 	if err != nil {
 		t.Fatalf("JSON Unmarshal失败: %v", err)
@@ -501,6 +518,15 @@ func TestOrderedMapJSONMarshalUnmarshal(t *testing.T) {
 	}
 	if om2.Get("a") != 1 || om2.Get("b") != 2 || om2.Get("c") != 3 {
 		t.Error("反序列化后的值不正确")
+	}
+	if om2.ContainsKey("stale") || len(om2.Keys()) != om2.Size() {
+		t.Errorf("JSON反序列化未完整替换旧状态: size=%d keys=%v", om2.Size(), om2.Keys())
+	}
+	if err := json.Unmarshal([]byte(`{"broken":`), om2); err == nil {
+		t.Error("无效JSON应该返回错误")
+	}
+	if got, want := om2.ToMap(), map[string]int{"a": 1, "b": 2, "c": 3}; !reflect.DeepEqual(got, want) {
+		t.Errorf("无效JSON修改了OrderedMap: %v", got)
 	}
 }
 
@@ -520,6 +546,7 @@ func TestOrderedMapBSONMarshalUnmarshal(t *testing.T) {
 
 	// Unmarshal
 	om2 := NewOrderedMap[string, int]()
+	om2.Put("stale", 99)
 	err = bson.Unmarshal(data, om2)
 	if err != nil {
 		t.Fatalf("BSON Unmarshal失败: %v", err)
@@ -530,6 +557,15 @@ func TestOrderedMapBSONMarshalUnmarshal(t *testing.T) {
 	}
 	if om2.Get("a") != 1 || om2.Get("b") != 2 || om2.Get("c") != 3 {
 		t.Error("反序列化后的值不正确")
+	}
+	if om2.ContainsKey("stale") || len(om2.Keys()) != om2.Size() {
+		t.Errorf("BSON反序列化未完整替换旧状态: size=%d keys=%v", om2.Size(), om2.Keys())
+	}
+	if err := bson.Unmarshal([]byte{0, 1, 2}, om2); err == nil {
+		t.Error("无效BSON应该返回错误")
+	}
+	if got, want := om2.ToMap(), map[string]int{"a": 1, "b": 2, "c": 3}; !reflect.DeepEqual(got, want) {
+		t.Errorf("无效BSON修改了OrderedMap: %v", got)
 	}
 }
 
@@ -560,6 +596,17 @@ func TestOrderedMapEmptyOperations(t *testing.T) {
 	m := om.ToMap()
 	if len(m) != 0 {
 		t.Error("空map的ToMap应该为空map")
+	}
+	if om.Get("missing") != 0 || om.GetOrDefault("missing", 10) != 10 || om.GetElement("missing") != nil {
+		t.Error("空map的Get/GetOrDefault/GetElement返回值不正确")
+	}
+	called := false
+	om.Range(func(string, int) bool {
+		called = true
+		return true
+	})
+	if called {
+		t.Error("空map的Range不应调用回调")
 	}
 }
 
@@ -687,11 +734,10 @@ func TestOrderedMapLargeDataSet(t *testing.T) {
 		t.Errorf("期望大小为%d，实际为%d", n, om.Size())
 	}
 
-	// 验证随机访问
-	for i := 0; i < 100; i++ {
-		idx := i * 100
-		if om.Get(idx) != idx*2 {
-			t.Errorf("索引%d的值不正确", idx)
+	// 验证所有随机访问位置
+	for i := 0; i < n; i++ {
+		if om.Get(i) != i*2 {
+			t.Errorf("索引%d的值不正确", i)
 		}
 	}
 
@@ -700,12 +746,11 @@ func TestOrderedMapLargeDataSet(t *testing.T) {
 	for key, value := range om.AllFromFront() {
 		if key != i || value != i*2 {
 			t.Errorf("索引%d的键或值不正确", i)
-			break
 		}
 		i++
-		if i >= 100 { // 只验证前100个
-			break
-		}
+	}
+	if i != n {
+		t.Errorf("遍历元素数=%d, want %d", i, n)
 	}
 }
 
@@ -741,23 +786,26 @@ func TestOrderedMapConcurrentReadsSafety(t *testing.T) {
 		om.Put(string(rune('a'+i%26))+string(rune('0'+i/26)), i)
 	}
 
-	// 多个goroutine同时读取
-	done := make(chan bool)
+	// 多个goroutine同时读取，并精确验证每次读取结果。
+	var wg sync.WaitGroup
+	wg.Add(10)
 	for i := 0; i < 10; i++ {
 		go func() {
+			defer wg.Done()
 			for j := 0; j < 100; j++ {
-				_ = om.Size()
-				_ = om.Keys()
-				_ = om.Get("a0")
+				if om.Size() != 100 {
+					t.Errorf("并发读取Size=%d, want 100", om.Size())
+				}
+				if keys := om.Keys(); len(keys) != 100 || keys[0] != "a0" {
+					t.Errorf("并发读取Keys结果不正确: len=%d first=%q", len(keys), keys[0])
+				}
+				if om.Get("a0") != 0 || !om.ContainsKey("a0") {
+					t.Error("并发读取a0结果不正确")
+				}
 			}
-			done <- true
 		}()
 	}
-
-	// 等待所有goroutine完成
-	for i := 0; i < 10; i++ {
-		<-done
-	}
+	wg.Wait()
 }
 
 // TestOrderedMapIMapInterface 测试IMap接口实现

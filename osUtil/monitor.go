@@ -38,10 +38,11 @@ type Monitor struct {
 	memory thresholdConfig
 	disk   thresholdConfig
 
-	stopChan chan struct{}
-	wg       sync.WaitGroup
-	mu       sync.Mutex
-	running  bool
+	stopChan    chan struct{}
+	wg          sync.WaitGroup
+	mu          sync.Mutex
+	lifecycleMu sync.Mutex
+	running     bool
 }
 
 // NewMonitor 创建一个新的监控器，使用默认的 fmt.Printf 报警
@@ -132,36 +133,33 @@ func (m *Monitor) SetAlertInterval(interval time.Duration) {
 
 // Start 启动监控
 func (m *Monitor) Start() error {
-	m.mu.Lock()
+	m.lifecycleMu.Lock()
+	defer m.lifecycleMu.Unlock()
 	if m.running {
-		m.mu.Unlock()
 		return fmt.Errorf("monitor is already running")
 	}
 	m.running = true
-	m.mu.Unlock()
-
+	stopChan := m.stopChan
 	m.wg.Add(1)
-	go m.monitorLoop()
+	go m.monitorLoop(stopChan)
 	return nil
 }
 
 // Stop 停止监控
 func (m *Monitor) Stop() {
-	m.mu.Lock()
+	m.lifecycleMu.Lock()
+	defer m.lifecycleMu.Unlock()
 	if !m.running {
-		m.mu.Unlock()
 		return
 	}
 	m.running = false
-	m.mu.Unlock()
-
 	close(m.stopChan)
 	m.wg.Wait()
 	m.stopChan = make(chan struct{})
 }
 
 // monitorLoop 监控循环
-func (m *Monitor) monitorLoop() {
+func (m *Monitor) monitorLoop(stopChan <-chan struct{}) {
 	defer m.wg.Done()
 
 	ticker := time.NewTicker(5 * time.Second)
@@ -169,7 +167,7 @@ func (m *Monitor) monitorLoop() {
 
 	for {
 		select {
-		case <-m.stopChan:
+		case <-stopChan:
 			return
 		case <-ticker.C:
 			m.checkResources()

@@ -119,7 +119,11 @@ func (cm *ConcurrentHashMap[K, V]) GetOrDefault(key K, defaultValue V) V {
 func (cm *ConcurrentHashMap[K, V]) ToMap() map[K]V {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
-	return cm.m
+	result := make(map[K]V, len(cm.m))
+	for key, value := range cm.m {
+		result[key] = value
+	}
+	return result
 }
 
 // CopyRange 先复制再遍历元素（返回false可提前终止）
@@ -171,10 +175,17 @@ func (cm *ConcurrentHashMap[K, V]) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON 实现 json.Unmarshaler 接口
 func (cm *ConcurrentHashMap[K, V]) UnmarshalJSON(data []byte) error {
+	var decoded map[K]V
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	if decoded == nil {
+		decoded = make(map[K]V)
+	}
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
-	cm.m = make(map[K]V)
-	return json.Unmarshal(data, &cm.m)
+	cm.m = decoded
+	return nil
 }
 
 // MarshalBSON 实现 bson.Marshaler 接口
@@ -186,8 +197,15 @@ func (cm *ConcurrentHashMap[K, V]) MarshalBSON() ([]byte, error) {
 
 // UnmarshalBSON 实现 bson.Unmarshaler 接口
 func (cm *ConcurrentHashMap[K, V]) UnmarshalBSON(data []byte) error {
+	var decoded map[K]V
+	if err := bson.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	if decoded == nil {
+		decoded = make(map[K]V)
+	}
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
-	cm.m = make(map[K]V)
-	return bson.Unmarshal(data, &cm.m)
+	cm.m = decoded
+	return nil
 }

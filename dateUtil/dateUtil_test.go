@@ -12,7 +12,7 @@ func TestGetTime(t *testing.T) {
 		expected  time.Time
 	}{
 		{"Zero timestamp", 0, time.Unix(0, 0).In(Loc)},
-		{"Current timestamp", time.Now().Unix(), time.Unix(time.Now().Unix(), 0).In(Loc)},
+		{"Negative timestamp", -1, time.Unix(-1, 0).In(Loc)},
 		{"Future timestamp", 1893456000, time.Unix(1893456000, 0).In(Loc)}, // 2030-01-01 00:00:00
 	}
 
@@ -23,6 +23,32 @@ func TestGetTime(t *testing.T) {
 				t.Errorf("GetTime() = %v, want %v", got, tt.expected)
 			}
 		})
+	}
+}
+
+func TestDayOfWeek(t *testing.T) {
+	for day, want := time.Monday, 1; day <= time.Saturday; day, want = day+1, want+1 {
+		input := time.Date(2023, 5, 15+int(day-time.Monday), 12, 0, 0, 0, Loc)
+		if got := DayOfWeek(input); got != want {
+			t.Errorf("DayOfWeek(%v) = %d, want %d", day, got, want)
+		}
+	}
+	sunday := time.Date(2023, 5, 21, 12, 0, 0, 0, Loc)
+	if got := DayOfWeek(sunday); got != 7 {
+		t.Errorf("DayOfWeek(Sunday) = %d, want 7", got)
+	}
+}
+
+func TestOffsetDay(t *testing.T) {
+	input := time.Date(2020, 2, 28, 12, 30, 45, 123, Loc)
+	if got, want := OffsetDay(input, 1), time.Date(2020, 2, 29, 12, 30, 45, 123, Loc); !got.Equal(want) {
+		t.Errorf("OffsetDay(leap day) = %v, want %v", got, want)
+	}
+	if got, want := OffsetDay(input, -59), time.Date(2019, 12, 31, 12, 30, 45, 123, Loc); !got.Equal(want) {
+		t.Errorf("OffsetDay(across year) = %v, want %v", got, want)
+	}
+	if got := OffsetDay(input, 0); !got.Equal(input) {
+		t.Errorf("OffsetDay(0) = %v, want %v", got, input)
 	}
 }
 
@@ -58,7 +84,7 @@ func TestBeginOfDay(t *testing.T) {
 			expected: time.Date(2023, 12, 31, 0, 0, 0, 0, Loc),
 		},
 		{
-			name:     "夏令时转换时间",
+			name:     "三月日期",
 			input:    time.Date(2023, 3, 12, 2, 30, 0, 0, Loc), // 夏令时开始
 			expected: time.Date(2023, 3, 12, 0, 0, 0, 0, Loc),
 		},
@@ -111,7 +137,7 @@ func TestBeginOfWeek(t *testing.T) {
 			expected: time.Date(2020, 2, 24, 0, 0, 0, 0, Loc),  // 本周一零点
 		},
 		{
-			name:     "夏令时转换周",
+			name:     "三月的一周",
 			input:    time.Date(2023, 3, 12, 2, 30, 0, 0, Loc), // 2023-03-12 周日(夏令时开始)
 			expected: time.Date(2023, 3, 6, 0, 0, 0, 0, Loc),   // 本周一零点
 		},
@@ -169,7 +195,7 @@ func TestBeginOfMonth(t *testing.T) {
 			expected: time.Date(2023, 1, 1, 0, 0, 0, 0, Loc), // 同一天零点
 		},
 		{
-			name:     "夏令时转换月",
+			name:     "三月",
 			input:    time.Date(2023, 3, 15, 2, 30, 0, 0, Loc), // 2023-03-15
 			expected: time.Date(2023, 3, 1, 0, 0, 0, 0, Loc),   // 当月第一天零点
 		},
@@ -182,6 +208,17 @@ func TestBeginOfMonth(t *testing.T) {
 				t.Errorf("BeginOfMonth(%v) = %v, want %v", tt.input, got, tt.expected)
 			}
 		})
+	}
+}
+
+func TestBeginAndEndOfYear(t *testing.T) {
+	location := time.FixedZone("UTC+05:30", 5*60*60+30*60)
+	input := time.Date(2020, 7, 15, 12, 30, 45, 999, location)
+	if got, want := BeginOfYear(input), time.Date(2020, 1, 1, 0, 0, 0, 0, location); !got.Equal(want) || got.Location() != location {
+		t.Errorf("BeginOfYear() = %v (%v), want %v (%v)", got, got.Location(), want, location)
+	}
+	if got, want := EndOfYear(input), time.Date(2020, 12, 31, 23, 59, 59, 0, location); !got.Equal(want) || got.Location() != location {
+		t.Errorf("EndOfYear() = %v (%v), want %v (%v)", got, got.Location(), want, location)
 	}
 }
 
@@ -530,6 +567,25 @@ func TestIsSameWeek(t *testing.T) {
 	}
 }
 
+func TestIsSameMonthAndYear(t *testing.T) {
+	base := time.Date(2023, 5, 1, 0, 0, 0, 0, Loc)
+	if !IsSameMonth(base, time.Date(2023, 5, 31, 23, 59, 59, 0, Loc)) {
+		t.Error("IsSameMonth() = false within one month")
+	}
+	if IsSameMonth(base, time.Date(2023, 6, 1, 0, 0, 0, 0, Loc)) {
+		t.Error("IsSameMonth() = true across months")
+	}
+	if IsSameMonth(base, time.Date(2024, 5, 1, 0, 0, 0, 0, Loc)) {
+		t.Error("IsSameMonth() = true across years")
+	}
+	if !IsSameYear(base, time.Date(2023, 12, 31, 23, 59, 59, 0, Loc)) {
+		t.Error("IsSameYear() = false within one year")
+	}
+	if IsSameYear(base, time.Date(2024, 1, 1, 0, 0, 0, 0, Loc)) {
+		t.Error("IsSameYear() = true across years")
+	}
+}
+
 func TestParseToTime(t *testing.T) {
 	// 定义测试用例
 	tests := []struct {
@@ -547,6 +603,29 @@ func TestParseToTime(t *testing.T) {
 			format:  "yyyy-mm-dd hh:mm:ss",
 			want:    time.Date(2023, 5, 15, 14, 30, 0, 0, Loc),
 			wantErr: false,
+		},
+		{
+			name:    "格式名称不区分大小写",
+			str:     "2023-05-15 14:30:00",
+			format:  "YYYY-MM-DD HH:MM:SS",
+			want:    time.Date(2023, 5, 15, 14, 30, 0, 0, Loc),
+			wantErr: false,
+		},
+		{
+			name:     "空时区切片等同未传",
+			str:      "2023-05-15 14:30:00",
+			format:   "yyyy-mm-dd hh:mm:ss",
+			timezone: []string{},
+			want:     time.Date(2023, 5, 15, 14, 30, 0, 0, Loc),
+			wantErr:  false,
+		},
+		{
+			name:     "空时区名称使用默认时区",
+			str:      "2023-05-15 14:30:00",
+			format:   "yyyy-mm-dd hh:mm:ss",
+			timezone: []string{""},
+			want:     time.Date(2023, 5, 15, 14, 30, 0, 0, Loc),
+			wantErr:  false,
 		},
 		{
 			name:    "简略日期格式",
@@ -637,12 +716,23 @@ func TestParseToTime(t *testing.T) {
 				t.Errorf("ParseToTime() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
+			if tt.wantErr && !got.IsZero() {
+				t.Errorf("ParseToTime() returned %v with error %v, want zero time", got, err)
+			}
 
 			// 如果没有错误，检查结果是否正确
 			if !tt.wantErr && !got.Equal(tt.want) {
 				t.Errorf("ParseToTime() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+
+	got, err := ParseToTime("2023-05-15 14:30:00", "yyyy-mm-dd hh:mm:ss", "UTC")
+	if err != nil {
+		t.Fatalf("ParseToTime(UTC): %v", err)
+	}
+	if got.Location() != time.UTC {
+		t.Errorf("ParseToTime(UTC) location = %v, want UTC", got.Location())
 	}
 }
 

@@ -3,6 +3,7 @@ package cryptor
 import (
 	"bytes"
 	"crypto/rsa"
+	"encoding/pem"
 	"errors"
 	"io"
 	"strings"
@@ -22,16 +23,10 @@ func (r *RSASecurity) SetPublicKey(pubStr string) (err error) {
 		return errors.New("public key is empty")
 	}
 
-	// 检查是否已经是 PEM 格式
-	if !strings.Contains(pubStr, "BEGIN PUBLIC KEY") {
-		// 处理非 PEM 格式的公钥
-		pubStr = strings.ReplaceAll(pubStr, "\r\n", "")
-		pubStr = strings.ReplaceAll(pubStr, "\n", "")
-		pubStr = strings.ReplaceAll(pubStr, "\r", "")
-		pubStr = strings.ReplaceAll(pubStr, " ", "")
-		var builder strings.Builder
-		builder.WriteString("-----BEGIN PUBLIC KEY-----\n")
-		pubStr = builder.String()
+	if block, _ := pem.Decode([]byte(pubStr)); block == nil {
+		// 将裸 Base64 DER 公钥包装为 PEM。
+		pubStr = strings.Join(strings.Fields(pubStr), "")
+		pubStr = "-----BEGIN PUBLIC KEY-----\n" + pubStr + "\n-----END PUBLIC KEY-----"
 	}
 
 	r.pubStr = pubStr
@@ -41,6 +36,14 @@ func (r *RSASecurity) SetPublicKey(pubStr string) (err error) {
 
 // SetPrivateKey 设置私钥
 func (r *RSASecurity) SetPrivateKey(priStr string) (err error) {
+	priStr = strings.TrimSpace(priStr)
+	if priStr == "" {
+		return errors.New("private key is empty")
+	}
+	if block, _ := pem.Decode([]byte(priStr)); block == nil {
+		priStr = strings.Join(strings.Fields(priStr), "")
+		priStr = "-----BEGIN PRIVATE KEY-----\n" + priStr + "\n-----END PRIVATE KEY-----"
+	}
 	r.priStr = priStr
 	r.prikey, err = r.GetPrivatekey()
 	return err

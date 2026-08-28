@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -50,4 +51,72 @@ func TestInitLogWriterFormatMatchesConsoleWithoutColor(t *testing.T) {
 	if json.Valid(fileOutput.Bytes()) {
 		t.Errorf("file output is still JSON: %s", fileOutput.String())
 	}
+}
+
+func TestGetColor(t *testing.T) {
+	tests := []struct {
+		level zapcore.Level
+		want  string
+	}{
+		{level: zapcore.DebugLevel, want: "\x1b[90m"},
+		{level: zapcore.InfoLevel, want: "\x1b[34m"},
+		{level: zapcore.WarnLevel, want: "\x1b[33m"},
+		{level: zapcore.ErrorLevel, want: "\x1b[31m"},
+		{level: zapcore.DPanicLevel, want: "\x1b[31m"},
+		{level: zapcore.PanicLevel, want: "\x1b[31m"},
+		{level: zapcore.FatalLevel, want: "\x1b[31m"},
+		{level: zapcore.Level(99), want: "\x1b[0m"},
+	}
+	for _, tt := range tests {
+		if got := getColor(tt.level); got != tt.want {
+			t.Errorf("getColor(%v) = %q, want %q", tt.level, got, tt.want)
+		}
+	}
+}
+
+func TestInitLogWriterLevelFiltering(t *testing.T) {
+	var infoOutput bytes.Buffer
+	var errorOutput bytes.Buffer
+	log := InitLog(map[io.Writer]zapcore.Level{
+		&infoOutput:  zapcore.InfoLevel,
+		&errorOutput: zapcore.ErrorLevel,
+	})
+	log.Debug("debug-message")
+	log.Info("info-message")
+	log.Warn("warn-message")
+	log.Error("error-message")
+
+	infoText := infoOutput.String()
+	if strings.Contains(infoText, "debug-message") || !strings.Contains(infoText, "info-message") || !strings.Contains(infoText, "warn-message") || !strings.Contains(infoText, "error-message") {
+		t.Errorf("info writer output has wrong level set: %q", infoText)
+	}
+	errorText := errorOutput.String()
+	if strings.Contains(errorText, "debug-message") || strings.Contains(errorText, "info-message") || strings.Contains(errorText, "warn-message") || !strings.Contains(errorText, "error-message") {
+		t.Errorf("error writer output has wrong level set: %q", errorText)
+	}
+}
+
+func TestSimplyInit(t *testing.T) {
+	logDir := filepath.Join(t.TempDir(), "nested", "logs")
+	if got := SimplyInit(logDir); got == nil {
+		t.Fatal("SimplyInit() returned nil")
+	}
+	info, err := os.Stat(logDir)
+	if err != nil {
+		t.Fatalf("Stat(log directory): %v", err)
+	}
+	if !info.IsDir() {
+		t.Errorf("SimplyInit() path is not a directory: %v", info.Mode())
+	}
+
+	filePath := filepath.Join(t.TempDir(), "not-a-directory")
+	if err := os.WriteFile(filePath, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if got := recover(); got != "logPath exists but is not a directory: "+filePath {
+			t.Errorf("SimplyInit(file) panic = %v", got)
+		}
+	}()
+	SimplyInit(filePath)
 }

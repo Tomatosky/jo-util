@@ -1,246 +1,221 @@
 package fileUtil
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
+func writeFixture(t *testing.T, name string, data []byte) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), name)
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatalf("write fixture %q: %v", path, err)
+	}
+	return path
+}
+
 func TestDel(t *testing.T) {
-	// 创建测试文件
-	testFile := "test_del.txt"
-	if err := os.WriteFile(testFile, []byte("test"), 0666); err != nil {
-		t.Fatal("Failed to create test file:", err)
+	root := t.TempDir()
+	dir := filepath.Join(root, "nested")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("create nested directory: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "file.txt"), []byte("test"), 0o600); err != nil {
+		t.Fatalf("create nested file: %v", err)
 	}
 
-	// 测试删除文件
-	if err := Del(testFile); err != nil {
-		t.Error("Del failed:", err)
+	if err := Del(dir); err != nil {
+		t.Fatalf("Del(%q): %v", dir, err)
 	}
-
-	// 验证文件是否已删除
-	if Exist(testFile) {
-		t.Error("File still exists after Del")
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Fatalf("Stat(%q) error = %v, want os.ErrNotExist", dir, err)
+	}
+	if err := Del(dir); err != nil {
+		t.Errorf("Del() should be idempotent for a missing path: %v", err)
 	}
 }
 
 func TestExist(t *testing.T) {
-	// 测试存在的文件
-	testFile := "test_exist.txt"
-	if err := os.WriteFile(testFile, []byte("test"), 0666); err != nil {
-		t.Fatal("Failed to create test file:", err)
+	file := writeFixture(t, "exists.txt", []byte("test"))
+	if !Exist(file) {
+		t.Errorf("Exist(%q) = false, want true", file)
 	}
-	defer os.Remove(testFile)
-
-	if !Exist(testFile) {
-		t.Error("Exist returned false for existing file")
-	}
-
-	// 测试不存在的文件
-	if Exist("nonexistent_file.txt") {
-		t.Error("Exist returned true for non-existent file")
+	if Exist(filepath.Join(t.TempDir(), "missing")) {
+		t.Error("Exist() = true for a missing path")
 	}
 }
 
 func TestGetTotalLines(t *testing.T) {
-	testFile := "test_lines.txt"
-	content := "line1\nline2\nline3"
-	if err := os.WriteFile(testFile, []byte(content), 0666); err != nil {
-		t.Fatal("Failed to create test file:", err)
+	tests := []struct {
+		name    string
+		content string
+		want    int
+	}{
+		{name: "empty", content: "", want: 0},
+		{name: "one line without newline", content: "line1", want: 1},
+		{name: "three lines", content: "line1\nline2\nline3", want: 3},
+		{name: "trailing newline", content: "line1\nline2\n", want: 2},
 	}
-	defer os.Remove(testFile)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := writeFixture(t, "lines.txt", []byte(tt.content))
+			got, err := GetTotalLines(path)
+			if err != nil {
+				t.Fatalf("GetTotalLines(%q): %v", path, err)
+			}
+			if got != tt.want {
+				t.Errorf("GetTotalLines(%q) = %d, want %d", tt.content, got, tt.want)
+			}
+		})
+	}
 
-	lines, err := GetTotalLines(testFile)
+	if got, err := GetTotalLines(filepath.Join(t.TempDir(), "missing")); err == nil || got != 0 {
+		t.Errorf("GetTotalLines(missing) = (%d, %v), want (0, error)", got, err)
+	}
+}
+
+func TestPathTypes(t *testing.T) {
+	file := writeFixture(t, "file.txt", []byte("test"))
+	dir := t.TempDir()
+	missing := filepath.Join(t.TempDir(), "missing")
+
+	tests := []struct {
+		name          string
+		path          string
+		wantDirectory bool
+		wantFile      bool
+	}{
+		{name: "file", path: file, wantFile: true},
+		{name: "directory", path: dir, wantDirectory: true},
+		{name: "missing", path: missing},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsDirectory(tt.path); got != tt.wantDirectory {
+				t.Errorf("IsDirectory(%q) = %v, want %v", tt.path, got, tt.wantDirectory)
+			}
+			if got := IsFile(tt.path); got != tt.wantFile {
+				t.Errorf("IsFile(%q) = %v, want %v", tt.path, got, tt.wantFile)
+			}
+		})
+	}
+}
+
+func TestReadFunctions(t *testing.T) {
+	content := []byte("第一行\nsecond line\n")
+	path := writeFixture(t, "utf8.txt", content)
+
+	gotBytes, err := ReadBytes(path)
 	if err != nil {
-		t.Error("GetTotalLines failed:", err)
+		t.Fatalf("ReadBytes(%q): %v", path, err)
 	}
-	if lines != 3 {
-		t.Errorf("GetTotalLines returned %d, expected 3", lines)
-	}
-}
-
-func TestIsDirectory(t *testing.T) {
-	// 测试目录
-	testDir := "test_dir"
-	if err := os.Mkdir(testDir, 0755); err != nil {
-		t.Fatal("Failed to create test directory:", err)
-	}
-	defer os.Remove(testDir)
-
-	if !IsDirectory(testDir) {
-		t.Error("IsDirectory returned false for directory")
+	if !bytes.Equal(gotBytes, content) {
+		t.Errorf("ReadBytes() = %q, want %q", gotBytes, content)
 	}
 
-	// 测试文件
-	testFile := "test_dir_file.txt"
-	if err := os.WriteFile(testFile, []byte("test"), 0666); err != nil {
-		t.Fatal("Failed to create test file:", err)
-	}
-	defer os.Remove(testFile)
-
-	if IsDirectory(testFile) {
-		t.Error("IsDirectory returned true for file")
-	}
-}
-
-func TestIsFile(t *testing.T) {
-	// 测试文件
-	testFile := "test_file.txt"
-	if err := os.WriteFile(testFile, []byte("test"), 0666); err != nil {
-		t.Fatal("Failed to create test file:", err)
-	}
-	defer os.Remove(testFile)
-
-	if !IsFile(testFile) {
-		t.Error("IsFile returned false for file")
-	}
-
-	// 测试目录
-	testDir := "test_dir"
-	if err := os.Mkdir(testDir, 0755); err != nil {
-		t.Fatal("Failed to create test directory:", err)
-	}
-	defer os.Remove(testDir)
-
-	if IsFile(testDir) {
-		t.Error("IsFile returned true for directory")
-	}
-}
-
-func TestReadBytes(t *testing.T) {
-	testFile := "test_read_bytes.txt"
-	content := []byte("test content")
-	if err := os.WriteFile(testFile, content, 0666); err != nil {
-		t.Fatal("Failed to create test file:", err)
-	}
-	defer os.Remove(testFile)
-
-	data, err := ReadBytes(testFile)
+	gotLines, err := ReadLines(path)
 	if err != nil {
-		t.Error("ReadBytes failed:", err)
+		t.Fatalf("ReadLines(%q): %v", path, err)
 	}
-	if string(data) != string(content) {
-		t.Errorf("ReadBytes returned %q, expected %q", data, content)
+	if want := []string{"第一行", "second line"}; !reflect.DeepEqual(gotLines, want) {
+		t.Errorf("ReadLines() = %#v, want %#v", gotLines, want)
 	}
-}
 
-func TestReadLines(t *testing.T) {
-	testFile := "test_read_lines.txt"
-	content := "line1\nline2\nline3"
-	if err := os.WriteFile(testFile, []byte(content), 0666); err != nil {
-		t.Fatal("Failed to create test file:", err)
-	}
-	defer os.Remove(testFile)
-
-	lines, err := ReadLines(testFile)
+	gotString, err := ReadUtf8String(path)
 	if err != nil {
-		t.Error("ReadLines failed:", err)
+		t.Fatalf("ReadUtf8String(%q): %v", path, err)
 	}
-	if len(lines) != 3 {
-		t.Errorf("ReadLines returned %d lines, expected 3", len(lines))
+	if gotString != string(content) {
+		t.Errorf("ReadUtf8String() = %q, want %q", gotString, content)
 	}
-	if lines[0] != "line1" || lines[1] != "line2" || lines[2] != "line3" {
-		t.Errorf("ReadLines returned unexpected content: %v", lines)
-	}
-}
 
-func TestReadUtf8String(t *testing.T) {
-	testFile := "test_read_utf8.txt"
-	content := "测试UTF-8内容"
-	if err := os.WriteFile(testFile, []byte(content), 0666); err != nil {
-		t.Fatal("Failed to create test file:", err)
+	missing := filepath.Join(t.TempDir(), "missing")
+	if got, err := ReadBytes(missing); err == nil || got != nil {
+		t.Errorf("ReadBytes(missing) = (%v, %v), want (nil, error)", got, err)
 	}
-	defer os.Remove(testFile)
-
-	str, err := ReadUtf8String(testFile)
-	if err != nil {
-		t.Error("ReadUtf8String failed:", err)
+	if got, err := ReadLines(missing); err == nil || got != nil {
+		t.Errorf("ReadLines(missing) = (%v, %v), want (nil, error)", got, err)
 	}
-	if str != content {
-		t.Errorf("ReadUtf8String returned %q, expected %q", str, content)
+	if got, err := ReadUtf8String(missing); err == nil || got != "" {
+		t.Errorf("ReadUtf8String(missing) = (%q, %v), want (empty, error)", got, err)
 	}
 }
 
 func TestRename(t *testing.T) {
-	oldFile := "test_rename_old.txt"
-	newFile := "test_rename_new.txt"
-	if err := os.WriteFile(oldFile, []byte("test"), 0666); err != nil {
-		t.Fatal("Failed to create test file:", err)
-	}
-	defer func() {
-		os.Remove(oldFile)
-		os.Remove(newFile)
-	}()
-
-	if err := Rename(oldFile, newFile); err != nil {
-		t.Error("Rename failed:", err)
+	root := t.TempDir()
+	oldPath := filepath.Join(root, "old.txt")
+	newPath := filepath.Join(root, "new.txt")
+	content := []byte("preserved content")
+	if err := os.WriteFile(oldPath, content, 0o600); err != nil {
+		t.Fatalf("create source file: %v", err)
 	}
 
-	if Exist(oldFile) {
-		t.Error("Old file still exists after Rename")
+	if err := Rename(oldPath, newPath); err != nil {
+		t.Fatalf("Rename(%q, %q): %v", oldPath, newPath, err)
 	}
-	if !Exist(newFile) {
-		t.Error("New file does not exist after Rename")
+	if Exist(oldPath) {
+		t.Errorf("source path %q still exists", oldPath)
+	}
+	got, err := os.ReadFile(newPath)
+	if err != nil {
+		t.Fatalf("read renamed file: %v", err)
+	}
+	if !bytes.Equal(got, content) {
+		t.Errorf("renamed content = %q, want %q", got, content)
+	}
+	if err := Rename(oldPath, filepath.Join(root, "other.txt")); err == nil {
+		t.Error("Rename() missing source returned nil error")
 	}
 }
 
 func TestSize(t *testing.T) {
-	testFile := "test_size.txt"
-	content := "test content"
-	if err := os.WriteFile(testFile, []byte(content), 0666); err != nil {
-		t.Fatal("Failed to create test file:", err)
-	}
-	defer os.Remove(testFile)
-
-	size, err := Size(testFile)
+	content := []byte("test content")
+	path := writeFixture(t, "size.txt", content)
+	size, err := Size(path)
 	if err != nil {
-		t.Error("Size failed:", err)
+		t.Fatalf("Size(%q): %v", path, err)
 	}
 	if size != int64(len(content)) {
-		t.Errorf("Size returned %d, expected %d", size, len(content))
+		t.Errorf("Size() = %d, want %d", size, len(content))
+	}
+	if got, err := Size(filepath.Join(t.TempDir(), "missing")); err == nil || got != 0 {
+		t.Errorf("Size(missing) = (%d, %v), want (0, error)", got, err)
 	}
 }
 
-func TestWriteBytes(t *testing.T) {
-	testFile := "test_write_bytes.txt"
-	content := []byte("test content")
-	defer os.Remove(testFile)
-
-	if err := WriteBytes(testFile, content); err != nil {
-		t.Error("WriteBytes failed:", err)
+func TestWriteFunctions(t *testing.T) {
+	tests := []struct {
+		name  string
+		write func(string) error
+		want  []byte
+	}{
+		{name: "bytes", write: func(path string) error { return WriteBytes(path, []byte{0, 1, 2, 255}) }, want: []byte{0, 1, 2, 255}},
+		{name: "string", write: func(path string) error { return WriteString(path, "测试 content") }, want: []byte("测试 content")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "output")
+			if err := tt.write(path); err != nil {
+				t.Fatalf("write %q: %v", path, err)
+			}
+			got, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("read output: %v", err)
+			}
+			if !bytes.Equal(got, tt.want) {
+				t.Errorf("output = %v, want %v", got, tt.want)
+			}
+		})
 	}
 
-	data, err := os.ReadFile(testFile)
-	if err != nil {
-		t.Error("Failed to read test file:", err)
+	directoryPath := t.TempDir()
+	if err := WriteBytes(directoryPath, []byte("x")); err == nil {
+		t.Error("WriteBytes(directory) returned nil error")
 	}
-	if string(data) != string(content) {
-		t.Errorf("File content %q, expected %q", data, content)
-	}
-}
-
-func TestWriteString(t *testing.T) {
-	testFile := "test_write_string.txt"
-	content := "test content"
-	defer os.Remove(testFile)
-
-	if err := WriteString(testFile, content); err != nil {
-		t.Error("WriteString failed:", err)
-	}
-
-	data, err := os.ReadFile(testFile)
-	if err != nil {
-		t.Error("Failed to read test file:", err)
-	}
-	if string(data) != content {
-		t.Errorf("File content %q, expected %q", data, content)
-	}
-}
-
-func TestCleanup(t *testing.T) {
-	// 清理可能遗留的测试文件
-	files, _ := filepath.Glob("test_*")
-	for _, f := range files {
-		os.Remove(f)
+	if err := WriteString(directoryPath, "x"); err == nil {
+		t.Error("WriteString(directory) returned nil error")
 	}
 }

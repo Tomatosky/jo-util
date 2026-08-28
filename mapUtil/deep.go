@@ -113,7 +113,7 @@ func getByPathKeys(item any, keys []string) (val any, ok bool) {
 
 			// k is index number
 			idx, err := strconv.Atoi(k)
-			if err != nil || idx >= len(tData) {
+			if err != nil || idx < 0 || idx >= len(tData) {
 				return nil, false
 			}
 			item = tData[idx]
@@ -148,7 +148,7 @@ func getByPathKeys(item any, keys []string) (val any, ok bool) {
 
 				// check k is index number
 				ii, err := strconv.Atoi(k)
-				if err != nil || ii >= rv.Len() {
+				if err != nil || ii < 0 || ii >= rv.Len() {
 					return nil, false
 				}
 
@@ -190,24 +190,50 @@ func SetByPath(mp *map[string]any, path string, val any) error {
 //
 //	SetByKeys([]string{"name", "first"}, "Mat")
 func SetByKeys(mp *map[string]any, keys []string, val any) (err error) {
+	if mp == nil {
+		return fmt.Errorf("input parameter#mp must not be nil")
+	}
+	for _, key := range keys {
+		pos := strings.IndexRune(key, '[')
+		if pos < 1 || !strings.HasSuffix(key, "]") {
+			continue
+		}
+		idx, parseErr := strconv.Atoi(key[pos+1 : len(key)-1])
+		if parseErr == nil && idx < 0 {
+			return fmt.Errorf("slice index must not be negative: %d", idx)
+		}
+	}
+
 	kln := len(keys)
 	if kln == 0 {
 		return nil
 	}
 
 	mpv := *mp
+	topK := keys[0]
+	_, _, topHasIndex := parseArrKeyIndex(topK)
 	if len(mpv) == 0 {
+		if topHasIndex {
+			rv := reflect.ValueOf(mp).Elem()
+			return setMapByKeys(rv, keys, reflect.ValueOf(val))
+		}
 		*mp = MakeByKeys(keys, val)
 		return nil
 	}
 
-	topK := keys[0]
-	if kln == 1 {
+	if topHasIndex {
+		topK, _, _ = parseArrKeyIndex(topK)
+	}
+	if kln == 1 && !topHasIndex {
 		mpv[topK] = val
 		return nil
 	}
 
 	if _, ok := mpv[topK]; !ok {
+		if topHasIndex {
+			rv := reflect.ValueOf(mp).Elem()
+			return setMapByKeys(rv, keys, reflect.ValueOf(val))
+		}
 		mpv[topK] = MakeByKeys(keys[1:], val)
 		return nil
 	}
@@ -397,6 +423,9 @@ func setMapByKeys(rv reflect.Value, keys []string, nv reflect.Value) (err error)
 					nxtKey := keys[i+1]
 					if strUtil.IsInt(nxtKey) {
 						idx, _ = strconv.Atoi(nxtKey)
+						if idx < 0 {
+							return fmt.Errorf("slice index must not be negative: %d", idx)
+						}
 						sliLen := tmpV.Len()
 						wantLen := idx + 1
 
@@ -414,7 +443,7 @@ func setMapByKeys(rv reflect.Value, keys []string, nv reflect.Value) (err error)
 						if i+1 == maxI {
 							tmpV.Index(idx).Set(nv)
 						} else {
-							err = setMapByKeys(tmpV.Index(idx), keys[i+1:], nv)
+							err = setMapByKeys(tmpV.Index(idx), keys[i+2:], nv)
 							if err != nil {
 								return err
 							}
@@ -441,6 +470,9 @@ func setMapByKeys(rv reflect.Value, keys []string, nv reflect.Value) (err error)
 			break
 		} else if isSlice && strUtil.IsInt(key) { // (E). slice from ptr slice
 			idx, _ = strconv.Atoi(key)
+			if idx < 0 {
+				return fmt.Errorf("slice index must not be negative: %d", idx)
+			}
 			sliLen := rv.Len()
 			wantLen := idx + 1
 
@@ -467,10 +499,14 @@ func setMapByKeys(rv reflect.Value, keys []string, nv reflect.Value) (err error)
 }
 
 func MakeByKeys(keys []string, val any) (mp map[string]any) {
-	size := len(keys)
+	pathKeys := append([]string(nil), keys...)
+	size := len(pathKeys)
+	if size == 0 {
+		return map[string]any{}
+	}
 
 	// if last key contains slice index, make slice wrap the val
-	lastKey := keys[size-1]
+	lastKey := pathKeys[size-1]
 	if newK, idx, ok := parseArrKeyIndex(lastKey); ok {
 		// valTyp := reflect.TypeOf(val)
 		sliTyp := reflect.SliceOf(reflect.TypeOf(val))
@@ -479,16 +515,16 @@ func MakeByKeys(keys []string, val any) (mp map[string]any) {
 
 		// update val and last key
 		val = sliVal.Interface()
-		keys[size-1] = newK
+		pathKeys[size-1] = newK
 	}
 
 	if size == 1 {
-		return map[string]any{keys[0]: val}
+		return map[string]any{pathKeys[0]: val}
 	}
 
 	// multi nodes
-	sliceUtil.Reverse(keys)
-	for _, p := range keys {
+	sliceUtil.Reverse(pathKeys)
+	for _, p := range pathKeys {
 		if mp == nil {
 			mp = map[string]any{p: val}
 		} else {

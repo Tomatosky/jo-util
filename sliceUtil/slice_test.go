@@ -54,6 +54,7 @@ func TestToString(t *testing.T) {
 	}{
 		{"NormalCase", []int{1, 2, 3}, "[1,2,3]"},
 		{"EmptySlice", []int{}, "[]"},
+		{"NilSlice", nil, "null"},
 	}
 
 	for _, tt := range tests {
@@ -92,19 +93,20 @@ func TestReverse(t *testing.T) {
 }
 
 func TestShuffle(t *testing.T) {
-	original := []int{1, 2, 3, 4, 5}
+	original := []int{1, 2, 2, 3, 4, 5}
+	before := append([]int(nil), original...)
 	shuffled := Shuffle(original)
 
 	// 检查长度是否相同
-	if len(shuffled) != len(original) {
-		t.Errorf("Shuffle() changed slice length, got %v, want %v", len(shuffled), len(original))
+	if len(shuffled) != len(before) {
+		t.Errorf("Shuffle() changed slice length, got %v, want %v", len(shuffled), len(before))
 	}
 
 	// 检查元素是否相同(顺序可能不同)
 	originalMap := make(map[int]int)
 	shuffledMap := make(map[int]int)
 
-	for _, v := range original {
+	for _, v := range before {
 		originalMap[v]++
 	}
 
@@ -113,7 +115,15 @@ func TestShuffle(t *testing.T) {
 	}
 
 	if !reflect.DeepEqual(originalMap, shuffledMap) {
-		t.Errorf("Shuffle() changed elements, got %v, want same elements as %v", shuffled, original)
+		t.Errorf("Shuffle() changed elements, got %v, want same elements as %v", shuffled, before)
+	}
+	if len(shuffled) > 0 && &shuffled[0] != &original[0] {
+		t.Error("Shuffle() should return the input slice after shuffling it in place")
+	}
+
+	empty := []int{}
+	if got := Shuffle(empty); len(got) != 0 {
+		t.Errorf("Shuffle(empty) = %v, want empty slice", got)
 	}
 }
 
@@ -206,6 +216,9 @@ func TestGetByIndex(t *testing.T) {
 				t.Errorf("GetByIndex() error = %v, wantError %v", err, tt.wantError)
 				return
 			}
+			if tt.wantError && err.Error() != map[bool]string{true: "slice is empty", false: "index out of range"}[len(tt.slice) == 0] {
+				t.Errorf("GetByIndex() error = %q", err)
+			}
 			if !tt.wantError && got != tt.want {
 				t.Errorf("GetByIndex() = %v, want %v", got, tt.want)
 			}
@@ -227,6 +240,7 @@ func TestInsertByIndex(t *testing.T) {
 		{"insert in middle", []int{1, 3}, 1, 2, []int{1, 2, 3}, false},
 		{"negative index -1", []int{1, 3}, -1, 2, []int{1, 3, 2}, false},
 		{"negative index -2", []int{1, 3}, -2, 2, []int{1, 2, 3}, false},
+		{"negative index at beginning", []int{1, 2}, -3, 0, []int{0, 1, 2}, false},
 		{"index out of range", []int{1, 2}, 3, 3, nil, true},
 		{"negative index out of range", []int{1, 2}, -4, 0, nil, true},
 		{"empty slice insert at 0", []int{}, 0, 1, []int{1}, false},
@@ -255,7 +269,7 @@ func TestInsertByIndex(t *testing.T) {
 	}
 }
 
-func TestEvery(t *testing.T) {
+func TestContainAll(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    []int
@@ -277,7 +291,7 @@ func TestEvery(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := ContainAll(tt.input, tt.elements...)
 			if result != tt.expected {
-				t.Errorf("Every(%v, %v) = %v, want %v", tt.input, tt.elements, result, tt.expected)
+				t.Errorf("ContainAll(%v, %v) = %v, want %v", tt.input, tt.elements, result, tt.expected)
 			}
 		})
 	}
@@ -413,7 +427,7 @@ func TestUnion(t *testing.T) {
 		b        []int
 		expected []int
 	}{
-		{name: "两个空slice", a: []int{}, b: []int{}, expected: []int{}},
+		{name: "两个空slice", a: []int{}, b: []int{}, expected: nil},
 		{name: "第一个slice为空", a: []int{}, b: []int{1, 2, 3}, expected: []int{1, 2, 3}},
 		{name: "第二个slice为空", a: []int{1, 2, 3}, b: []int{}, expected: []int{1, 2, 3}},
 		{name: "两个slice完全相同", a: []int{1, 2, 3}, b: []int{1, 2, 3}, expected: []int{1, 2, 3}},
@@ -423,30 +437,8 @@ func TestUnion(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := Union(tt.a, tt.b)
-			if len(result) != len(tt.expected) {
-				t.Errorf("期望长度 %d, 实际长度 %d", len(tt.expected), len(result))
-				return
-			}
-			// 检查结果中是否包含所有期望的元素
-			expectedSet := make(map[int]bool)
-			for _, item := range tt.expected {
-				expectedSet[item] = true
-			}
-			for _, item := range result {
-				if !expectedSet[item] {
-					t.Errorf("结果中包含不期望的元素 %d", item)
-				}
-			}
-			// 检查所有期望的元素是否都在结果中
-			resultSet := make(map[int]bool)
-			for _, item := range result {
-				resultSet[item] = true
-			}
-			for _, item := range tt.expected {
-				if !resultSet[item] {
-					t.Errorf("结果中缺少期望的元素 %d", item)
-				}
+			if result := Union(tt.a, tt.b); !reflect.DeepEqual(result, tt.expected) {
+				t.Errorf("Union(%v, %v) = %v, want %v", tt.a, tt.b, result, tt.expected)
 			}
 		})
 	}
@@ -466,13 +458,8 @@ func TestFieldExtractor(t *testing.T) {
 		}
 		got := FieldExtractor(people, func(p Person) string { return p.Name })
 		want := []string{"Alice", "Bob"}
-		if len(got) != len(want) {
-			t.Errorf("长度不匹配，期望 %d，得到 %d", len(want), len(got))
-		}
-		for i := range got {
-			if got[i] != want[i] {
-				t.Errorf("索引 %d 不匹配，期望 %v，得到 %v", i, want[i], got[i])
-			}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("FieldExtractor() = %v, want %v", got, want)
 		}
 	})
 
@@ -483,21 +470,16 @@ func TestFieldExtractor(t *testing.T) {
 		}
 		got := FieldExtractor(people, func(p Person) int { return p.Age })
 		want := []int{25, 30}
-		if len(got) != len(want) {
-			t.Errorf("长度不匹配，期望 %d，得到 %d", len(want), len(got))
-		}
-		for i := range got {
-			if got[i] != want[i] {
-				t.Errorf("索引 %d 不匹配，期望 %v，得到 %v", i, want[i], got[i])
-			}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("FieldExtractor() = %v, want %v", got, want)
 		}
 	})
 
 	t.Run("空切片", func(t *testing.T) {
 		var people []Person
 		got := FieldExtractor(people, func(p Person) string { return p.Name })
-		if len(got) != 0 {
-			t.Errorf("期望空切片，得到长度 %d", len(got))
+		if !reflect.DeepEqual(got, []string{}) {
+			t.Errorf("FieldExtractor(nil) = %#v, want non-nil empty slice", got)
 		}
 	})
 }
@@ -512,22 +494,21 @@ func TestToMap(t *testing.T) {
 		}
 		// 使用Name作为key
 		result := ToMap(people, func(p Person) string { return p.Name })
-		if len(result) != 3 {
-			t.Errorf("Expected map length 3, got %d", len(result))
+		want := map[string]Person{
+			"Alice":   {Name: "Alice", Age: 25},
+			"Bob":     {Name: "Bob", Age: 30},
+			"Charlie": {Name: "Charlie", Age: 35},
 		}
-		if result["Alice"].Age != 25 {
-			t.Errorf("Expected Alice's age 25, got %d", result["Alice"].Age)
-		}
-		if result["Bob"].Name != "Bob" {
-			t.Errorf("Expected Bob's name Bob, got %s", result["Bob"].Name)
+		if !reflect.DeepEqual(result, want) {
+			t.Errorf("ToMap() = %v, want %v", result, want)
 		}
 	})
 	// 测试用例2：空切片
 	t.Run("Empty slice", func(t *testing.T) {
 		var empty []Person
 		result := ToMap(empty, func(p Person) string { return p.Name })
-		if len(result) != 0 {
-			t.Errorf("Expected empty map, got %d", len(result))
+		if !reflect.DeepEqual(result, map[string]Person{}) {
+			t.Errorf("ToMap(nil) = %#v, want non-nil empty map", result)
 		}
 	})
 	// 测试用例3：重复Name的情况（后出现的会覆盖前面的）
@@ -639,9 +620,84 @@ func TestJoinSliceEdgeCases(t *testing.T) {
 
 	sliceWithNil := []*myStruct{nil, {value: "test"}, nil}
 	result2 := Join(sliceWithNil, "|")
-	// 注意：convertor.ToString(nil) 通常会返回某种字符串表示，如"<nil>"
-	// 这里我们主要测试函数不会panic
-	if result2 == "" {
-		t.Error("JoinSlice包含nil指针的切片返回了空字符串")
+	if result2 != "null|{}|null" {
+		t.Errorf("JoinSlice包含nil指针 = %q, want %q", result2, "null|{}|null")
+	}
+}
+
+func TestIndexOf(t *testing.T) {
+	tests := []struct {
+		name   string
+		values []string
+		target string
+		want   int
+	}{
+		{name: "first", values: []string{"a", "b", "a"}, target: "a", want: 0},
+		{name: "middle", values: []string{"a", "b", "c"}, target: "b", want: 1},
+		{name: "missing", values: []string{"a", "b"}, target: "c", want: -1},
+		{name: "empty", values: nil, target: "a", want: -1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IndexOf(tt.values, tt.target); got != tt.want {
+				t.Errorf("IndexOf(%v, %q) = %d, want %d", tt.values, tt.target, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFill(t *testing.T) {
+	values := []int{1, 2, 3}
+	filled := Fill(values, 7)
+	if !reflect.DeepEqual(filled, []int{7, 7, 7}) {
+		t.Errorf("Fill() = %v, want [7 7 7]", filled)
+	}
+	if &filled[0] != &values[0] {
+		t.Error("Fill() should modify and return the input slice")
+	}
+
+	var empty []int
+	if got := Fill(empty, 7); got != nil {
+		t.Errorf("Fill(nil) = %v, want nil", got)
+	}
+}
+
+func TestMaxMin(t *testing.T) {
+	values := []int{-5, 3, 3, 1}
+	if got := Max(values); got != 3 {
+		t.Errorf("Max(%v) = %d, want 3", values, got)
+	}
+	if got := Min(values); got != -5 {
+		t.Errorf("Min(%v) = %d, want -5", values, got)
+	}
+
+	for _, tt := range []struct {
+		name      string
+		call      func()
+		wantPanic string
+	}{
+		{name: "Max", call: func() { Max([]int{}) }, wantPanic: "mathutil.Max: empty list"},
+		{name: "Min", call: func() { Min([]int{}) }, wantPanic: "mathutil.min: empty list"},
+	} {
+		t.Run(tt.name+" empty panics", func(t *testing.T) {
+			defer func() {
+				if got := recover(); got != tt.wantPanic {
+					t.Fatalf("%s(empty) panic = %v, want %q", tt.name, got, tt.wantPanic)
+				}
+			}()
+			tt.call()
+		})
+	}
+}
+
+func TestSum(t *testing.T) {
+	if got := Sum(1, 2, 3, -2); got != 4 {
+		t.Errorf("Sum() = %d, want 4", got)
+	}
+	if got := Sum[int](); got != 0 {
+		t.Errorf("Sum[int]() = %d, want 0", got)
+	}
+	if got := Sum(uint(1), uint(2), uint(3)); got != 6 {
+		t.Errorf("Sum(uint) = %v, want 6", got)
 	}
 }

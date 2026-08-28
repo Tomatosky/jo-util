@@ -56,6 +56,11 @@ func RandomWeightedKey[K comparable, V numberUtil.Number](weights map[K]V) K {
 	// 计算总权重
 	var sum int
 	for _, w := range weights {
+		if w < 0 {
+			const message = "权重值不能为负数"
+			logger.Log.Error(message)
+			panic(message)
+		}
 		sum += int(w)
 	}
 

@@ -3,12 +3,11 @@ package mapUtil
 import (
 	"encoding/json"
 	"fmt"
-	"math/rand"
-	"sort"
+	"reflect"
 	"sync"
+	"sync/atomic"
 	"testing"
 
-	"github.com/Tomatosky/jo-util/dateUtil"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
@@ -32,6 +31,13 @@ func TestNewConcurrentSkipListMap(t *testing.T) {
 	}
 	if val := initMap.Get("b"); val != 2 {
 		t.Errorf("Expected value 2 for key 'b', got %d", val)
+	}
+	if val := initMap.Get("c"); val != 3 {
+		t.Errorf("Expected value 3 for key 'c', got %d", val)
+	}
+	initData["a"] = 100
+	if val := initMap.Get("a"); val != 1 {
+		t.Errorf("constructor should copy input map, got changed value %d", val)
 	}
 }
 
@@ -143,7 +149,7 @@ func TestSkipListMapOrder(t *testing.T) {
 	expectedKeys := []int{1, 2, 3, 4, 5, 6, 7, 8, 9}
 
 	if len(resultKeys) != len(expectedKeys) {
-		t.Errorf("Expected %d keys, got %d", len(expectedKeys), len(resultKeys))
+		t.Fatalf("Expected %d keys, got %d", len(expectedKeys), len(resultKeys))
 	}
 
 	for i := range expectedKeys {
@@ -174,6 +180,9 @@ func TestSkipListMapOrderWithStrings(t *testing.T) {
 	// 验证有序性
 	keys := csm.Keys()
 	expected := []string{"apple", "banana", "cat", "dog", "elephant"}
+	if len(keys) != len(expected) {
+		t.Fatalf("Expected %d keys, got %d: %v", len(expected), len(keys), keys)
+	}
 
 	for i := range expected {
 		if keys[i] != expected[i] {
@@ -191,18 +200,24 @@ func TestSkipListMapRangeOrder(t *testing.T) {
 	}
 
 	// 使用Range验证顺序
-	lastKey := 0
+	var visited []int
 	csm.Range(func(key int, value string) bool {
-		if key <= lastKey {
-			t.Errorf("Keys not in ascending order: %d after %d", key, lastKey)
-		}
-		lastKey = key
+		visited = append(visited, key)
 		expectedValue := fmt.Sprintf("v%d", key)
 		if value != expectedValue {
 			t.Errorf("Expected value %s for key %d, got %s", expectedValue, key, value)
 		}
 		return true
 	})
+	expected := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+	if len(visited) != len(expected) {
+		t.Fatalf("Range visited %d keys, want %d", len(visited), len(expected))
+	}
+	for i := range expected {
+		if visited[i] != expected[i] {
+			t.Errorf("Range key[%d]=%d, want %d", i, visited[i], expected[i])
+		}
+	}
 }
 
 // ============ 高级功能测试 ============
@@ -279,6 +294,11 @@ func TestSkipListMapToMap(t *testing.T) {
 	}
 	if m[3] != "three" {
 		t.Errorf("Expected 'three' for key 3, got '%s'", m[3])
+	}
+	m[1] = "changed"
+	delete(m, 2)
+	if csm.Get(1) != "one" || !csm.ContainsKey(2) {
+		t.Error("mutating ToMap result changed ConcurrentSkipListMap")
 	}
 }
 
@@ -481,8 +501,11 @@ func TestSkipListMapLastEntry(t *testing.T) {
 
 func TestSkipListMapConcurrentAccess(t *testing.T) {
 	csm := NewConcurrentSkipListMap[int, int]()
-	const numRoutines = 100
-	const numIterations = 1000
+	const numRoutines = 20
+	const numIterations = 200
+	for i := 1; i <= numRoutines*numIterations; i++ {
+		csm.Put(-i, -i)
+	}
 
 	var wg sync.WaitGroup
 	wg.Add(numRoutines * 3)
@@ -493,7 +516,7 @@ func TestSkipListMapConcurrentAccess(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < numIterations; j++ {
 				key := id*numIterations + j
-				csm.Put(key, key)
+				csm.Put(key, key*2)
 			}
 		}(i)
 	}
@@ -513,8 +536,8 @@ func TestSkipListMapConcurrentAccess(t *testing.T) {
 	for i := 0; i < numRoutines; i++ {
 		go func(id int) {
 			defer wg.Done()
-			for j := 0; j < numIterations/2; j++ {
-				key := id*numIterations + j
+			for j := 0; j < numIterations; j++ {
+				key := -(id*numIterations + j + 1)
 				csm.Remove(key)
 			}
 		}(i)
@@ -522,17 +545,33 @@ func TestSkipListMapConcurrentAccess(t *testing.T) {
 
 	wg.Wait()
 
-	// 验证最终大小
-	expectedSize := numRoutines * numIterations / 2
+	expectedSize := numRoutines * numIterations
 	if csm.Size() != expectedSize {
-		t.Logf("Warning: Expected size around %d, got %d (due to concurrent operations)", expectedSize, csm.Size())
+		t.Fatalf("Expected exact size %d, got %d", expectedSize, csm.Size())
+	}
+	for key := 0; key < expectedSize; key++ {
+		if got := csm.Get(key); got != key*2 {
+			t.Fatalf("Get(%d)=%d, want %d", key, got, key*2)
+		}
+		if csm.ContainsKey(-(key + 1)) {
+			t.Errorf("deleted key %d is still present", -(key + 1))
+		}
+	}
+	keys := csm.Keys()
+	if len(keys) != expectedSize {
+		t.Fatalf("Keys length=%d, want %d", len(keys), expectedSize)
+	}
+	for i, key := range keys {
+		if key != i {
+			t.Errorf("Keys[%d]=%d, want %d", i, key, i)
+		}
 	}
 }
 
 func TestSkipListMapConcurrentReadWrite(t *testing.T) {
 	csm := NewConcurrentSkipListMap[int, string]()
-	const numRoutines = 50
-	const numOperations = 500
+	const numRoutines = 20
+	const numOperations = 200
 
 	var wg sync.WaitGroup
 	wg.Add(numRoutines * 4)
@@ -542,7 +581,8 @@ func TestSkipListMapConcurrentReadWrite(t *testing.T) {
 		go func(id int) {
 			defer wg.Done()
 			for j := 0; j < numOperations; j++ {
-				csm.Put(j, fmt.Sprintf("value-%d-%d", id, j))
+				key := id*numOperations + j
+				csm.Put(key, fmt.Sprintf("value-%d", key))
 			}
 		}(i)
 	}
@@ -552,7 +592,7 @@ func TestSkipListMapConcurrentReadWrite(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < numOperations; j++ {
-				_ = csm.Get(j)
+				_ = csm.Get(j % numOperations)
 			}
 		}()
 	}
@@ -562,7 +602,7 @@ func TestSkipListMapConcurrentReadWrite(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < numOperations; j++ {
-				_ = csm.ContainsKey(j)
+				_ = csm.ContainsKey(j % numOperations)
 			}
 		}()
 	}
@@ -579,9 +619,15 @@ func TestSkipListMapConcurrentReadWrite(t *testing.T) {
 
 	wg.Wait()
 
-	// 验证基本属性
-	if csm.Size() > numOperations {
-		t.Errorf("Size should not exceed %d, got %d", numOperations, csm.Size())
+	wantSize := numRoutines * numOperations
+	if csm.Size() != wantSize {
+		t.Fatalf("Size=%d, want exact size %d", csm.Size(), wantSize)
+	}
+	for key := 0; key < wantSize; key++ {
+		want := fmt.Sprintf("value-%d", key)
+		if got := csm.Get(key); got != want {
+			t.Fatalf("Get(%d)=%q, want %q", key, got, want)
+		}
 	}
 }
 
@@ -624,6 +670,9 @@ func TestSkipListMapConcurrentPutIfAbsent(t *testing.T) {
 	if csm.Size() != 1 {
 		t.Errorf("Expected size 1, got %d", csm.Size())
 	}
+	if value := csm.Get(targetKey); value < 0 || value >= numRoutines {
+		t.Errorf("stored value=%d, want one submitted goroutine id", value)
+	}
 }
 
 // ============ 序列化测试 ============
@@ -641,8 +690,8 @@ func TestSkipListMapJSONMarshalUnmarshal(t *testing.T) {
 	}
 
 	// 测试反序列化
-	var newCsm ConcurrentSkipListMap[string, int]
-	if err := json.Unmarshal(data, &newCsm); err != nil {
+	newCsm := NewConcurrentSkipListMap(map[string]int{"stale": 99})
+	if err := json.Unmarshal(data, newCsm); err != nil {
 		t.Fatal("JSON反序列化失败:", err)
 	}
 
@@ -655,14 +704,26 @@ func TestSkipListMapJSONMarshalUnmarshal(t *testing.T) {
 	if newCsm.Get("y") != 20 {
 		t.Error("反序列化后的值不正确")
 	}
+	if newCsm.Get("z") != 30 || newCsm.ContainsKey("stale") {
+		t.Errorf("JSON反序列化没有完整替换状态: %v", newCsm.ToMap())
+	}
 
 	// 验证顺序保持
 	keys := newCsm.Keys()
 	expectedKeys := []string{"x", "y", "z"}
+	if len(keys) != len(expectedKeys) {
+		t.Fatalf("JSON unmarshal Keys length=%d, want %d", len(keys), len(expectedKeys))
+	}
 	for i, k := range expectedKeys {
 		if keys[i] != k {
 			t.Errorf("Key order not preserved after unmarshal, expected %s at index %d, got %s", k, i, keys[i])
 		}
+	}
+	if err := json.Unmarshal([]byte(`{"broken":`), newCsm); err == nil {
+		t.Error("invalid JSON should return an error")
+	}
+	if got, want := newCsm.ToMap(), map[string]int{"x": 10, "y": 20, "z": 30}; !reflect.DeepEqual(got, want) {
+		t.Errorf("invalid JSON mutated map: %v", got)
 	}
 }
 
@@ -679,8 +740,8 @@ func TestSkipListMapBSONMarshalUnmarshal(t *testing.T) {
 	}
 
 	// 测试BSON反序列化
-	var newCsm ConcurrentSkipListMap[string, float64]
-	if err := bson.Unmarshal(data, &newCsm); err != nil {
+	newCsm := NewConcurrentSkipListMap(map[string]float64{"stale": 99})
+	if err := bson.Unmarshal(data, newCsm); err != nil {
 		t.Fatal("BSON反序列化失败:", err)
 	}
 
@@ -688,8 +749,17 @@ func TestSkipListMapBSONMarshalUnmarshal(t *testing.T) {
 		t.Errorf("反序列化后的map大小不正确, expected 3, got %d", newCsm.Size())
 	}
 
-	if newCsm.Get("pi") != 3.14159 {
-		t.Error("反序列化后的值不正确")
+	if newCsm.Get("pi") != 3.14159 || newCsm.Get("e") != 2.71828 || newCsm.Get("phi") != 1.618 {
+		t.Errorf("反序列化后的值不正确: %v", newCsm.ToMap())
+	}
+	if newCsm.ContainsKey("stale") {
+		t.Error("BSON反序列化应替换旧状态")
+	}
+	if err := bson.Unmarshal([]byte{0, 1, 2}, newCsm); err == nil {
+		t.Error("invalid BSON should return an error")
+	}
+	if got, want := newCsm.ToMap(), map[string]float64{"pi": 3.14159, "e": 2.71828, "phi": 1.618}; !reflect.DeepEqual(got, want) {
+		t.Errorf("invalid BSON mutated map: %v", got)
 	}
 }
 
@@ -842,6 +912,16 @@ func TestSkipListMapLargeDataSet(t *testing.T) {
 	if csm.Size() != size/2 {
 		t.Errorf("Expected size %d after removing half, got %d", size/2, csm.Size())
 	}
+	remaining := csm.Keys()
+	if len(remaining) != size/2 {
+		t.Fatalf("remaining key count=%d, want %d", len(remaining), size/2)
+	}
+	for i, key := range remaining {
+		wantKey := i*2 + 1
+		if key != wantKey || csm.Get(key) != key*2 {
+			t.Errorf("remaining[%d]=%d value=%d, want key=%d value=%d", i, key, csm.Get(key), wantKey, wantKey*2)
+		}
+	}
 }
 
 func TestSkipListMapDuplicatePuts(t *testing.T) {
@@ -936,12 +1016,12 @@ func BenchmarkSkipListMapGet(b *testing.B) {
 
 func BenchmarkSkipListMapRemove(b *testing.B) {
 	csm := NewConcurrentSkipListMap[int, int]()
+	b.StopTimer()
 	for i := 0; i < b.N; i++ {
-		csm.Put(i, i)
-	}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		csm.Remove(i)
+		csm.Put(1, 1)
+		b.StartTimer()
+		csm.Remove(1)
+		b.StopTimer()
 	}
 }
 
@@ -960,11 +1040,11 @@ func BenchmarkSkipListMapRange(b *testing.B) {
 
 func BenchmarkSkipListMapConcurrentPut(b *testing.B) {
 	csm := NewConcurrentSkipListMap[int, int]()
+	var key atomic.Uint64
 	b.RunParallel(func(pb *testing.PB) {
-		i := 0
 		for pb.Next() {
+			i := int(key.Add(1))
 			csm.Put(i, i)
-			i++
 		}
 	})
 }
@@ -1008,60 +1088,6 @@ func BenchmarkSkipListMapConcurrentMixed(b *testing.B) {
 	})
 }
 
-// ============ 与HashMap性能对比测试 ============
-
-func TestComparePerformance(t *testing.T) {
-	const size = 100000
-	timer := dateUtil.NewTimer()
-
-	// 测试ConcurrentHashMap
-	chm := NewConcurrentHashMap[int, int]()
-	for i := 0; i < size; i++ {
-		chm.Put(i, i)
-	}
-	chmTime := timer.Interval()
-
-	// 测试ConcurrentSkipListMap
-	csm := NewConcurrentSkipListMap[int, int]()
-	for i := 0; i < size; i++ {
-		csm.Put(i, i)
-	}
-	csmTime := timer.Interval()
-
-	t.Logf("ConcurrentHashMap Put %d items: %d ms", size, chmTime)
-	t.Logf("ConcurrentSkipListMap Put %d items: %d ms", size, csmTime)
-
-	// 测试随机读取性能
-	timer = dateUtil.NewTimer()
-	for i := 0; i < size; i++ {
-		_ = chm.Get(rand.Intn(size))
-	}
-	chmGetTime := timer.Interval()
-
-	for i := 0; i < size; i++ {
-		_ = csm.Get(rand.Intn(size))
-	}
-	csmGetTime := timer.Interval()
-
-	t.Logf("ConcurrentHashMap Random Get: %d ms", chmGetTime)
-	t.Logf("ConcurrentSkipListMap Random Get: %d ms", csmGetTime)
-
-	// 测试有序遍历(SkipListMap的优势)
-	timer = dateUtil.NewTimer()
-	keys := csm.Keys()
-	csmKeysTime := timer.Interval()
-
-	// 验证有序性
-	isSorted := sort.IntsAreSorted(keys)
-	t.Logf("ConcurrentSkipListMap Keys() (sorted): %d ms, is sorted: %v", csmKeysTime, isSorted)
-
-	// HashMap的Keys()是无序的
-	timer = dateUtil.NewTimer()
-	_ = chm.Keys()
-	chmKeysTime := timer.Interval()
-	t.Logf("ConcurrentHashMap Keys() (unsorted): %d ms", chmKeysTime)
-}
-
 // ============ 特殊场景测试 ============
 
 func TestSkipListMapWithNegativeKeys(t *testing.T) {
@@ -1082,8 +1108,11 @@ func TestSkipListMapWithNegativeKeys(t *testing.T) {
 	}
 
 	// 验证FirstKey和LastKey
-	firstKey, _ := csm.FirstKey()
-	lastKey, _ := csm.LastKey()
+	firstKey, firstOK := csm.FirstKey()
+	lastKey, lastOK := csm.LastKey()
+	if !firstOK || !lastOK {
+		t.Fatal("FirstKey/LastKey should report values for a non-empty map")
+	}
 
 	if firstKey != -9 {
 		t.Errorf("Expected first key -9, got %d", firstKey)
@@ -1099,38 +1128,23 @@ func TestSkipListMapRangeModification(t *testing.T) {
 		csm.Put(i, fmt.Sprintf("v%d", i))
 	}
 
-	// 在Range中不应该修改原map(因为Range复制了数据)
-	// 但我们可以在Range之外修改
-	count := 0
+	// Range遍历快照，回调中的写入不应死锁，也不应进入本轮快照。
+	var visited []int
 	csm.Range(func(key int, value string) bool {
-		count++
-		return true
-	})
-
-	if count != 10 {
-		t.Errorf("Expected to iterate 10 items, got %d", count)
-	}
-
-	// 验证在Range过程中添加的元素不会影响当前迭代
-	iterations := 0
-	var wg sync.WaitGroup
-	wg.Add(1)
-	csm.Range(func(key int, value string) bool {
-		if iterations == 0 {
-			// 在另一个goroutine中添加元素
-			go func() {
-				defer wg.Done()
-				csm.Put(100, "v100")
-			}()
+		visited = append(visited, key)
+		if len(visited) == 1 {
+			csm.Put(100, "v100")
 		}
-		iterations++
 		return true
 	})
-
-	// 等待goroutine完成
-	wg.Wait()
-
-	// 验证元素已添加
+	if len(visited) != 10 {
+		t.Fatalf("Range visited %d snapshot entries, want 10", len(visited))
+	}
+	for i, key := range visited {
+		if key != i+1 {
+			t.Errorf("Range snapshot key[%d]=%d, want %d", i, key, i+1)
+		}
+	}
 	if !csm.ContainsKey(100) {
 		t.Error("New element should be added")
 	}
@@ -1144,48 +1158,45 @@ func TestSkipListMapStressTest(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(numRoutines * 3)
 
-	// 混合操作压力测试
+	// 每个goroutine操作不重叠的键，压力完成后的状态可以精确验证。
 	for i := 0; i < numRoutines; i++ {
-		// Put
 		go func(id int) {
 			defer wg.Done()
 			for j := 0; j < numOps; j++ {
-				key := rand.Intn(numOps)
-				csm.Put(key, id*numOps+j)
+				key := id*numOps + j
+				csm.Put(key, key*2)
 			}
 		}(i)
 
-		// Get
-		go func() {
+		go func(id int) {
 			defer wg.Done()
 			for j := 0; j < numOps; j++ {
-				key := rand.Intn(numOps)
+				key := id*numOps + j
 				_ = csm.Get(key)
 			}
-		}()
+		}(i)
 
-		// Remove
-		go func() {
+		go func(id int) {
 			defer wg.Done()
-			for j := 0; j < numOps/2; j++ {
-				key := rand.Intn(numOps)
-				csm.Remove(key)
+			for j := 0; j < numOps; j++ {
+				csm.Remove(-(id*numOps + j + 1))
 			}
-		}()
+		}(i)
 	}
 
 	wg.Wait()
 
-	// 验证map仍然可用
-	size := csm.Size()
-	t.Logf("After stress test, map size: %d", size)
-
-	// 验证有序性
+	wantSize := numRoutines * numOps
+	if csm.Size() != wantSize {
+		t.Fatalf("stress size=%d, want %d", csm.Size(), wantSize)
+	}
 	keys := csm.Keys()
-	for i := 1; i < len(keys); i++ {
-		if keys[i] <= keys[i-1] {
-			t.Error("Keys not in ascending order after stress test")
-			break
+	if len(keys) != wantSize {
+		t.Fatalf("stress Keys length=%d, want %d", len(keys), wantSize)
+	}
+	for i, key := range keys {
+		if key != i || csm.Get(key) != key*2 {
+			t.Fatalf("stress key[%d]=%d value=%d, want %d/%d", i, key, csm.Get(key), i, i*2)
 		}
 	}
 }
