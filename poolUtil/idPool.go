@@ -4,13 +4,10 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/Tomatosky/jo-util/convertor"
-	"github.com/Tomatosky/jo-util/idUtil"
 	"github.com/Tomatosky/jo-util/logger"
-	"github.com/Tomatosky/jo-util/mapUtil"
 	"github.com/Tomatosky/jo-util/randomUtil"
 )
 
@@ -18,11 +15,12 @@ var _ IPool = (*IdPool)(nil)
 
 type IdPool struct {
 	workers      []*worker
-	taskIdMap    *mapUtil.ConcurrentHashMap[string, int64]        // key: taskID(string), value: id
-	idTaskCounts *mapUtil.ConcurrentHashMap[int64, *atomic.Int32] // key: id, value: *atomic.Int32
+	idTaskCounts map[int64]int32
 	cores        int64
-	running      atomic.Bool    // 控制服务运行状态
+	running      bool           // 控制服务运行状态
 	wg           sync.WaitGroup // 用于等待所有worker退出
+	stateMu      sync.Mutex     // 保护生命周期和任务计数
+	terminated   chan struct{}
 	poolName     string
 }
 
@@ -33,8 +31,8 @@ type worker struct {
 }
 
 type customTask struct {
-	taskID string
-	task   func()
+	id   int64
+	task func()
 }
 
 type IdPoolOpt struct {
@@ -52,11 +50,11 @@ func NewIdPool(opt *IdPoolOpt) *IdPool {
 	idPool := &IdPool{
 		cores:        opt.PoolSize,
 		workers:      make([]*worker, opt.PoolSize),
-		taskIdMap:    mapUtil.NewConcurrentHashMap[string, int64](),
-		idTaskCounts: mapUtil.NewConcurrentHashMap[int64, *atomic.Int32](),
+		idTaskCounts: make(map[int64]int32),
+		terminated:   make(chan struct{}),
+		running:      true,
 		poolName:     opt.PoolName,
 	}
-	idPool.running.Store(true)
 	// 初始化 workers
 	for i := int64(0); i < opt.PoolSize; i++ {
 		idPool.workers[i] = newWorker(idPool, opt.QueueSize)
@@ -75,17 +73,16 @@ func (i *IdPool) Submit(task func()) {
 
 // SubmitWithId 添加任务
 func (i *IdPool) SubmitWithId(id any, task func()) {
-	if !i.running.Load() {
+	idInt64 := convertor.ToInt64(id)
+
+	i.stateMu.Lock()
+	defer i.stateMu.Unlock()
+	if !i.running {
 		return
 	}
-	idInt64 := convertor.ToInt64(id)
-	// 生成唯一任务ID
-	taskID := idUtil.RandomUUID()
+
 	// 更新任务计数
-	v, _ := i.idTaskCounts.PutIfAbsent(idInt64, &atomic.Int32{})
-	v.Add(1)
-	// 记录任务映射
-	i.taskIdMap.Put(taskID, idInt64)
+	i.idTaskCounts[idInt64]++
 	// 选择 worker（哈希取模）
 	workerIndex := idInt64 % i.cores
 	if workerIndex < 0 {
@@ -94,10 +91,12 @@ func (i *IdPool) SubmitWithId(id any, task func()) {
 	w := i.workers[workerIndex]
 	// 发送任务
 	select {
-	case w.queue <- &customTask{taskID: taskID, task: task}:
+	case w.queue <- &customTask{id: idInt64, task: task}:
 	default:
-		i.taskIdMap.Remove(taskID)
-		v.Add(-1)
+		i.idTaskCounts[idInt64]--
+		if i.idTaskCounts[idInt64] == 0 {
+			delete(i.idTaskCounts, idInt64)
+		}
 		logger.Log.Warn(fmt.Sprintf("%s queue is full", i.poolName))
 	}
 }
@@ -105,8 +104,9 @@ func (i *IdPool) SubmitWithId(id any, task func()) {
 // GetTaskCount 获取任务计数
 func (i *IdPool) GetTaskCount(id any) int32 {
 	idInt64 := convertor.ToInt64(id)
-	v := i.idTaskCounts.GetOrDefault(idInt64, &atomic.Int32{})
-	return v.Load()
+	i.stateMu.Lock()
+	defer i.stateMu.Unlock()
+	return i.idTaskCounts[idInt64]
 }
 
 // MaxQueue 最大worker队列长度
@@ -125,24 +125,23 @@ func (i *IdPool) Shutdown(timeout time.Duration) (isTimeout bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	// 停止接收新任务
-	i.running.Store(false)
-
-	// 通知所有 worker 停止
-	for _, w := range i.workers {
-		close(w.done) // 发送关闭信号
+	// 停止接收新任务，并且只关闭 worker 一次。
+	i.stateMu.Lock()
+	if i.running {
+		i.running = false
+		for _, w := range i.workers {
+			close(w.done)
+		}
+		go func() {
+			i.wg.Wait()
+			close(i.terminated)
+		}()
 	}
-
-	// 创建一个 channel 用于等待 WaitGroup
-	waitCh := make(chan struct{})
-	go func() {
-		i.wg.Wait()
-		close(waitCh)
-	}()
+	i.stateMu.Unlock()
 
 	// 等待所有 worker 退出或上下文取消
 	select {
-	case <-waitCh:
+	case <-i.terminated:
 		return false
 	case <-ctx.Done():
 		return true
@@ -193,12 +192,12 @@ func (w *worker) processTask(task *customTask) {
 			logger.Log.Error(fmt.Sprintf("err=%v", err))
 		}
 
-		// 清理任务映射并减少计数
-		id := w.idPool.taskIdMap.Get(task.taskID)
-		w.idPool.taskIdMap.Remove(task.taskID)
-		v := w.idPool.idTaskCounts.Get(id)
-		if v != nil {
-			v.Add(-1)
+		// 与新任务提交串行化，避免计数丢失。
+		w.idPool.stateMu.Lock()
+		defer w.idPool.stateMu.Unlock()
+		w.idPool.idTaskCounts[task.id]--
+		if w.idPool.idTaskCounts[task.id] == 0 {
+			delete(w.idPool.idTaskCounts, task.id)
 		}
 	}()
 

@@ -6,6 +6,8 @@ import (
 )
 
 func TestDeepGet(t *testing.T) {
+	firstPointerItem := map[string]any{"name": "pointer-first"}
+	secondPointerItem := map[string]any{"name": "pointer-second"}
 	testMap := map[string]any{
 		"direct":  "direct_value",
 		"top.sub": "literal_dotted_key",
@@ -19,6 +21,11 @@ func TestDeepGet(t *testing.T) {
 				{"id": 1, "name": "first"},
 				{"id": 2, "name": "second"},
 			},
+			"genericArray": []any{
+				map[string]any{"name": "generic-first"},
+				map[string]any{"name": "generic-second"},
+			},
+			"pointerArray": []*map[string]any{&firstPointerItem, &secondPointerItem},
 		},
 	}
 
@@ -37,6 +44,8 @@ func TestDeepGet(t *testing.T) {
 		{name: "slice index", path: "top.array.1.name", want: "second", ok: true},
 		{name: "slice wildcard", path: "top.array.*", want: testMap["top"].(map[string]any)["array"], ok: true},
 		{name: "slice wildcard projection", path: "top.array.*.name", want: []any{"first", "second"}, ok: true},
+		{name: "generic slice wildcard projection", path: "top.genericArray.*.name", want: []any{"generic-first", "generic-second"}, ok: true},
+		{name: "pointer slice wildcard projection", path: "top.pointerArray.*.name", want: []any{"pointer-first", "pointer-second"}, ok: true},
 		{name: "empty path", path: "", want: testMap, ok: true},
 		{name: "missing key", path: "top.missing", want: nil, ok: false},
 		{name: "invalid slice index", path: "top.array.nope", want: nil, ok: false},
@@ -156,6 +165,42 @@ func TestSetByPathErrors(t *testing.T) {
 
 	if err := SetByKeys(nil, []string{"key"}, "value"); err == nil {
 		t.Error("SetByKeys(nil, ...) expected an error")
+	}
+}
+
+func TestSetByPathRejectsIncompatibleValueWithoutPanicking(t *testing.T) {
+	m := map[string]any{"array": []string{"first"}}
+	want := cloneStringAnyMap(m)
+
+	if err := SetByPath(&m, "array[0]", 42); err == nil {
+		t.Fatal("SetByPath should reject an int value for a string slice")
+	}
+	if !reflect.DeepEqual(m, want) {
+		t.Fatalf("failed SetByPath mutated map: got %#v, want %#v", m, want)
+	}
+}
+
+func TestSetByPathExpandsSlicePointer(t *testing.T) {
+	items := []map[string]any{}
+	m := map[string]any{"array": &items}
+
+	if err := SetByPath(&m, "array.1.name", "second"); err != nil {
+		t.Fatalf("SetByPath through slice pointer failed: %v", err)
+	}
+	want := []map[string]any{nil, {"name": "second"}}
+	if !reflect.DeepEqual(items, want) {
+		t.Fatalf("expanded slice = %#v, want %#v", items, want)
+	}
+}
+
+func TestSetByPathSupportsNilArrayElement(t *testing.T) {
+	var m map[string]any
+	if err := SetByPath(&m, "array[1]", nil); err != nil {
+		t.Fatalf("SetByPath with nil array element failed: %v", err)
+	}
+	want := map[string]any{"array": []any{nil, nil}}
+	if !reflect.DeepEqual(m, want) {
+		t.Fatalf("SetByPath result = %#v, want %#v", m, want)
 	}
 }
 

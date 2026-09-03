@@ -24,35 +24,49 @@ func ToBool(value any) bool {
 
 // ToInt 转换为 int
 func ToInt(value any) int {
-	s := ToString(value)
-	f, err := strconv.ParseFloat(s, 64)
-	if err != nil {
-		logger.Log.Error(fmt.Sprintf("%v", err))
-		panic(err)
-	}
-	return int(f)
+	return int(toSignedInteger(value, strconv.IntSize))
 }
 
 // ToInt32 转换为 int32
 func ToInt32(value any) int32 {
-	s := ToString(value)
-	f, err := strconv.ParseFloat(s, 64)
-	if err != nil {
-		logger.Log.Error(fmt.Sprintf("%v", err))
-		panic(err)
-	}
-	return int32(f)
+	return int32(toSignedInteger(value, 32))
 }
 
 // ToInt64 转换为 int64
 func ToInt64(value any) int64 {
+	return toSignedInteger(value, 64)
+}
+
+func toSignedInteger(value any, bitSize int) int64 {
 	s := ToString(value)
-	f, err := strconv.ParseFloat(s, 64)
-	if err != nil {
-		logger.Log.Error(fmt.Sprintf("%v", err))
+	integer, err := strconv.ParseInt(s, 10, bitSize)
+	if err == nil {
+		return integer
+	}
+	if numErr, ok := err.(*strconv.NumError); ok && numErr.Err == strconv.ErrRange {
+		logger.Log.Error(err.Error())
 		panic(err)
 	}
-	return int64(f)
+
+	number, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		logger.Log.Error(err.Error())
+		panic(err)
+	}
+	if math.IsNaN(number) || math.IsInf(number, 0) {
+		err = fmt.Errorf("value %q out of range for int%d", s, bitSize)
+		logger.Log.Error(err.Error())
+		panic(err)
+	}
+
+	truncated := math.Trunc(number)
+	limit := math.Ldexp(1, bitSize-1)
+	if truncated < -limit || truncated >= limit {
+		err = fmt.Errorf("value %q out of range for int%d", s, bitSize)
+		logger.Log.Error(err.Error())
+		panic(err)
+	}
+	return int64(truncated)
 }
 
 // ToFloat32 转换为 float32

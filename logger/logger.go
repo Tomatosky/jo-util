@@ -3,6 +3,7 @@ package logger
 import (
 	"io"
 	"os"
+	"path/filepath"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -24,11 +25,13 @@ func SimplyInit(logPath string) *zap.Logger {
 		panic("logPath exists but is not a directory: " + logPath)
 	}
 	if os.IsNotExist(err) {
-		_ = os.MkdirAll(logPath, 0755)
+		if err = os.MkdirAll(logPath, 0755); err != nil {
+			panic(err)
+		}
 	}
-	infoPath := logPath + "/info.log"
-	warnPath := logPath + "/warn.log"
-	errorPath := logPath + "/error.log"
+	infoPath := filepath.Join(logPath, "info.log")
+	warnPath := filepath.Join(logPath, "warn.log")
+	errorPath := filepath.Join(logPath, "error.log")
 	return InitLog(map[io.Writer]zapcore.Level{
 		&lumberjack.Logger{
 			Filename:   infoPath, //日志文件存放目录，如果文件夹不存在会自动创建

@@ -186,8 +186,7 @@ func AesCfbEncrypt(data, key []byte, paddingType PaddingType) ([]byte, error) {
 	encrypted := make([]byte, aes.BlockSize+len(data))
 	iv := encrypted[:aes.BlockSize]
 	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
-		logger.Log.Error(fmt.Sprintf("%v", err))
-		panic(err)
+		return nil, err
 	}
 	cfbXOR(block, encrypted[aes.BlockSize:], data, iv, false)
 	return encrypted, nil
@@ -474,7 +473,10 @@ func GenerateRsaKey(keySize int, priKeyFile, pubKeyFile string) error {
 		Bytes: derText,
 	}
 
-	if err = os.WriteFile(priKeyFile, pem.EncodeToMemory(&block), 0666); err != nil {
+	if err = os.WriteFile(priKeyFile, pem.EncodeToMemory(&block), 0600); err != nil {
+		return err
+	}
+	if err = os.Chmod(priKeyFile, 0600); err != nil {
 		return err
 	}
 

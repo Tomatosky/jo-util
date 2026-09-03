@@ -532,6 +532,29 @@ func TestCustomExpirationWithZeroDefault(t *testing.T) {
 	}
 }
 
+func TestExplicitZeroExpirationOverridesDefault(t *testing.T) {
+	cache1 := newTestCache[string, int](t, time.Minute)
+	cache1.Set("permanent", 1, 0)
+
+	value, found, expiration := cache1.GetWithExpiration("permanent")
+	if !found || value != 1 || !expiration.IsZero() {
+		t.Errorf("GetWithExpiration(permanent) = (%d, %v, %v), want (1, true, zero)", value, found, expiration)
+	}
+	cache1.deleteExpired()
+	if value, found := cache1.Get("permanent"); !found || value != 1 {
+		t.Errorf("Get(permanent) after cleanup = (%d, %v), want (1, true)", value, found)
+	}
+}
+
+func TestGetWithExpirationExpired(t *testing.T) {
+	cache1 := newTestCache[string, int](t, time.Minute)
+	cache1.Set("expired", 1)
+	expireTestKey(cache1, "expired")
+	if value, found, expiration := cache1.GetWithExpiration("expired"); value != 0 || found || !expiration.IsZero() {
+		t.Errorf("GetWithExpiration(expired) = (%d, %v, %v), want zero values", value, found, expiration)
+	}
+}
+
 // TestDifferentTypes 测试不同的数据类型
 func TestDifferentTypes(t *testing.T) {
 	// 测试 int 键和 string 值

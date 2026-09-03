@@ -7,6 +7,17 @@ import (
 	"time"
 )
 
+type blockingJSONID struct {
+	started chan<- struct{}
+	release <-chan struct{}
+}
+
+func (id blockingJSONID) MarshalJSON() ([]byte, error) {
+	close(id.started)
+	<-id.release
+	return []byte("0"), nil
+}
+
 func newTestIDPool(poolSize int64, queueSize int) *IdPool {
 	return NewIdPool(&IdPoolOpt{
 		PoolSize:  poolSize,
@@ -59,9 +70,6 @@ func TestIdPool(t *testing.T) {
 		}
 		if got := pool.GetTaskCount(1); got != 0 {
 			t.Errorf("task count after completion = %d, want 0", got)
-		}
-		if got := pool.taskIdMap.Size(); got != 0 {
-			t.Errorf("task-id map size after completion = %d, want 0", got)
 		}
 	})
 
@@ -116,8 +124,8 @@ func TestIdPool(t *testing.T) {
 				t.Errorf("task count for id %d = %d, want 0", id, got)
 			}
 		}
-		if got := pool.taskIdMap.Size(); got != 0 {
-			t.Errorf("task-id map size = %d, want 0", got)
+		if got := len(pool.idTaskCounts); got != 0 {
+			t.Fatalf("completed task counters retained %d ids", got)
 		}
 	})
 
@@ -138,9 +146,6 @@ func TestIdPool(t *testing.T) {
 		if got := pool.GetTaskCount(0); got != 2 {
 			t.Errorf("accepted task count = %d, want 2", got)
 		}
-		if got := pool.taskIdMap.Size(); got != 2 {
-			t.Errorf("task-id map size while two tasks are accepted = %d, want 2", got)
-		}
 		if got := pool.MaxQueue(); got != 1 {
 			t.Errorf("maximum queued tasks = %d, want 1", got)
 		}
@@ -154,9 +159,6 @@ func TestIdPool(t *testing.T) {
 		}
 		if got := pool.GetTaskCount(0); got != 0 {
 			t.Errorf("task count after drain = %d, want 0", got)
-		}
-		if got := pool.taskIdMap.Size(); got != 0 {
-			t.Errorf("task-id map size after drain = %d, want 0", got)
 		}
 	})
 
@@ -190,12 +192,11 @@ func TestIdPool(t *testing.T) {
 			t.Error("Shutdown should report timeout while task is blocked")
 		}
 		close(release)
-		pool.wg.Wait()
+		if timedOut := pool.Shutdown(time.Second); timedOut {
+			t.Fatal("Shutdown timed out after timed-out task completed")
+		}
 		if got := pool.GetTaskCount(0); got != 0 {
 			t.Errorf("task count after timed-out task completes = %d, want 0", got)
-		}
-		if got := pool.taskIdMap.Size(); got != 0 {
-			t.Errorf("task-id map after timed-out task completes = %d, want 0", got)
 		}
 	})
 
@@ -214,10 +215,6 @@ func TestIdPool(t *testing.T) {
 				t.Errorf("blocked task count for id %d = %d, want %d", id, got, tasksPerID)
 			}
 		}
-		if got := pool.taskIdMap.Size(); got != 4*tasksPerID {
-			t.Errorf("task-id map size = %d, want %d", got, 4*tasksPerID)
-		}
-
 		close(release)
 		if timedOut := pool.Shutdown(2 * time.Second); timedOut {
 			t.Fatal("shutdown timed out after releasing blocked tasks")
@@ -226,9 +223,6 @@ func TestIdPool(t *testing.T) {
 			if got := pool.GetTaskCount(id); got != 0 {
 				t.Errorf("completed task count for id %d = %d, want 0", id, got)
 			}
-		}
-		if got := pool.taskIdMap.Size(); got != 0 {
-			t.Errorf("task-id map size after completion = %d, want 0", got)
 		}
 	})
 
@@ -240,9 +234,6 @@ func TestIdPool(t *testing.T) {
 		}
 		if got := pool.GetTaskCount(7); got != 0 {
 			t.Errorf("task count after panic = %d, want 0", got)
-		}
-		if got := pool.taskIdMap.Size(); got != 0 {
-			t.Errorf("task-id map size after panic = %d, want 0", got)
 		}
 	})
 
@@ -259,8 +250,45 @@ func TestIdPool(t *testing.T) {
 		if got := pool.GetTaskCount(0); got != 0 {
 			t.Errorf("task count after rejected submission = %d, want 0", got)
 		}
-		if got := pool.taskIdMap.Size(); got != 0 {
-			t.Errorf("task-id map size after rejected submission = %d, want 0", got)
+	})
+
+	t.Run("shutdown is idempotent", func(t *testing.T) {
+		pool := newTestIDPool(2, 2)
+		if timedOut := pool.Shutdown(time.Second); timedOut {
+			t.Fatal("initial shutdown timed out")
+		}
+		if timedOut := pool.Shutdown(time.Second); timedOut {
+			t.Fatal("repeated shutdown timed out")
 		}
 	})
+
+	t.Run("shutdown rejects a submission paused before enqueue", func(t *testing.T) {
+		pool := newTestIDPool(1, 1)
+		started := make(chan struct{})
+		release := make(chan struct{})
+		submitted := make(chan struct{})
+		var executed atomic.Bool
+
+		go func() {
+			defer close(submitted)
+			pool.SubmitWithId(blockingJSONID{started: started, release: release}, func() {
+				executed.Store(true)
+			})
+		}()
+
+		waitForSignal(t, started, time.Second, "blocked id conversion")
+		if timedOut := pool.Shutdown(time.Second); timedOut {
+			t.Fatal("shutdown timed out while submission was paused before enqueue")
+		}
+		close(release)
+		waitForSignal(t, submitted, time.Second, "paused submission return")
+
+		if executed.Load() {
+			t.Error("submission that lost the shutdown race was executed")
+		}
+		if got := pool.GetTaskCount(0); got != 0 {
+			t.Errorf("task count after shutdown race = %d, want 0", got)
+		}
+	})
+
 }

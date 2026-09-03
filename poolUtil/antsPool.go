@@ -13,15 +13,21 @@ import (
 var _ IPool = (*AntsPool)(nil)
 
 type AntsPool struct {
-	pool    *ants.Pool
-	wg      sync.WaitGroup
-	stateMu sync.Mutex
-	closed  bool
+	pool       *ants.Pool
+	wg         sync.WaitGroup
+	stateMu    sync.Mutex
+	closed     bool
+	shutdown   chan struct{}
+	terminated chan struct{}
 }
 
 func NewAntsPool(size int) *AntsPool {
 	pool, _ := ants.NewPool(size)
-	return &AntsPool{pool: pool}
+	return &AntsPool{
+		pool:       pool,
+		shutdown:   make(chan struct{}),
+		terminated: make(chan struct{}),
+	}
 }
 
 func (p *AntsPool) SubmitWithId(id any, task func()) {
@@ -55,48 +61,39 @@ func (p *AntsPool) Submit(task func()) {
 // 以固定的频率执行任务，不考虑任务执行时间
 // 返回一个函数，调用它可以停止调度
 func (p *AntsPool) ScheduleAtFixedRate(initialDelay, period time.Duration, task func()) (stop func()) {
+	if task == nil {
+		panic("task cannot be nil")
+	}
+	if period <= 0 {
+		panic("period must be greater than 0")
+	}
 	done := make(chan struct{})
 	var once sync.Once
-	// 初始延迟
-	timer := time.AfterFunc(initialDelay, func() {
-		select {
-		case <-done:
+	started := p.startSchedule(func() {
+		if !p.waitScheduleDelay(initialDelay, done) {
 			return
-		default:
-			p.Submit(func() {
-				select {
-				case <-done:
-					return
-				default:
-					task()
-				}
-			})
 		}
+		p.submitScheduled(done, task)
 
 		ticker := time.NewTicker(period)
-		go func() {
-			for {
-				select {
-				case <-ticker.C:
-					p.Submit(func() {
-						select {
-						case <-done:
-							return
-						default:
-							task()
-						}
-					})
-				case <-done:
-					ticker.Stop()
-					return
-				}
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				p.submitScheduled(done, task)
+			case <-done:
+				return
+			case <-p.shutdown:
+				return
 			}
-		}()
+		}
 	})
+	if !started {
+		return func() {}
+	}
 	return func() {
 		once.Do(func() {
 			close(done)
-			timer.Stop()
 		})
 	}
 }
@@ -105,54 +102,102 @@ func (p *AntsPool) ScheduleAtFixedRate(initialDelay, period time.Duration, task 
 // 在上一次任务完成后，固定延迟时间后执行下一次任务
 // 返回一个函数，调用它可以停止调度
 func (p *AntsPool) ScheduleWithFixedDelay(initialDelay, delay time.Duration, task func()) (stop func()) {
+	if task == nil {
+		panic("task cannot be nil")
+	}
+	if delay <= 0 {
+		panic("delay must be greater than 0")
+	}
 	done := make(chan struct{})
 	var once sync.Once
-	// 初始延迟
-	timer := time.AfterFunc(initialDelay, func() {
-		select {
-		case <-done:
+	started := p.startSchedule(func() {
+		if !p.waitScheduleDelay(initialDelay, done) {
 			return
-		default:
 		}
-		p.Submit(func() {
+
+		for {
+			completed := make(chan bool, 1)
+			p.Submit(func() {
+				succeeded := false
+				defer func() {
+					if recovered := recover(); recovered != nil {
+						completed <- false
+						panic(recovered)
+					}
+					completed <- succeeded
+				}()
+
+				select {
+				case <-done:
+					return
+				case <-p.shutdown:
+					return
+				default:
+					task()
+					succeeded = true
+				}
+			})
+
 			select {
+			case succeeded := <-completed:
+				if !succeeded {
+					return
+				}
 			case <-done:
 				return
-			default:
+			case <-p.shutdown:
+				return
 			}
-			task()
-			p.scheduleNextWithDelay(delay, task, done, &once)
-		})
+
+			if !p.waitScheduleDelay(delay, done) {
+				return
+			}
+		}
 	})
+	if !started {
+		return func() {}
+	}
 	return func() {
 		once.Do(func() {
 			close(done)
-			timer.Stop()
 		})
 	}
 }
 
-// 递归调用来实现固定延迟调度
-func (p *AntsPool) scheduleNextWithDelay(delay time.Duration, task func(), done <-chan struct{}, once *sync.Once) {
+func (p *AntsPool) startSchedule(run func()) bool {
+	p.stateMu.Lock()
+	defer p.stateMu.Unlock()
+	if p.closed {
+		return false
+	}
+	go run()
+	return true
+}
+
+func (p *AntsPool) waitScheduleDelay(delay time.Duration, done <-chan struct{}) bool {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
 	select {
 	case <-done:
-		return
-	case <-time.After(delay):
+		return false
+	case <-p.shutdown:
+		return false
+	case <-timer.C:
+		return true
+	}
+}
+
+func (p *AntsPool) submitScheduled(done <-chan struct{}, task func()) {
+	p.Submit(func() {
 		select {
 		case <-done:
 			return
+		case <-p.shutdown:
+			return
 		default:
-		}
-		p.Submit(func() {
-			select {
-			case <-done:
-				return
-			default:
-			}
 			task()
-			p.scheduleNextWithDelay(delay, task, done, once)
-		})
-	}
+		}
+	})
 }
 
 func (p *AntsPool) Shutdown(timeout time.Duration) (isTimeout bool) {
@@ -160,21 +205,20 @@ func (p *AntsPool) Shutdown(timeout time.Duration) (isTimeout bool) {
 	defer cancel()
 
 	p.stateMu.Lock()
-	p.closed = true
+	if !p.closed {
+		p.closed = true
+		close(p.shutdown)
+		go func() {
+			p.wg.Wait()
+			close(p.terminated)
+		}()
+	}
 	p.stateMu.Unlock()
-
 	defer p.pool.Release()
-
-	// 创建一个通道用于通知等待完成
-	done := make(chan struct{})
-	go func() {
-		p.wg.Wait()
-		close(done)
-	}()
 
 	// 使用select实现超时控制
 	select {
-	case <-done:
+	case <-p.terminated:
 		return false
 	case <-ctx.Done():
 		return true

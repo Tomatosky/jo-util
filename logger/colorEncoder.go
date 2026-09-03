@@ -11,6 +11,10 @@ type ColorEncoder struct {
 	zapcore.Encoder
 }
 
+func (e *ColorEncoder) Clone() zapcore.Encoder {
+	return &ColorEncoder{Encoder: e.Encoder.Clone()}
+}
+
 func (e *ColorEncoder) EncodeEntry(ent zapcore.Entry, fields []zapcore.Field) (*buffer.Buffer, error) {
 	buf, err := e.Encoder.EncodeEntry(ent, fields)
 	if err != nil {

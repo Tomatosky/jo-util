@@ -62,6 +62,8 @@ func (q *SafeFixedQueue[T]) Dequeue() (T, bool) {
 		return zero, false
 	}
 	item := q.items[q.head]
+	var zero T
+	q.items[q.head] = zero
 	q.head = (q.head + 1) % q.maxSize
 	q.size--
 	return item, true

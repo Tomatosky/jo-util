@@ -193,6 +193,14 @@ func TestCheckThresholdStateTransitions(t *testing.T) {
 	if !config.startTime.IsZero() || !config.lastAlertTime.Equal(firstAlert) {
 		t.Errorf("recovery state = %+v, want zero start and preserved last alert", config)
 	}
+
+	immediate := thresholdConfig{threshold: 80, alertInterval: time.Hour}
+	before = time.Now()
+	monitor.checkThreshold(&immediate, Memory, 80)
+	after = time.Now()
+	if immediate.startTime.Before(before) || immediate.startTime.After(after) || immediate.lastAlertTime.Before(before) || immediate.lastAlertTime.After(after) {
+		t.Errorf("zero-duration threshold did not alert immediately: %+v", immediate)
+	}
 }
 
 func TestMemoryStringFormats(t *testing.T) {

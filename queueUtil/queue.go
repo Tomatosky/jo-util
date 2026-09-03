@@ -24,6 +24,8 @@ func (q *Queue[T]) Dequeue() (T, bool) {
 		return zero, false
 	}
 	item := q.items[q.head]
+	var zero T
+	q.items[q.head] = zero
 	q.head++
 
 	// 定期缩容，避免内存泄漏

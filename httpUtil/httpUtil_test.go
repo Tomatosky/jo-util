@@ -24,11 +24,15 @@ func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 type failingReadCloser struct {
-	err error
+	err    error
+	closed bool
 }
 
-func (r failingReadCloser) Read([]byte) (int, error) { return 0, r.err }
-func (r failingReadCloser) Close() error             { return nil }
+func (r *failingReadCloser) Read([]byte) (int, error) { return 0, r.err }
+func (r *failingReadCloser) Close() error {
+	r.closed = true
+	return nil
+}
 
 func TestRequestClientConfiguration(t *testing.T) {
 	rc := NewRequestClient()
@@ -49,6 +53,9 @@ func TestRequestClientConfiguration(t *testing.T) {
 	transport, ok = rc.Client.Transport.(*http.Transport)
 	if !ok || transport.Proxy == nil {
 		t.Fatalf("SetProxy() transport = %#v, want proxy function", rc.Client.Transport)
+	}
+	if transport.TLSClientConfig == nil || !transport.TLSClientConfig.InsecureSkipVerify {
+		t.Fatal("SetProxy() enabled TLS certificate verification")
 	}
 	requestURL, _ := url.Parse("https://example.test/resource")
 	proxyURL, err := transport.Proxy(&http.Request{URL: requestURL})
@@ -116,15 +123,19 @@ func TestGetErrors(t *testing.T) {
 	}
 
 	sentinel = errors.New("read failed")
+	body := &failingReadCloser{err: sentinel}
 	rc.Client.Transport = roundTripFunc(func(*http.Request) (*http.Response, error) {
 		return &http.Response{
 			StatusCode: http.StatusOK,
 			Header:     make(http.Header),
-			Body:       failingReadCloser{err: sentinel},
+			Body:       body,
 		}, nil
 	})
 	if resp := rc.Get("http://example.test"); !errors.Is(resp.Err, sentinel) {
 		t.Errorf("Get(response read failure) error = %v, want %v", resp.Err, sentinel)
+	}
+	if !body.closed {
+		t.Error("Get(response read failure) did not close the response body")
 	}
 }
 
@@ -310,15 +321,19 @@ func TestPostErrors(t *testing.T) {
 	}
 
 	sentinel = errors.New("read failed")
+	body := &failingReadCloser{err: sentinel}
 	rc.Client.Transport = roundTripFunc(func(*http.Request) (*http.Response, error) {
 		return &http.Response{
 			StatusCode: http.StatusOK,
 			Header:     make(http.Header),
-			Body:       failingReadCloser{err: sentinel},
+			Body:       body,
 		}, nil
 	})
 	if resp := rc.Post("http://example.test", nil); !errors.Is(resp.Err, sentinel) {
 		t.Errorf("Post(response read failure) error = %v, want %v", resp.Err, sentinel)
+	}
+	if !body.closed {
+		t.Error("Post(response read failure) did not close the response body")
 	}
 
 	closedFile, err := os.CreateTemp(t.TempDir(), "closed")

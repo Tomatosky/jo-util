@@ -278,22 +278,35 @@ func setMapByKeys(rv reflect.Value, keys []string, nv reflect.Value) (err error)
 					break
 				}
 
-				rftK := reflect.ValueOf(key)
+				rftK, valueErr := reflectValueForType(reflect.ValueOf(key), rv.Type().Key())
+				if valueErr != nil {
+					return valueErr
+				}
 				tmpV := rv.MapIndex(rftK)
 				if !tmpV.IsValid() {
 					if isLast {
-						sliVal := reflect.MakeSlice(reflect.SliceOf(nv.Type()), idx+1, idx+1)
-						sliVal.Index(idx).Set(nv)
-						rv.SetMapIndex(rftK, sliVal)
+						elemType := reflect.TypeOf((*any)(nil)).Elem()
+						if nv.IsValid() {
+							elemType = nv.Type()
+						}
+						sliVal := reflect.MakeSlice(reflect.SliceOf(elemType), idx+1, idx+1)
+						if err = setReflectValue(sliVal.Index(idx), nv); err != nil {
+							return err
+						}
+						if err = setReflectMapValue(rv, rftK, sliVal); err != nil {
+							return err
+						}
 					} else {
 						// deep make map by keys
-						newVal := MakeByKeys(keys[i+1:], nv.Interface())
+						newVal := MakeByKeys(keys[i+1:], reflectInterface(nv))
 						mpVal := reflect.ValueOf(newVal)
 
 						sliVal := reflect.MakeSlice(reflect.SliceOf(mpVal.Type()), idx+1, idx+1)
 						sliVal.Index(idx).Set(mpVal)
 
-						rv.SetMapIndex(rftK, sliVal)
+						if err = setReflectMapValue(rv, rftK, sliVal); err != nil {
+							return err
+						}
 					}
 					break
 				}
@@ -334,7 +347,9 @@ func setMapByKeys(rv reflect.Value, keys []string, nv reflect.Value) (err error)
 						}
 
 						// tmpV.Index(idx).Set(elemV)
-						rv.SetMapIndex(rftK, tmpV)
+						if err = setReflectMapValue(rv, rftK, tmpV); err != nil {
+							return err
+						}
 					} else {
 						err = fmt.Errorf(
 							"key %s[%d] elem must be map for set sub-value by remain path: %s",
@@ -345,8 +360,12 @@ func setMapByKeys(rv reflect.Value, keys []string, nv reflect.Value) (err error)
 					}
 				} else {
 					// last - set value
-					tmpV.Index(idx).Set(nv)
-					rv.SetMapIndex(rftK, tmpV)
+					if err = setReflectValue(tmpV.Index(idx), nv); err != nil {
+						return err
+					}
+					if err = setReflectMapValue(rv, rftK, tmpV); err != nil {
+						return err
+					}
 				}
 				break
 			}
@@ -355,7 +374,19 @@ func setMapByKeys(rv reflect.Value, keys []string, nv reflect.Value) (err error)
 		// set value on last key
 		if isLast {
 			if isMap {
-				rv.SetMapIndex(reflect.ValueOf(key), nv)
+				if rv.IsNil() {
+					if !rv.CanSet() {
+						return fmt.Errorf("cannot initialize map of type %s", rv.Type())
+					}
+					rv.Set(reflect.MakeMap(rv.Type()))
+				}
+				rftK, valueErr := reflectValueForType(reflect.ValueOf(key), rv.Type().Key())
+				if valueErr != nil {
+					return valueErr
+				}
+				if err = setReflectMapValue(rv, rftK, nv); err != nil {
+					return err
+				}
 				break
 			}
 
@@ -385,7 +416,9 @@ func setMapByKeys(rv reflect.Value, keys []string, nv reflect.Value) (err error)
 						rv.Set(reflect.AppendSlice(rv, newAdd))
 					}
 
-					rv.Index(idx).Set(nv)
+					if err = setReflectValue(rv.Index(idx), nv); err != nil {
+						return err
+					}
 				} else {
 					err = fmt.Errorf("cannot set slice value by named key %q", key)
 				}
@@ -402,7 +435,10 @@ func setMapByKeys(rv reflect.Value, keys []string, nv reflect.Value) (err error)
 		}
 
 		if isMap {
-			rftK := reflect.ValueOf(key)
+			rftK, valueErr := reflectValueForType(reflect.ValueOf(key), rv.Type().Key())
+			if valueErr != nil {
+				return valueErr
+			}
 			if tmpV := rv.MapIndex(rftK); tmpV.IsValid() {
 				var isPtr bool
 				// get real type: any -> map
@@ -441,7 +477,9 @@ func setMapByKeys(rv reflect.Value, keys []string, nv reflect.Value) (err error)
 
 						// rv = tmpV.Index(idx) // TODO
 						if i+1 == maxI {
-							tmpV.Index(idx).Set(nv)
+							if err = setReflectValue(tmpV.Index(idx), nv); err != nil {
+								return err
+							}
 						} else {
 							err = setMapByKeys(tmpV.Index(idx), keys[i+2:], nv)
 							if err != nil {
@@ -449,7 +487,9 @@ func setMapByKeys(rv reflect.Value, keys []string, nv reflect.Value) (err error)
 							}
 						}
 
-						rv.SetMapIndex(rftK, tmpV)
+						if err = setReflectMapValue(rv, rftK, tmpV); err != nil {
+							return err
+						}
 					} else {
 						err = fmt.Errorf("cannot set slice value by named key %s(parent: %s)", nxtKey, key)
 					}
@@ -463,8 +503,10 @@ func setMapByKeys(rv reflect.Value, keys []string, nv reflect.Value) (err error)
 				}
 			} else {
 				// deep make map by keys
-				newVal := MakeByKeys(keys[i+1:], nv.Interface())
-				rv.SetMapIndex(rftK, reflect.ValueOf(newVal))
+				newVal := MakeByKeys(keys[i+1:], reflectInterface(nv))
+				if err = setReflectMapValue(rv, rftK, reflect.ValueOf(newVal)); err != nil {
+					return err
+				}
 			}
 
 			break
@@ -483,7 +525,10 @@ func setMapByKeys(rv reflect.Value, keys []string, nv reflect.Value) (err error)
 					newAdd = reflect.Append(newAdd, reflect.New(elemTyp).Elem())
 				}
 
-				rv = reflect.AppendSlice(rv, newAdd)
+				if !rv.CanSet() {
+					return fmt.Errorf("cannot expand slice of type %s", rv.Type())
+				}
+				rv.Set(reflect.AppendSlice(rv, newAdd))
 			}
 
 			rv = rv.Index(idx)
@@ -498,6 +543,52 @@ func setMapByKeys(rv reflect.Value, keys []string, nv reflect.Value) (err error)
 	return
 }
 
+func setReflectValue(dst, value reflect.Value) error {
+	if !dst.CanSet() {
+		return fmt.Errorf("cannot set value of type %s", dst.Type())
+	}
+	prepared, err := reflectValueForType(value, dst.Type())
+	if err != nil {
+		return err
+	}
+	dst.Set(prepared)
+	return nil
+}
+
+func setReflectMapValue(dst, key, value reflect.Value) error {
+	if dst.IsNil() {
+		return fmt.Errorf("cannot set entry on nil map of type %s", dst.Type())
+	}
+	prepared, err := reflectValueForType(value, dst.Type().Elem())
+	if err != nil {
+		return err
+	}
+	dst.SetMapIndex(key, prepared)
+	return nil
+}
+
+func reflectValueForType(value reflect.Value, target reflect.Type) (reflect.Value, error) {
+	if !value.IsValid() {
+		switch target.Kind() {
+		case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+			return reflect.Zero(target), nil
+		default:
+			return reflect.Value{}, fmt.Errorf("cannot assign nil to %s", target)
+		}
+	}
+	if !value.Type().AssignableTo(target) {
+		return reflect.Value{}, fmt.Errorf("cannot assign %s to %s", value.Type(), target)
+	}
+	return value, nil
+}
+
+func reflectInterface(value reflect.Value) any {
+	if !value.IsValid() {
+		return nil
+	}
+	return value.Interface()
+}
+
 func MakeByKeys(keys []string, val any) (mp map[string]any) {
 	pathKeys := append([]string(nil), keys...)
 	size := len(pathKeys)
@@ -508,10 +599,15 @@ func MakeByKeys(keys []string, val any) (mp map[string]any) {
 	// if last key contains slice index, make slice wrap the val
 	lastKey := pathKeys[size-1]
 	if newK, idx, ok := parseArrKeyIndex(lastKey); ok {
-		// valTyp := reflect.TypeOf(val)
-		sliTyp := reflect.SliceOf(reflect.TypeOf(val))
+		elemType := reflect.TypeOf((*any)(nil)).Elem()
+		if val != nil {
+			elemType = reflect.TypeOf(val)
+		}
+		sliTyp := reflect.SliceOf(elemType)
 		sliVal := reflect.MakeSlice(sliTyp, idx+1, idx+1)
-		sliVal.Index(idx).Set(reflect.ValueOf(val))
+		if val != nil {
+			sliVal.Index(idx).Set(reflect.ValueOf(val))
+		}
 
 		// update val and last key
 		val = sliVal.Interface()

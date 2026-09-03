@@ -277,6 +277,30 @@ func TestTreeMapPutIfAbsent(t *testing.T) {
 	}
 }
 
+func TestTreeMapPutIfAbsentMaintainsTreeProperties(t *testing.T) {
+	tm := NewTreeMap[int, string](func(a, b int) bool {
+		return a < b
+	})
+
+	for key := 100; key >= 1; key-- {
+		value := fmt.Sprintf("value%d", key)
+		if existing, loaded := tm.PutIfAbsent(key, value); loaded || existing != "" {
+			t.Fatalf("PutIfAbsent(%d) = (%q, %v), want (empty, false)", key, existing, loaded)
+		}
+		assertTreeMapRedBlackProperties(t, tm)
+	}
+
+	if got := tm.Size(); got != 100 {
+		t.Fatalf("tree size = %d, want 100", got)
+	}
+	for key := 1; key <= 100; key++ {
+		want := fmt.Sprintf("value%d", key)
+		if got := tm.Get(key); got != want {
+			t.Fatalf("Get(%d) = %q, want %q", key, got, want)
+		}
+	}
+}
+
 // TestTreeMapGetOrDefault 测试GetOrDefault方法
 func TestTreeMapGetOrDefault(t *testing.T) {
 	tm := NewTreeMap[int, string](func(a, b int) bool {

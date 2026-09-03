@@ -891,6 +891,19 @@ func TestSafeFixedQueueFullEnqueue(t *testing.T) {
 	}
 }
 
+func TestSafeFixedQueueDequeueReleasesReference(t *testing.T) {
+	value := 42
+	q := NewSafeFixedQueue[*int](1)
+	q.Enqueue(&value)
+
+	if _, ok := q.Dequeue(); !ok {
+		t.Fatal("Dequeue should succeed")
+	}
+	if q.items[0] != nil {
+		t.Fatal("dequeued slot still retains its pointer")
+	}
+}
+
 // BenchmarkSafeFixedQueueEnqueue 性能测试:入队
 func BenchmarkSafeFixedQueueEnqueue(b *testing.B) {
 	q := NewSafeFixedQueue[int](b.N)

@@ -361,6 +361,19 @@ func TestPointerQueue(t *testing.T) {
 	}
 }
 
+func TestQueueDequeueReleasesReference(t *testing.T) {
+	value := 42
+	q := NewQueue[*int]()
+	q.Enqueue(&value)
+
+	if _, ok := q.Dequeue(); !ok {
+		t.Fatal("Dequeue should succeed")
+	}
+	if q.items[0] != nil {
+		t.Fatal("dequeued slot still retains its pointer")
+	}
+}
+
 // BenchmarkEnqueue 性能测试:入队
 func BenchmarkEnqueue(b *testing.B) {
 	q := NewQueue[int]()

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"math"
+	"strconv"
 	"testing"
 )
 
@@ -45,7 +46,9 @@ func TestNumericConversions(t *testing.T) {
 		{name: "int from string", got: func() any { return ToInt("123.9") }, want: 123},
 		{name: "int from negative float", got: func() any { return ToInt(-12.9) }, want: -12},
 		{name: "int32", got: func() any { return ToInt32("123") }, want: int32(123)},
+		{name: "int32 from decimal", got: func() any { return ToInt32("-12.9") }, want: int32(-12)},
 		{name: "int64", got: func() any { return ToInt64(int32(-456)) }, want: int64(-456)},
+		{name: "int64 from decimal", got: func() any { return ToInt64("123.9") }, want: int64(123)},
 		{name: "float32", got: func() any { return ToFloat32("123.5") }, want: float32(123.5)},
 		{name: "float64", got: func() any { return ToFloat64(-789.25) }, want: -789.25},
 	}
@@ -65,6 +68,40 @@ func TestNumericConversions(t *testing.T) {
 		"ToFloat64": func() { ToFloat64("invalid") },
 	} {
 		t.Run(name+" invalid input", func(t *testing.T) {
+			requirePanic(t, f)
+		})
+	}
+}
+
+func TestIntegerConversionsPreserveLargeValues(t *testing.T) {
+	if got := ToInt64(int64(math.MaxInt64)); got != math.MaxInt64 {
+		t.Errorf("ToInt64(MaxInt64) = %d, want %d", got, int64(math.MaxInt64))
+	}
+	if got := ToInt64("-9223372036854775808"); got != math.MinInt64 {
+		t.Errorf("ToInt64(MinInt64 string) = %d, want %d", got, int64(math.MinInt64))
+	}
+	if got := ToInt64(uint64(math.MaxInt64)); got != math.MaxInt64 {
+		t.Errorf("ToInt64(uint64(MaxInt64)) = %d, want %d", got, int64(math.MaxInt64))
+	}
+	if strconv.IntSize == 64 {
+		if got := ToInt(int64(math.MaxInt64)); int64(got) != math.MaxInt64 {
+			t.Errorf("ToInt(MaxInt64) = %d, want %d", got, int64(math.MaxInt64))
+		}
+	}
+}
+
+func TestIntegerConversionsRejectOverflowAndNonFiniteValues(t *testing.T) {
+	tests := map[string]func(){
+		"int32 overflow":         func() { ToInt32("2147483648") },
+		"int32 decimal overflow": func() { ToInt32("2147483648.0") },
+		"int64 overflow":         func() { ToInt64("9223372036854775808") },
+		"int64 decimal overflow": func() { ToInt64("9223372036854775808.0") },
+		"uint64 overflow":        func() { ToInt64(uint64(math.MaxUint64)) },
+		"NaN":                    func() { ToInt64(math.NaN()) },
+		"positive Inf":           func() { ToInt64(math.Inf(1)) },
+	}
+	for name, f := range tests {
+		t.Run(name, func(t *testing.T) {
 			requirePanic(t, f)
 		})
 	}

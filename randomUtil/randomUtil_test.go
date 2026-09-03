@@ -1,6 +1,7 @@
 package randomUtil
 
 import (
+	"math"
 	"reflect"
 	"strings"
 	"testing"
@@ -40,6 +41,12 @@ func TestRandomInt(t *testing.T) {
 	}
 	requirePanic(t, func() { RandomInt(10, 1) })
 	requirePanic(t, func() { RandomInt(5, 5) })
+	if got := RandomInt[uint64](0, math.MaxUint64); got >= math.MaxUint64 {
+		t.Fatalf("RandomInt[uint64](0, MaxUint64) = %d", got)
+	}
+	if got := RandomInt[int64](math.MinInt64, math.MaxInt64); got >= math.MaxInt64 {
+		t.Fatalf("RandomInt[int64](MinInt64, MaxInt64) = %d", got)
+	}
 }
 
 func TestRandomEle(t *testing.T) {
@@ -122,6 +129,12 @@ func TestRandomWeightedKey(t *testing.T) {
 			RandomWeightedKey(weights)
 		})
 	}
+	if got := RandomWeightedKey(map[string]uint64{"selected": math.MaxUint64}); got != "selected" {
+		t.Errorf("RandomWeightedKey(MaxUint64 weight) = %q, want selected", got)
+	}
+	requirePanicValue(t, "权重值总和溢出", func() {
+		RandomWeightedKey(map[string]uint64{"a": math.MaxUint64, "b": 1})
+	})
 }
 
 func TestRandomString(t *testing.T) {

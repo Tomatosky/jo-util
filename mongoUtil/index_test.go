@@ -132,6 +132,26 @@ func TestEnsureIndexesNilModelIsNoOp(t *testing.T) {
 	}
 }
 
+func TestEnsureIndexesUsesDefaultBSONFieldName(t *testing.T) {
+	resetIndexCache(t)
+	var commands []bson.Raw
+	var commandLock sync.Mutex
+	collection, _ := mockCollection(t, "default-name", []bson.D{{{Key: "ok", Value: 1}}}, &commands, &commandLock)
+	type defaultNameModel struct {
+		DisplayName string `bson:",omitempty" mongoIndex:"index"`
+	}
+
+	if err := EnsureIndexes(context.Background(), collection, defaultNameModel{}); err != nil {
+		t.Fatalf("EnsureIndexes(): %v", err)
+	}
+	commandLock.Lock()
+	defer commandLock.Unlock()
+	if len(commands) != 1 {
+		t.Fatalf("createIndexes command count = %d, want 1", len(commands))
+	}
+	assertIndexCommand(t, commands[0], "default-name", "displayname", false)
+}
+
 func TestEnsureIndexesCachesValueAndPointerAsSameModel(t *testing.T) {
 	resetIndexCache(t)
 	var commands []bson.Raw

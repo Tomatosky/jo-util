@@ -74,6 +74,23 @@ func TestGetColor(t *testing.T) {
 	}
 }
 
+func TestColorEncoderClonePreservesColor(t *testing.T) {
+	config := zap.NewProductionEncoderConfig()
+	clone := (&ColorEncoder{Encoder: zapcore.NewConsoleEncoder(config)}).Clone()
+	colorClone, ok := clone.(*ColorEncoder)
+	if !ok {
+		t.Fatalf("ColorEncoder.Clone() returned %T, want *ColorEncoder", clone)
+	}
+	buf, err := colorClone.EncodeEntry(zapcore.Entry{Level: zapcore.WarnLevel, Message: "warning"}, nil)
+	if err != nil {
+		t.Fatalf("EncodeEntry(): %v", err)
+	}
+	defer buf.Free()
+	if got := buf.String(); !strings.HasPrefix(got, "\x1b[33m") || !strings.HasSuffix(got, "\x1b[0m") {
+		t.Errorf("cloned encoder output = %q, want warning color wrapper", got)
+	}
+}
+
 func TestInitLogWriterLevelFiltering(t *testing.T) {
 	var infoOutput bytes.Buffer
 	var errorOutput bytes.Buffer
@@ -98,7 +115,8 @@ func TestInitLogWriterLevelFiltering(t *testing.T) {
 
 func TestSimplyInit(t *testing.T) {
 	logDir := filepath.Join(t.TempDir(), "nested", "logs")
-	if got := SimplyInit(logDir); got == nil {
+	log := SimplyInit(logDir)
+	if log == nil {
 		t.Fatal("SimplyInit() returned nil")
 	}
 	info, err := os.Stat(logDir)
@@ -113,10 +131,16 @@ func TestSimplyInit(t *testing.T) {
 	if err := os.WriteFile(filePath, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	defer func() {
-		if got := recover(); got != "logPath exists but is not a directory: "+filePath {
-			t.Errorf("SimplyInit(file) panic = %v", got)
-		}
-	}()
-	SimplyInit(filePath)
+	if got := loggerPanicValue(func() { SimplyInit(filePath) }); got != "logPath exists but is not a directory: "+filePath {
+		t.Errorf("SimplyInit(file) panic = %v", got)
+	}
+	if got := loggerPanicValue(func() { SimplyInit(filepath.Join(filePath, "logs")) }); got == nil {
+		t.Error("SimplyInit(path below a file) did not propagate directory creation error")
+	}
+}
+
+func loggerPanicValue(f func()) (recovered any) {
+	defer func() { recovered = recover() }()
+	f()
+	return nil
 }

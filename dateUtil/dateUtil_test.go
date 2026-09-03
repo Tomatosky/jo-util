@@ -826,6 +826,53 @@ func TestBetweenWeek(t *testing.T) {
 	}
 }
 
+func TestBetweenResetCountsCrossedBoundaries(t *testing.T) {
+	tests := []struct {
+		name string
+		from time.Time
+		to   time.Time
+		got  func(time.Time, time.Time, bool) int
+	}{
+		{
+			name: "minute",
+			from: time.Date(2023, 5, 15, 12, 30, 59, 0, Loc),
+			to:   time.Date(2023, 5, 15, 12, 31, 0, 0, Loc),
+			got:  BetweenMinute,
+		},
+		{
+			name: "hour",
+			from: time.Date(2023, 5, 15, 12, 59, 59, 0, Loc),
+			to:   time.Date(2023, 5, 15, 13, 0, 0, 0, Loc),
+			got:  BetweenHour,
+		},
+		{
+			name: "day",
+			from: time.Date(2023, 5, 15, 23, 59, 59, 0, Loc),
+			to:   time.Date(2023, 5, 16, 0, 0, 0, 0, Loc),
+			got:  BetweenDay,
+		},
+		{
+			name: "week",
+			from: time.Date(2023, 5, 21, 23, 59, 59, 0, Loc),
+			to:   time.Date(2023, 5, 22, 0, 0, 0, 0, Loc),
+			got:  BetweenWeek,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.got(tt.from, tt.to, false); got != 0 {
+				t.Errorf("without reset = %d, want 0", got)
+			}
+			if got := tt.got(tt.from, tt.to, true); got != 1 {
+				t.Errorf("with reset = %d, want 1", got)
+			}
+		})
+	}
+	if got := BetweenMinute(tests[0].to, tests[0].from, true); got != 1 {
+		t.Errorf("reverse minute with reset = %d, want 1", got)
+	}
+}
+
 func TestBetweenMonth(t *testing.T) {
 	t1 := time.Date(2023, 1, 15, 12, 0, 0, 0, Loc)
 	t2 := time.Date(2023, 3, 20, 12, 0, 0, 0, Loc)

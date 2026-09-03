@@ -54,6 +54,9 @@ func EnsureIndexes(ctx context.Context, collection *mongo.Collection, model inte
 		}
 
 		bsonName := strings.Split(bsonTag, ",")[0]
+		if bsonName == "" {
+			bsonName = strings.ToLower(field.Name)
+		}
 
 		indexOptions := options.Index()
 

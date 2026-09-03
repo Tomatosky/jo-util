@@ -112,7 +112,7 @@ func TestPoolScheduleAtFixedRate(t *testing.T) {
 }
 
 func TestPoolScheduleWithFixedDelay(t *testing.T) {
-	pool := NewAntsPool(2)
+	pool := NewAntsPool(1)
 	executions := make(chan struct{})
 	var count atomic.Int32
 	stop := pool.ScheduleWithFixedDelay(0, 40*time.Millisecond, func() {
@@ -138,21 +138,66 @@ func TestPoolScheduleWithFixedDelay(t *testing.T) {
 	}
 }
 
-func TestPoolFixedDelayDoesNotRunWhenStopAndDelayAreReady(t *testing.T) {
-	pool := NewAntsPool(4)
-	done := make(chan struct{})
-	close(done)
-	var once sync.Once
-	var count atomic.Int32
+func TestPoolSchedulesRejectInvalidArguments(t *testing.T) {
+	tests := []struct {
+		name      string
+		wantPanic string
+		schedule  func(*AntsPool)
+	}{
+		{
+			name:      "fixed rate nil task",
+			wantPanic: "task cannot be nil",
+			schedule: func(pool *AntsPool) {
+				pool.ScheduleAtFixedRate(0, time.Second, nil)
+			},
+		},
+		{
+			name:      "fixed rate zero period",
+			wantPanic: "period must be greater than 0",
+			schedule: func(pool *AntsPool) {
+				pool.ScheduleAtFixedRate(0, 0, func() {})
+			},
+		},
+		{
+			name:      "fixed delay nil task",
+			wantPanic: "task cannot be nil",
+			schedule: func(pool *AntsPool) {
+				pool.ScheduleWithFixedDelay(0, time.Second, nil)
+			},
+		},
+		{
+			name:      "fixed delay zero delay",
+			wantPanic: "delay must be greater than 0",
+			schedule: func(pool *AntsPool) {
+				pool.ScheduleWithFixedDelay(0, 0, func() {})
+			},
+		},
+	}
 
-	for i := 0; i < 1000; i++ {
-		pool.scheduleNextWithDelay(0, func() { count.Add(1) }, done, &once)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pool := NewAntsPool(1)
+			defer pool.Shutdown(time.Second)
+			defer func() {
+				if got := recover(); got != tt.wantPanic {
+					t.Fatalf("schedule panic = %v, want %q", got, tt.wantPanic)
+				}
+			}()
+			tt.schedule(pool)
+		})
 	}
-	if timedOut := pool.Shutdown(time.Second); timedOut {
-		t.Fatal("fixed-delay pool shutdown timed out")
-	}
-	if got := count.Load(); got != 0 {
-		t.Errorf("fixed-delay schedule executed %d tasks after stop", got)
+}
+
+func TestPoolShutdownCancelsFixedDelayWait(t *testing.T) {
+	pool := NewAntsPool(1)
+	executed := make(chan struct{})
+	pool.ScheduleWithFixedDelay(0, time.Hour, func() {
+		close(executed)
+	})
+	waitForSignal(t, executed, time.Second, "fixed-delay execution")
+
+	if timedOut := pool.Shutdown(200 * time.Millisecond); timedOut {
+		t.Fatal("shutdown waited for the next fixed-delay interval")
 	}
 }
 
@@ -339,7 +384,9 @@ func TestPoolShutdown(t *testing.T) {
 		}
 		close(release)
 		waitForSignal(t, finished, time.Second, "timed-out task completion")
-		pool.wg.Wait()
+		if timedOut := pool.Shutdown(time.Second); timedOut {
+			t.Fatal("Shutdown timed out after timed-out task completed")
+		}
 	})
 }
 

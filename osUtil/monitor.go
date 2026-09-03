@@ -208,7 +208,8 @@ func (m *Monitor) checkThreshold(config *thresholdConfig, resourceType ResourceT
 		if config.startTime.IsZero() {
 			// 第一次超过，记录开始时间
 			config.startTime = now
-		} else if now.Sub(config.startTime) >= config.duration {
+		}
+		if now.Sub(config.startTime) >= config.duration {
 			// 持续超过阈值时间，检查是否在报警间隔内
 			if config.lastAlertTime.IsZero() || now.Sub(config.lastAlertTime) >= config.alertInterval {
 				// 触发报警，传递实际持续时长

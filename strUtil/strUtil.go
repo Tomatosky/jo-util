@@ -6,8 +6,8 @@ import (
 )
 
 var intReg = regexp.MustCompile(`^0$|^-?[1-9]\d*$`)
-var floatReg = regexp.MustCompile(`^0$|^0\.[0-9]+$|^-?[1-9]\d*$|^-?[1-9]\d*\.[0-9]+$`)
-var numReg = regexp.MustCompile(`^0$|^0\.[0-9]+$|^-?[1-9]\d*$|^-?[1-9]\d*\.[0-9]+$`)
+var floatReg = regexp.MustCompile(`^0$|^-?0\.[0-9]+$|^-?[1-9]\d*$|^-?[1-9]\d*\.[0-9]+$`)
+var numReg = regexp.MustCompile(`^0$|^-?0\.[0-9]+$|^-?[1-9]\d*$|^-?[1-9]\d*\.[0-9]+$`)
 
 // IsInt check the string is an integer number
 func IsInt(s string) bool { return intReg.MatchString(s) }

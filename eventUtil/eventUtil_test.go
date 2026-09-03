@@ -141,6 +141,7 @@ func TestShutDownRejectsNewWork(t *testing.T) {
 		t.Fatal(err)
 	}
 	manager.ShutDown(time.Second)
+	manager.ShutDown(time.Second)
 
 	if !manager.isDestroying() {
 		t.Error("ShutDown() did not set destroying")

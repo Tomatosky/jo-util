@@ -7,11 +7,19 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
+
+type failingReader struct {
+	err error
+}
+
+func (r failingReader) Read([]byte) (int, error) { return 0, r.err }
 
 func requirePanic(t *testing.T, f func()) {
 	t.Helper()
@@ -179,6 +187,18 @@ func TestAESCTRRoundTrip(t *testing.T) {
 	}
 	if !bytes.Equal(decrypted, data) {
 		t.Errorf("CTR round trip = %q, want %q", decrypted, data)
+	}
+}
+
+func TestAesCfbEncryptRandomSourceError(t *testing.T) {
+	sentinel := errors.New("random source failed")
+	originalReader := rand.Reader
+	rand.Reader = failingReader{err: sentinel}
+	t.Cleanup(func() { rand.Reader = originalReader })
+
+	key := []byte("1234567890123456")
+	if _, err := AesCfbEncrypt([]byte("data"), key, Pkcs7Padding); !errors.Is(err, sentinel) {
+		t.Errorf("AesCfbEncrypt() error = %v, want %v", err, sentinel)
 	}
 }
 
@@ -378,6 +398,14 @@ func TestRSAKeyFilesRoundTrip(t *testing.T) {
 	root := t.TempDir()
 	privatePath := filepath.Join(root, "private.pem")
 	publicPath := filepath.Join(root, "public.pem")
+	if runtime.GOOS != "windows" {
+		if err := os.WriteFile(privatePath, []byte("old key"), 0o666); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(privatePath, 0o666); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if err := GenerateRsaKey(1024, privatePath, publicPath); err != nil {
 		t.Fatalf("GenerateRsaKey(): %v", err)
 	}
@@ -388,6 +416,13 @@ func TestRSAKeyFilesRoundTrip(t *testing.T) {
 		}
 		if info.Size() == 0 {
 			t.Errorf("generated key file %q is empty", path)
+		}
+	}
+	if runtime.GOOS != "windows" {
+		if info, err := os.Stat(privatePath); err != nil {
+			t.Fatal(err)
+		} else if info.Mode().Perm()&0o077 != 0 {
+			t.Errorf("private key permissions = %04o, want no group/other permissions", info.Mode().Perm())
 		}
 	}
 

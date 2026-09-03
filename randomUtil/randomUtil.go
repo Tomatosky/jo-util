@@ -2,8 +2,8 @@ package randomUtil
 
 import (
 	"fmt"
-	"math/rand"
-	"time"
+	"math"
+	"math/rand/v2"
 
 	"github.com/Tomatosky/jo-util/logger"
 	"github.com/Tomatosky/jo-util/numberUtil"
@@ -15,8 +15,8 @@ func RandomInt[T numberUtil.Number](start, end T) T {
 		logger.Log.Error(fmt.Sprintf("%v", "invalid range: start >= end"))
 		panic("invalid range: start >= end")
 	}
-	var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
-	return T(rng.Int63n(int64(end-start))) + start
+	rangeSize := uint64(end) - uint64(start)
+	return start + T(rand.Uint64N(rangeSize))
 }
 
 // RandomEle 从切片中随机选择一个元素
@@ -25,8 +25,7 @@ func RandomEle[T any](slice []T) T {
 		logger.Log.Error(fmt.Sprintf("%v", "slice is empty"))
 		panic("slice is empty")
 	}
-	var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
-	return slice[rng.Intn(len(slice))]
+	return slice[rand.IntN(len(slice))]
 }
 
 // RandomEleSet 从切片中随机选择 n 个不重复的元素
@@ -42,8 +41,7 @@ func RandomEleSet[T any](slice []T, n int) []T {
 	if n > length {
 		n = length
 	}
-	var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
-	indices := rng.Perm(length)
+	indices := rand.Perm(length)
 	result := make([]T, n)
 	for i := 0; i < n; i++ {
 		result[i] = slice[indices[i]]
@@ -54,14 +52,20 @@ func RandomEleSet[T any](slice []T, n int) []T {
 // RandomWeightedKey 根据权重随机选择一个键
 func RandomWeightedKey[K comparable, V numberUtil.Number](weights map[K]V) K {
 	// 计算总权重
-	var sum int
+	var sum uint64
 	for _, w := range weights {
 		if w < 0 {
 			const message = "权重值不能为负数"
 			logger.Log.Error(message)
 			panic(message)
 		}
-		sum += int(w)
+		weight := uint64(w)
+		if math.MaxUint64-sum < weight {
+			const message = "权重值总和溢出"
+			logger.Log.Error(message)
+			panic(message)
+		}
+		sum += weight
 	}
 
 	// 处理无效权重的情况
@@ -71,13 +75,12 @@ func RandomWeightedKey[K comparable, V numberUtil.Number](weights map[K]V) K {
 	}
 
 	// 生成随机数
-	var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
-	r := rng.Intn(sum)
+	r := rand.Uint64N(sum)
 
 	// 查找对应的键
-	var runningTotal int
+	var runningTotal uint64
 	for key, weight := range weights {
-		runningTotal += int(weight)
+		runningTotal += uint64(weight)
 		if runningTotal > r {
 			return key
 		}
@@ -93,9 +96,8 @@ func RandomWeightedKey[K comparable, V numberUtil.Number](weights map[K]V) K {
 func RandomString(length int) string {
 	const charset = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	b := make([]byte, length)
-	var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
 	for i := range b {
-		b[i] = charset[rng.Intn(len(charset))]
+		b[i] = charset[rand.IntN(len(charset))]
 	}
 	return string(b)
 }
@@ -104,9 +106,8 @@ func RandomString(length int) string {
 func RandomNumbers(length int) string {
 	const charset = "0123456789"
 	b := make([]byte, length)
-	var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
 	for i := range b {
-		b[i] = charset[rng.Intn(len(charset))]
+		b[i] = charset[rand.IntN(len(charset))]
 	}
 	return string(b)
 }
