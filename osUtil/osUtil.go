@@ -2,7 +2,10 @@ package osUtil
 
 import (
 	"fmt"
+	"os"
 	"runtime/metrics"
+
+	"github.com/Tomatosky/jo-util/logger"
 )
 
 func MemUse() uint64 {
@@ -33,4 +36,16 @@ func MemUseGB() float32 {
 
 func MemUseGBStr() string {
 	return fmt.Sprintf("%.2f", MemUseGB())
+}
+
+func PackageDateTime() string {
+	buildTime := "unknown"
+	if executable, err := os.Executable(); err != nil {
+		logger.Log.Warn(fmt.Sprintf("获取可执行文件路径失败: %v", err))
+	} else if info, err := os.Stat(executable); err != nil {
+		logger.Log.Warn(fmt.Sprintf("读取可执行文件修改时间失败: %v", err))
+	} else {
+		buildTime = info.ModTime().Format("2006-01-02 15:04:05")
+	}
+	return buildTime
 }
