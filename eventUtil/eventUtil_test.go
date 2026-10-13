@@ -46,38 +46,43 @@ func TestNewEventManager(t *testing.T) {
 
 func TestRegister(t *testing.T) {
 	manager := newTestEventManager(t)
-	handler := func(interface{}) {}
-	if err := manager.Register("event", handler); err != nil {
-		t.Fatalf("Register(valid): %v", err)
-	}
-	if err := manager.Register("event", handler); err != nil {
-		t.Fatalf("Register(second handler): %v", err)
-	}
+	handler := EventHandler{Func: func(interface{}) {}}
+	manager.Register("event", handler)
+	manager.Register("event", handler)
 	if got := len(manager.handlers["event"]); got != 2 {
 		t.Errorf("registered handler count = %d, want 2", got)
 	}
 
-	if err := manager.Register("", handler); err == nil || err.Error() != "event name cannot be empty" {
-		t.Errorf("Register(empty name) error = %v", err)
-	}
-	if err := manager.Register("event", nil); err == nil || err.Error() != "handler cannot be nil" {
-		t.Errorf("Register(nil handler) error = %v", err)
+	for _, test := range []struct {
+		name      string
+		eventName string
+		handler   EventHandler
+	}{
+		{name: "empty name", eventName: "", handler: handler},
+		{name: "nil handler", eventName: "event", handler: EventHandler{}},
+		{name: "negative priority", eventName: "event", handler: EventHandler{Func: handler.Func, Priority: -1}},
+		{name: "negative priority for new event", eventName: "negative", handler: EventHandler{Func: handler.Func, Priority: -1}},
+		{name: "priority above maximum", eventName: "event", handler: EventHandler{Func: handler.Func, Priority: 1000}},
+		{name: "priority above maximum for new event", eventName: "above-maximum", handler: EventHandler{Func: handler.Func, Priority: 1000}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			manager.Register(test.eventName, test.handler)
+			if len(manager.handlers) != 1 || len(manager.handlers["event"]) != 2 {
+				t.Errorf("invalid registration changed handlers: %#v", manager.handlers)
+			}
+		})
 	}
 }
 
 func TestTriggerSync(t *testing.T) {
 	manager := newTestEventManager(t)
 	var got []string
-	if err := manager.Register("event", func(data interface{}) {
+	manager.Register("event", EventHandler{Func: func(data interface{}) {
 		got = append(got, fmt.Sprintf("first:%v", data))
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := manager.Register("event", func(data interface{}) {
+	}})
+	manager.Register("event", EventHandler{Func: func(data interface{}) {
 		got = append(got, fmt.Sprintf("second:%v", data))
-	}); err != nil {
-		t.Fatal(err)
-	}
+	}})
 
 	manager.TriggerSync("event", "payload")
 	if want := []string{"first:payload", "second:payload"}; !reflect.DeepEqual(got, want) {
@@ -89,32 +94,122 @@ func TestTriggerSync(t *testing.T) {
 	}
 }
 
-func TestTriggerWithID(t *testing.T) {
+func TestTriggerAsync(t *testing.T) {
+	for _, mode := range []string{"Trigger", "TriggerWithId"} {
+		t.Run(mode, func(t *testing.T) {
+			manager := newTestEventManager(t)
+			received := make(chan interface{}, 3)
+			manager.Register("event", EventHandler{Func: func(data interface{}) {
+				received <- data
+			}})
+			trigger := manager.Trigger
+			if mode == "TriggerWithId" {
+				trigger = func(eventName string, data interface{}) {
+					manager.TriggerWithId(1, eventName, data)
+				}
+			}
+
+			trigger("event", "payload")
+			select {
+			case got := <-received:
+				if got != "payload" {
+					t.Errorf("handler data = %v, want payload", got)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("timed out waiting for asynchronous handler")
+			}
+
+			trigger("", nil)
+			trigger("missing", nil)
+			manager.ShutDown(time.Second)
+			select {
+			case got := <-received:
+				t.Errorf("invalid event unexpectedly invoked handler with %v", got)
+			default:
+			}
+		})
+	}
+}
+
+func TestTriggerPriorityOrder(t *testing.T) {
+	for _, mode := range []string{"sync", "async", "asyncWithID"} {
+		t.Run(mode, func(t *testing.T) {
+			manager := newTestEventManager(t)
+			entries := []struct {
+				name     string
+				priority int
+			}{
+				{name: "default"},
+				{name: "second-default"},
+				{name: "high", priority: 1},
+				{name: "equal", priority: 1},
+				{name: "explicit-default", priority: 999},
+				{name: "before-default", priority: 998},
+			}
+			received := make(chan string, len(entries))
+			for _, entry := range entries {
+				manager.Register("event", EventHandler{
+					Func:     func(interface{}) { received <- entry.name },
+					Priority: entry.priority,
+				})
+			}
+
+			switch mode {
+			case "sync":
+				manager.TriggerSync("event", nil)
+			case "async":
+				manager.Trigger("event", nil)
+			case "asyncWithID":
+				manager.TriggerWithId(1, "event", nil)
+			}
+
+			var got []string
+			timer := time.NewTimer(time.Second)
+			defer timer.Stop()
+			for range entries {
+				select {
+				case name := <-received:
+					got = append(got, name)
+				case <-timer.C:
+					t.Fatalf("timed out waiting for handlers; received %v", got)
+				}
+			}
+			want := []string{"high", "equal", "before-default", "default", "second-default", "explicit-default"}
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("handler order = %v, want %v", got, want)
+			}
+		})
+	}
+}
+
+func TestRegisterDuringTrigger(t *testing.T) {
 	manager := newTestEventManager(t)
-	received := make(chan interface{}, 1)
-	if err := manager.Register("event", func(data interface{}) {
-		received <- data
-	}); err != nil {
-		t.Fatal(err)
+	var got []int
+	registered := false
+	for _, priority := range []int{10, 20, 30, 40} {
+		manager.Register("event", EventHandler{
+			Func: func(interface{}) {
+				got = append(got, priority)
+				if priority == 10 && !registered {
+					registered = true
+					manager.Register("event", EventHandler{
+						Func:     func(interface{}) { got = append(got, 1) },
+						Priority: 1,
+					})
+				}
+			},
+			Priority: priority,
+		})
 	}
 
-	if err := manager.TriggerWithId(1, "event", "payload"); err != nil {
-		t.Fatalf("TriggerWithId(valid): %v", err)
+	manager.TriggerSync("event", nil)
+	if want := []int{10, 20, 30, 40}; !reflect.DeepEqual(got, want) {
+		t.Errorf("current trigger order = %v, want %v", got, want)
 	}
-	select {
-	case got := <-received:
-		if got != "payload" {
-			t.Errorf("handler data = %v, want payload", got)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("timed out waiting for asynchronous handler")
-	}
-
-	if err := manager.TriggerWithId(1, "", nil); err == nil || err.Error() != "event name cannot be empty" {
-		t.Errorf("TriggerWithId(empty name) error = %v", err)
-	}
-	if err := manager.TriggerWithId(1, "missing", nil); err == nil || err.Error() != "event not found" {
-		t.Errorf("TriggerWithId(missing) error = %v", err)
+	got = nil
+	manager.TriggerSync("event", nil)
+	if want := []int{1, 10, 20, 30, 40}; !reflect.DeepEqual(got, want) {
+		t.Errorf("next trigger order = %v, want %v", got, want)
 	}
 }
 
@@ -123,9 +218,7 @@ func TestHasEventAndClear(t *testing.T) {
 	if manager.HasEvent("event") {
 		t.Error("HasEvent() = true before registration")
 	}
-	if err := manager.Register("event", func(interface{}) {}); err != nil {
-		t.Fatal(err)
-	}
+	manager.Register("event", EventHandler{Func: func(interface{}) {}})
 	if !manager.HasEvent("event") {
 		t.Error("HasEvent() = false after registration")
 	}
@@ -136,48 +229,44 @@ func TestHasEventAndClear(t *testing.T) {
 }
 
 func TestShutDownRejectsNewWork(t *testing.T) {
-	manager := NewEventManager(&EventOpt{PoolSize: 1, QueueSize: 1})
-	if err := manager.Register("event", func(interface{}) {}); err != nil {
-		t.Fatal(err)
-	}
+	manager := newTestEventManager(t)
+	received := make(chan struct{}, 2)
+	handler := EventHandler{Func: func(interface{}) { received <- struct{}{} }}
+	manager.Register("event", handler)
 	manager.ShutDown(time.Second)
 	manager.ShutDown(time.Second)
 
 	if !manager.isDestroying() {
 		t.Error("ShutDown() did not set destroying")
 	}
-	if err := manager.Register("new", func(interface{}) {}); err == nil || err.Error() != "event manager is destroying, cannot register new handlers" {
-		t.Errorf("Register(after shutdown) error = %v", err)
+	manager.Register("new", handler)
+	manager.Register("event", handler)
+	if manager.HasEvent("new") || len(manager.handlers["event"]) != 1 {
+		t.Errorf("Register(after shutdown) changed handlers: %#v", manager.handlers)
 	}
-	if err := manager.TriggerWithId(1, "event", nil); err == nil || err.Error() != "event manager is destroying, cannot trigger events" {
-		t.Errorf("TriggerWithId(after shutdown) error = %v", err)
+	manager.Trigger("event", nil)
+	manager.TriggerWithId(1, "event", nil)
+	select {
+	case <-received:
+		t.Error("trigger after shutdown unexpectedly invoked handler")
+	default:
 	}
 }
 
 func TestHandlerPanicDoesNotEscapeOrStopFollowingHandlers(t *testing.T) {
 	manager := newTestEventManager(t)
 	called := false
-	if err := manager.Register("sync", func(interface{}) { panic("test panic") }); err != nil {
-		t.Fatal(err)
-	}
-	if err := manager.Register("sync", func(interface{}) { called = true }); err != nil {
-		t.Fatal(err)
-	}
+	manager.Register("sync", EventHandler{Func: func(interface{}) { panic("test panic") }})
+	manager.Register("sync", EventHandler{Func: func(interface{}) { called = true }})
 	manager.TriggerSync("sync", nil)
 	if !called {
 		t.Error("handler after panicking handler was not called")
 	}
 
 	done := make(chan struct{}, 1)
-	if err := manager.Register("async", func(interface{}) { panic("test panic") }); err != nil {
-		t.Fatal(err)
-	}
-	if err := manager.Register("async", func(interface{}) { done <- struct{}{} }); err != nil {
-		t.Fatal(err)
-	}
-	if err := manager.TriggerWithId(1, "async", nil); err != nil {
-		t.Fatal(err)
-	}
+	manager.Register("async", EventHandler{Func: func(interface{}) { panic("test panic") }})
+	manager.Register("async", EventHandler{Func: func(interface{}) { done <- struct{}{} }})
+	manager.TriggerWithId(1, "async", nil)
 	select {
 	case <-done:
 	case <-time.After(time.Second):
