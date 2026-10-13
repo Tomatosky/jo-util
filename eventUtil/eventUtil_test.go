@@ -9,7 +9,7 @@ import (
 
 func newTestEventManager(t *testing.T) *EventManager {
 	t.Helper()
-	manager := NewEventManager(&EventOpt{PoolSize: 2, QueueSize: 10})
+	manager := NewEventManager(EventOpt{PoolSize: 2, QueueSize: 10})
 	t.Cleanup(func() {
 		manager.ShutDown(time.Second)
 	})
@@ -33,7 +33,7 @@ func TestNewEventManager(t *testing.T) {
 		t.Error("new manager is already destroying")
 	}
 
-	for _, opt := range []*EventOpt{
+	for _, opt := range []EventOpt{
 		{PoolSize: 0, QueueSize: 1},
 		{PoolSize: 1, QueueSize: 0},
 		{PoolSize: -1, QueueSize: -1},

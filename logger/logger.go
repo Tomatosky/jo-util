@@ -69,7 +69,7 @@ func InitLog(writers map[io.Writer]zapcore.Level) *zap.Logger {
 	consoleEncoderConfig.EncodeTime = zapcore.TimeEncoderOfLayout("2006-01-02 15:04:05.000") //指定时间格式
 	consoleEncoderConfig.EncodeLevel = zapcore.CapitalLevelEncoder
 	consoleEncoder := zapcore.NewConsoleEncoder(consoleEncoderConfig)
-	colorEncoder := &ColorEncoder{Encoder: consoleEncoder}
+	colorEncoder := ColorEncoder{Encoder: consoleEncoder}
 	consoleCore := zapcore.NewCore(colorEncoder, zapcore.AddSync(os.Stdout), debugLevel)
 	coreArr = append(coreArr, consoleCore)
 
