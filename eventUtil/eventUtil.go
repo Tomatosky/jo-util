@@ -27,14 +27,13 @@ type EventManager struct {
 	destroying bool
 }
 
-// EventOpt 是创建事件管理器时读取的配置，不需要共享修改。
 type EventOpt struct {
 	PoolSize  int64
 	QueueSize int
 }
 
 // NewEventManager 创建一个新的事件管理器
-func NewEventManager(opt EventOpt) *EventManager {
+func NewEventManager(opt *EventOpt) *EventManager {
 	if opt.PoolSize <= 0 || opt.QueueSize <= 0 {
 		logger.Log.Error(fmt.Sprintf("pool size and queue size must be greater than 0"))
 		panic(fmt.Sprintf("pool size and queue size must be greater than 0"))
@@ -42,7 +41,7 @@ func NewEventManager(opt EventOpt) *EventManager {
 
 	manager := &EventManager{
 		handlers: make(map[string][]EventHandler),
-		pool: poolUtil.NewIdPool(poolUtil.IdPoolOpt{
+		pool: poolUtil.NewIdPool(&poolUtil.IdPoolOpt{
 			PoolSize:  opt.PoolSize,
 			QueueSize: opt.QueueSize,
 			PoolName:  "event",

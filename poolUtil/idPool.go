@@ -14,7 +14,7 @@ import (
 var _ IPool = (*IdPool)(nil)
 
 type IdPool struct {
-	workers      []worker
+	workers      []*worker
 	idTaskCounts map[int64]int32
 	cores        int64
 	running      bool           // 控制服务运行状态
@@ -24,27 +24,24 @@ type IdPool struct {
 	poolName     string
 }
 
-// worker 初始化后不再替换字段，复制时共享同一个池和通道。
 type worker struct {
-	idPool *IdPool         // 反向引用 IdPool
-	queue  chan customTask // 任务通道
-	done   chan struct{}   // 关闭信号
+	idPool *IdPool          // 反向引用 IdPool
+	queue  chan *customTask // 任务通道
+	done   chan struct{}    // 关闭信号
 }
 
-// customTask 是入队后只读的任务数据，直接按值传递。
 type customTask struct {
 	id   int64
 	task func()
 }
 
-// IdPoolOpt 是创建池时读取的配置，不需要共享修改。
 type IdPoolOpt struct {
 	PoolSize  int64
 	QueueSize int
 	PoolName  string
 }
 
-func NewIdPool(opt IdPoolOpt) *IdPool {
+func NewIdPool(opt *IdPoolOpt) *IdPool {
 	if opt.PoolSize <= 0 || opt.QueueSize <= 0 {
 		logger.Log.Error(fmt.Sprintf("%v", "pool size and queue size must be greater than 0"))
 		panic("pool size and queue size must be greater than 0")
@@ -52,7 +49,7 @@ func NewIdPool(opt IdPoolOpt) *IdPool {
 
 	idPool := &IdPool{
 		cores:        opt.PoolSize,
-		workers:      make([]worker, opt.PoolSize),
+		workers:      make([]*worker, opt.PoolSize),
 		idTaskCounts: make(map[int64]int32),
 		terminated:   make(chan struct{}),
 		running:      true,
@@ -62,7 +59,7 @@ func NewIdPool(opt IdPoolOpt) *IdPool {
 	for i := int64(0); i < opt.PoolSize; i++ {
 		idPool.workers[i] = newWorker(idPool, opt.QueueSize)
 		idPool.wg.Add(1) // 为每个worker增加计数
-		go func(w worker) {
+		go func(w *worker) {
 			defer idPool.wg.Done() // worker退出时减少计数
 			w.run()
 		}(idPool.workers[i])
@@ -94,7 +91,7 @@ func (i *IdPool) SubmitWithId(id any, task func()) {
 	w := i.workers[workerIndex]
 	// 发送任务
 	select {
-	case w.queue <- customTask{id: idInt64, task: task}:
+	case w.queue <- &customTask{id: idInt64, task: task}:
 	default:
 		i.idTaskCounts[idInt64]--
 		if i.idTaskCounts[idInt64] == 0 {
@@ -151,16 +148,16 @@ func (i *IdPool) Shutdown(timeout time.Duration) (isTimeout bool) {
 	}
 }
 
-func newWorker(i *IdPool, queueSize int) worker {
-	return worker{
+func newWorker(i *IdPool, queueSize int) *worker {
+	return &worker{
 		idPool: i,
-		queue:  make(chan customTask, queueSize), // 带缓冲的任务队列
+		queue:  make(chan *customTask, queueSize), // 带缓冲的任务队列
 		done:   make(chan struct{}),
 	}
 }
 
 // worker 运行循环
-func (w worker) run() {
+func (w *worker) run() {
 	for {
 		select {
 		case task := <-w.queue:
@@ -174,7 +171,7 @@ func (w worker) run() {
 }
 
 // 排空剩余任务
-func (w worker) drainQueue() {
+func (w *worker) drainQueue() {
 	for {
 		select {
 		case task, ok := <-w.queue:
@@ -188,7 +185,7 @@ func (w worker) drainQueue() {
 	}
 }
 
-func (w worker) processTask(task customTask) {
+func (w *worker) processTask(task *customTask) {
 	defer func() {
 		err := recover()
 		if err != nil {

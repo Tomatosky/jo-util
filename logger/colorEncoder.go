@@ -7,18 +7,15 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-var _ zapcore.Encoder = ColorEncoder{}
-
-// ColorEncoder 按值包装底层编码器；需要独立编码状态时使用 Clone。
 type ColorEncoder struct {
 	zapcore.Encoder
 }
 
-func (e ColorEncoder) Clone() zapcore.Encoder {
-	return ColorEncoder{Encoder: e.Encoder.Clone()}
+func (e *ColorEncoder) Clone() zapcore.Encoder {
+	return &ColorEncoder{Encoder: e.Encoder.Clone()}
 }
 
-func (e ColorEncoder) EncodeEntry(ent zapcore.Entry, fields []zapcore.Field) (*buffer.Buffer, error) {
+func (e *ColorEncoder) EncodeEntry(ent zapcore.Entry, fields []zapcore.Field) (*buffer.Buffer, error) {
 	buf, err := e.Encoder.EncodeEntry(ent, fields)
 	if err != nil {
 		return nil, err

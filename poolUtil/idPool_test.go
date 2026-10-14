@@ -19,7 +19,7 @@ func (id blockingJSONID) MarshalJSON() ([]byte, error) {
 }
 
 func newTestIDPool(poolSize int64, queueSize int) *IdPool {
-	return NewIdPool(IdPoolOpt{
+	return NewIdPool(&IdPoolOpt{
 		PoolSize:  poolSize,
 		QueueSize: queueSize,
 		PoolName:  "test-id-pool",
@@ -41,7 +41,7 @@ func TestIdPool(t *testing.T) {
 						t.Errorf("NewIdPool(%+v) panic = %v", opt, got)
 					}
 				}()
-				NewIdPool(opt)
+				NewIdPool(&opt)
 			}()
 		}
 	})

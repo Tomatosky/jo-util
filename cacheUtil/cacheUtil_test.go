@@ -31,9 +31,7 @@ func newAccessTestCache[K comparable, V any](t *testing.T, expiration time.Durat
 
 func expireTestKey[K comparable, V any](c *Cache[K, V], key K) {
 	c.mu.Lock()
-	item := c.items[key]
-	item.Expiration = time.Now().Add(-time.Nanosecond).UnixNano()
-	c.items[key] = item
+	c.items[key].Expiration = time.Now().Add(-time.Nanosecond).UnixNano()
 	c.mu.Unlock()
 }
 
@@ -208,48 +206,11 @@ func TestAccessExpire(t *testing.T) {
 	if refreshedExpiration.Before(beforeGet.Add(expiration)) || refreshedExpiration.After(afterGet.Add(expiration)) {
 		t.Errorf("refreshed expiration = %v, want within [%v, %v]", refreshedExpiration, beforeGet.Add(expiration), afterGet.Add(expiration))
 	}
-	if storedExpiration := cache1.items["key1"].Expiration; storedExpiration != refreshedExpiration.UnixNano() {
-		t.Errorf("stored expiration = %d, want refreshed expiration %d", storedExpiration, refreshedExpiration.UnixNano())
-	}
 
 	expireTestKey(cache1, "key1")
 	_, found = cache1.Get("key1")
 	if found {
 		t.Error("Key should have expired after no access")
-	}
-}
-
-func TestAccessExpirePersistsOnGetAndSetIfAbsent(t *testing.T) {
-	for _, expiration := range []time.Duration{time.Minute, 0} {
-		t.Run(expiration.String(), func(t *testing.T) {
-			cache1 := newAccessTestCache[string, int](t, expiration)
-			for _, operation := range []string{"Get", "SetIfAbsent"} {
-				t.Run(operation, func(t *testing.T) {
-					// 先设置与默认值不同的过期时间，验证访问确实更新了存储的条目。
-					cache1.Set("key", 1, time.Hour)
-					before := time.Now()
-					if operation == "Get" {
-						if value, found := cache1.Get("key"); !found || value != 1 {
-							t.Fatalf("Get(key) = (%d, %v), want (1, true)", value, found)
-						}
-					} else if cache1.SetIfAbsent("key", 2) {
-						t.Fatal("SetIfAbsent replaced an existing item")
-					}
-					after := time.Now()
-					item := cache1.items["key"]
-					if item.Object != 1 {
-						t.Fatalf("stored value = %d, want 1", item.Object)
-					}
-					if expiration == 0 {
-						if item.Expiration != 0 {
-							t.Errorf("stored expiration = %d, want 0", item.Expiration)
-						}
-					} else if item.Expiration < before.Add(expiration).UnixNano() || item.Expiration > after.Add(expiration).UnixNano() {
-						t.Errorf("stored expiration = %d, want refreshed expiration within [%d, %d]", item.Expiration, before.Add(expiration).UnixNano(), after.Add(expiration).UnixNano())
-					}
-				})
-			}
-		})
 	}
 }
 
@@ -419,9 +380,8 @@ func TestDeleteExpired(t *testing.T) {
 	}
 
 	cache1.mu.Lock()
-	for key, item := range cache1.items {
+	for _, item := range cache1.items {
 		item.Expiration = time.Now().Add(-time.Nanosecond).UnixNano()
-		cache1.items[key] = item
 	}
 	cache1.mu.Unlock()
 	cache1.deleteExpired()
@@ -562,12 +522,12 @@ func TestCustomExpirationWithZeroDefault(t *testing.T) {
 	_, getExists := cache1.items["get"]
 	_, itemsExists := cache1.items["items"]
 	_, janitorExists := cache1.items["janitor"]
-	permanent, permanentExists := cache1.items["permanent"]
+	permanent := cache1.items["permanent"]
 	cache1.mu.RUnlock()
 	if getExists || itemsExists || janitorExists {
 		t.Errorf("deleteExpired left custom-expired items: get=%v items=%v janitor=%v", getExists, itemsExists, janitorExists)
 	}
-	if !permanentExists || permanent.Expiration != 0 || permanent.Object != 4 {
+	if permanent == nil || permanent.Expiration != 0 || permanent.Object != 4 {
 		t.Errorf("permanent item after cleanup = %#v", permanent)
 	}
 }

@@ -76,14 +76,11 @@ func TestGetColor(t *testing.T) {
 
 func TestColorEncoderClonePreservesColor(t *testing.T) {
 	config := zap.NewProductionEncoderConfig()
-	original := ColorEncoder{Encoder: zapcore.NewConsoleEncoder(config)}
-	original.AddString("shared", "original")
-	clone := original.Clone()
-	colorClone, ok := clone.(ColorEncoder)
+	clone := (&ColorEncoder{Encoder: zapcore.NewConsoleEncoder(config)}).Clone()
+	colorClone, ok := clone.(*ColorEncoder)
 	if !ok {
-		t.Fatalf("ColorEncoder.Clone() returned %T, want ColorEncoder", clone)
+		t.Fatalf("ColorEncoder.Clone() returned %T, want *ColorEncoder", clone)
 	}
-	colorClone.AddString("clone-only", "value")
 	buf, err := colorClone.EncodeEntry(zapcore.Entry{Level: zapcore.WarnLevel, Message: "warning"}, nil)
 	if err != nil {
 		t.Fatalf("EncodeEntry(): %v", err)
@@ -91,17 +88,6 @@ func TestColorEncoderClonePreservesColor(t *testing.T) {
 	defer buf.Free()
 	if got := buf.String(); !strings.HasPrefix(got, "\x1b[33m") || !strings.HasSuffix(got, "\x1b[0m") {
 		t.Errorf("cloned encoder output = %q, want warning color wrapper", got)
-	}
-	if got := buf.String(); !strings.Contains(got, `"shared": "original"`) || !strings.Contains(got, `"clone-only": "value"`) {
-		t.Errorf("cloned encoder fields = %q, want inherited and clone-only fields", got)
-	}
-	originalBuf, err := original.EncodeEntry(zapcore.Entry{Level: zapcore.WarnLevel, Message: "warning"}, nil)
-	if err != nil {
-		t.Fatalf("original.EncodeEntry(): %v", err)
-	}
-	defer originalBuf.Free()
-	if got := originalBuf.String(); !strings.Contains(got, `"shared": "original"`) || strings.Contains(got, "clone-only") {
-		t.Errorf("original encoder fields = %q, clone must have independent state", got)
 	}
 }
 

@@ -6,7 +6,6 @@ import (
 	"time"
 )
 
-// Item 是缓存内部按值保存的条目；Object 仍遵循 V 自身的复制语义。
 type Item[V any] struct {
 	Object     V
 	Expiration int64
@@ -22,7 +21,7 @@ type Cache[K comparable, V any] struct {
 
 type cache[K comparable, V any] struct {
 	expiration   time.Duration
-	items        map[K]Item[V]
+	items        map[K]*Item[V]
 	mu           sync.RWMutex
 	janitor      *janitor[K, V]
 	accessExpire bool // 是否启用访问过期模式（expireAfterAccess）
@@ -35,7 +34,7 @@ type cache[K comparable, V any] struct {
 func New[K comparable, V any](expiration time.Duration) *Cache[K, V] {
 	c := &cache[K, V]{
 		expiration:   expiration,
-		items:        make(map[K]Item[V]),
+		items:        make(map[K]*Item[V]),
 		accessExpire: false,
 	}
 	C := &Cache[K, V]{c}
@@ -54,7 +53,7 @@ func New[K comparable, V any](expiration time.Duration) *Cache[K, V] {
 func NewAccessExpire[K comparable, V any](expiration time.Duration) *Cache[K, V] {
 	c := &cache[K, V]{
 		expiration:   expiration,
-		items:        make(map[K]Item[V]),
+		items:        make(map[K]*Item[V]),
 		accessExpire: true,
 	}
 	C := &Cache[K, V]{c}
@@ -80,7 +79,7 @@ func (c *cache[K, V]) Set(k K, x V, expiration ...time.Duration) {
 	if duration > 0 {
 		exp = time.Now().Add(duration).UnixNano()
 	}
-	c.items[k] = Item[V]{
+	c.items[k] = &Item[V]{
 		Object:     x,
 		Expiration: exp,
 	}
@@ -96,7 +95,7 @@ func (c *cache[K, V]) set(k K, x V) {
 	if c.expiration > 0 {
 		expiration = time.Now().Add(c.expiration).UnixNano()
 	}
-	c.items[k] = Item[V]{
+	c.items[k] = &Item[V]{
 		Object:     x,
 		Expiration: expiration,
 	}
@@ -161,7 +160,6 @@ func (c *cache[K, V]) get(k K) (V, bool, time.Time) {
 		} else {
 			item.Expiration = 0
 		}
-		c.items[k] = item // map 读取的是副本，续期后必须写回。
 		return item.Object, true, newExpiration
 	}
 
@@ -238,7 +236,7 @@ func (c *cache[K, V]) Items() map[K]V {
 // 操作完成后再释放写锁。
 func (c *cache[K, V]) Flush() {
 	c.mu.Lock()
-	c.items = make(map[K]Item[V])
+	c.items = make(map[K]*Item[V])
 	c.mu.Unlock()
 }
 

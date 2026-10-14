@@ -165,7 +165,7 @@ func TestGetTimeout(t *testing.T) {
 }
 
 func TestRespMethods(t *testing.T) {
-	resp := Resp{Body: []byte(`{"key":"value","num":123}`)}
+	resp := &Resp{Body: []byte(`{"key":"value","num":123}`)}
 	if got := resp.Text(); got != `{"key":"value","num":123}` {
 		t.Errorf("Text() = %q", got)
 	}
@@ -189,7 +189,7 @@ func TestRespMethods(t *testing.T) {
 		t.Errorf("JsonObj() = %#v, want %#v", gotObject, want)
 	}
 
-	invalid := Resp{Body: []byte("not-json")}
+	invalid := &Resp{Body: []byte("not-json")}
 	if got, err := invalid.Json(); err == nil || len(got) != 0 {
 		t.Errorf("Json(invalid) = (%#v, %v), want empty map and error", got, err)
 	}
@@ -392,7 +392,7 @@ func TestUrlEncode(t *testing.T) {
 	}
 }
 
-func assertPostResponse(t *testing.T, resp Resp, body string, status int, header string) {
+func assertPostResponse(t *testing.T, resp *Resp, body string, status int, header string) {
 	t.Helper()
 	if resp.Err != nil {
 		t.Fatalf("Post(): %v", resp.Err)

@@ -58,7 +58,6 @@ func (rc *RequestClient) SetTimeout(timeout time.Duration) {
 	rc.Client.Timeout = timeout
 }
 
-// Resp 是已读取完响应体的请求结果，按值返回；复制时 Body 和 Headers 共享底层数据。
 type Resp struct {
 	Err        error
 	Body       []byte
@@ -96,26 +95,26 @@ func buildMultipartBody(data map[string]interface{}) (body *bytes.Buffer, conten
 	return body, contentType, nil
 }
 
-func (r Resp) Text() string {
+func (r *Resp) Text() string {
 	return string(r.Body)
 }
 
-func (r Resp) Json() (map[string]any, error) {
+func (r *Resp) Json() (map[string]any, error) {
 	jsonData := map[string]any{}
 	err := json.Unmarshal(r.Body, &jsonData)
 	return jsonData, err
 }
 
-func (r Resp) JsonObj(v any) error {
+func (r *Resp) JsonObj(v any) error {
 	err := json.Unmarshal(r.Body, v)
 	return err
 }
 
 // Get 发送GET请求
-func (rc *RequestClient) Get(requestURL string) Resp {
+func (rc *RequestClient) Get(requestURL string) *Resp {
 	req, err := http.NewRequest("GET", requestURL, nil)
 	if err != nil {
-		return Resp{Err: err}
+		return &Resp{Err: err}
 	}
 
 	// 设置请求头
@@ -128,14 +127,14 @@ func (rc *RequestClient) Get(requestURL string) Resp {
 	// 发送请求
 	resp, err := rc.Client.Do(req)
 	if err != nil {
-		return Resp{Err: err}
+		return &Resp{Err: err}
 	}
 	defer resp.Body.Close()
 
 	// 读取响应体
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return Resp{Err: err}
+		return &Resp{Err: err}
 	}
 
 	// 收集响应头
@@ -146,7 +145,7 @@ func (rc *RequestClient) Get(requestURL string) Resp {
 		}
 	}
 
-	return Resp{
+	return &Resp{
 		Err:        nil,
 		Body:       body,
 		StatusCode: resp.StatusCode,
@@ -155,7 +154,7 @@ func (rc *RequestClient) Get(requestURL string) Resp {
 }
 
 // Post 发送POST请求
-func (rc *RequestClient) Post(postUrl string, data map[string]interface{}) Resp {
+func (rc *RequestClient) Post(postUrl string, data map[string]interface{}) *Resp {
 	var (
 		reqBody     io.Reader
 		contentType string
@@ -166,7 +165,7 @@ func (rc *RequestClient) Post(postUrl string, data map[string]interface{}) Resp 
 		// multipart/form-data 格式
 		body, multipartContentType, err := buildMultipartBody(data)
 		if err != nil {
-			return Resp{Err: err}
+			return &Resp{Err: err}
 		}
 		reqBody = body
 		contentType = multipartContentType
@@ -175,7 +174,7 @@ func (rc *RequestClient) Post(postUrl string, data map[string]interface{}) Resp 
 		// JSON 格式
 		jsonData, err := json.Marshal(data)
 		if err != nil {
-			return Resp{Err: err}
+			return &Resp{Err: err}
 		}
 		reqBody = bytes.NewBuffer(jsonData)
 		contentType = "application/json"
@@ -193,7 +192,7 @@ func (rc *RequestClient) Post(postUrl string, data map[string]interface{}) Resp 
 	// 创建 HTTP 请求
 	req, err := http.NewRequest("POST", postUrl, reqBody)
 	if err != nil {
-		return Resp{Err: err}
+		return &Resp{Err: err}
 	}
 	// 设置请求头
 	req.Header.Set("Content-Type", contentType)
@@ -205,13 +204,13 @@ func (rc *RequestClient) Post(postUrl string, data map[string]interface{}) Resp 
 	// 发送请求
 	resp, err := rc.Client.Do(req)
 	if err != nil {
-		return Resp{Err: err}
+		return &Resp{Err: err}
 	}
 	defer resp.Body.Close()
 	// 读取响应
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return Resp{Err: err}
+		return &Resp{Err: err}
 	}
 
 	// 收集响应头
@@ -222,7 +221,7 @@ func (rc *RequestClient) Post(postUrl string, data map[string]interface{}) Resp 
 		}
 	}
 
-	return Resp{
+	return &Resp{
 		Err:        nil,
 		Body:       body,
 		StatusCode: resp.StatusCode,
